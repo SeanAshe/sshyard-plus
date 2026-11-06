@@ -31,6 +31,14 @@ func assertCursorPixels(t *testing.T, img *image.RGBA, r ui.Rect, v *termView, p
 		{v.cellW / 2, v.cellH + 2, false},
 	} {
 		want := pal.Background
+		// Odd terminal rows are a step from the background when stripes are on.
+		row := 0
+		if p.y >= v.cellH {
+			row = 1
+		}
+		if v.stripe && !v.clear && (v.first+row)%2 == 1 {
+			want = pal.Stripe()
+		}
 		if p.cursor {
 			want = pal.Cursor
 		}

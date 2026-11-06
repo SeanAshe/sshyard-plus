@@ -591,7 +591,7 @@ func TestOSC52Pause(t *testing.T) {
 
 func TestOSC52Settings(t *testing.T) {
 	a, tt := newTestApp(t)
-	tt.SetSize(1200, 2600)
+	tt.SetSize(1200, 3200)
 	a.openSettings(prefTerminal)
 	tt.Frame()
 	if !tt.HasText("Remote clipboard (OSC 52)") || !tt.HasText("A remote program can never read the clipboard.") {
