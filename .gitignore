@@ -4,3 +4,5 @@ mygo_windows_*.syso
 /dist/
 *.key
 .DS_Store
+__pycache__/
+*.py[cod]
