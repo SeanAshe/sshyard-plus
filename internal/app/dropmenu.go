@@ -267,9 +267,9 @@ func (a *App) menuPanel(c *ui.Context, tok theme.Tokens, panel ui.Element, entri
 	})
 }
 
-// menuRow is the i-th entry e of a drop-down menu at level: lit in the
-// accent's tint under the pointer or the keyboard's focus, as IconButtons
-// are; its submenu after it, which the pointer or the right arrow opens.
+// menuRow is the i-th entry e of a drop-down menu at level: lit in a
+// neutral tint (a danger entry's red) under the pointer or the keyboard's
+// focus; its submenu after it, which the pointer or the right arrow opens.
 func (a *App) menuRow(c *ui.Context, tok theme.Tokens, e menuEntry, i, level int, compactMenu ...bool) ui.Element {
 	row := ui.ButtonBase(c.Key("mi:"+strconv.Itoa(i))).Role(ui.RoleMenuItem).FillWidth().Justify(ui.Start).
 		Padding(6, 8).Gap(10).Radius(theme.RadiusSmall).FocusRing(false).Disabled(e.Disabled)
@@ -278,10 +278,6 @@ func (a *App) menuRow(c *ui.Context, tok theme.Tokens, e menuEntry, i, level int
 	}
 	if e.Checked {
 		row.Role(ui.RoleMenuItemCheckBox).Checked(true)
-	}
-	hue := tok.Accent
-	if e.Danger {
-		hue = tok.Danger
 	}
 	strong := float32(0.12)
 	if tok.Dark {
@@ -302,14 +298,15 @@ func (a *App) menuRow(c *ui.Context, tok theme.Tokens, e menuEntry, i, level int
 	switch {
 	case e.Disabled:
 		row.Opacity(0.4)
-	case lit && row.Pressed():
-		row.Background(hue.Alpha(strong * 1.8))
-		fg, muted = hue, hue
-	case lit:
-		row.Background(hue.Alpha(strong))
-		fg, muted = hue, hue
 	case e.Danger:
-		fg, muted = hue, hue
+		fg, muted = tok.Danger, tok.Danger
+		if lit && row.Pressed() {
+			row.Background(tok.Danger.Alpha(strong * 1.8))
+		} else if lit {
+			row.Background(tok.Danger.Alpha(strong))
+		}
+	case lit:
+		row.Background(tok.Press)
 	}
 	row.Children(func() {
 		var ic ui.Element
@@ -317,7 +314,7 @@ func (a *App) menuRow(c *ui.Context, tok theme.Tokens, e menuEntry, i, level int
 			ic = ui.Box(c).Size(16, 16).Shrink(0)
 		}
 		tint := muted
-		if e.Tint != (ui.Color{}) && !lit && !e.Disabled {
+		if e.Tint != (ui.Color{}) && !(lit && e.Danger) && !e.Disabled {
 			tint = e.Tint
 		}
 		switch {

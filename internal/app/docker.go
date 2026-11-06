@@ -196,7 +196,7 @@ func (a *App) dockerPanel(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 	}
 	a.readDocker(c, tc, false)
 	ui.Row(c.Key("dockertools")).Gap(8).FillWidth().AlignItems(ui.Center).Children(func() {
-		formSegmented(c.Key("dockerview"), &d.view, m.DockerContainers(strconv.Itoa(len(d.info.Containers))), m.DockerImages(strconv.Itoa(len(d.info.Images)))).
+		formSegmented(c.Key("dockerview"), &d.view, false, m.DockerContainers(strconv.Itoa(len(d.info.Containers))), m.DockerImages(strconv.Itoa(len(d.info.Images)))).
 			Label(m.DockerManager()).Grow(1)
 		if d.running {
 			ui.Spinner(c)

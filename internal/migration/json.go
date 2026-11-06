@@ -132,7 +132,7 @@ func parseWindTerm(data []byte, name string) (Result, error) {
 		}
 		e := Entry{ID: str(m, "session.uuid"), Name: str(m, "session.label"), Group: str(m, "session.folder")}
 		if e.Group == "" {
-			e.Group = str(m, "session.group")
+			e.Group = windTermGroup(str(m, "session.group"))
 		}
 		protocol := str(m, "session.protocol")
 		if protocol != "" && !strings.EqualFold(protocol, "SSH") {
@@ -151,6 +151,18 @@ func parseWindTerm(data []byte, name string) (Result, error) {
 		r.Entries = append(r.Entries, e)
 	}
 	return r, nil
+}
+
+// windTermGroup turns WindTerm's "Parent>Child" (also written "Parent > Child")
+// into the slash-separated path used for nested groups.
+func windTermGroup(s string) string {
+	var parts []string
+	for _, p := range strings.Split(s, ">") {
+		if p = strings.TrimSpace(p); p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return strings.Join(parts, "/")
 }
 func parseElecterm(data []byte, name string) (Result, error) {
 	v, err := decodeJSON(data)

@@ -606,7 +606,7 @@ func (a *App) fwdView(c *ui.Context, m locales.Messages) {
 					a.fwdHold.apply(c, f, in)
 				})
 				ui.Field(c, m.FieldType(), func() {
-					formSegmented(c.Key("ff:kind"), &f.kind, m.FwdKindLocal(), m.FwdKindRemote(), m.FwdKindDynamic()).Label(m.FieldType())
+					formSegmented(c.Key("ff:kind"), &f.kind, false, m.FwdKindLocal(), m.FwdKindRemote(), m.FwdKindDynamic()).Label(m.FieldType())
 				})
 				ui.Field(c, m.FwdHost(), func() {
 					labels, _ := a.hostChoices()

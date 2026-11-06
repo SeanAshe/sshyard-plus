@@ -90,7 +90,8 @@ jobs:
           out="$(gofmt -l .)"
           if [ -n "$out" ]; then echo "::error::gofmt needed on:"; echo "$out"; exit 1; fi
       - run: go vet ./...
-      - run: go test -race -count=1 ./...
+      # internal/app nears go test's default 10m under the race detector.
+      - run: go test -race -count=1 -timeout 30m ./...
 
   test:
     name: test (${{ matrix.os }})

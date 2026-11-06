@@ -169,21 +169,20 @@ func (a *App) snippetSearch(c *ui.Context, m locales.Messages, tok theme.Tokens)
 func (a *App) snippetTab(c *ui.Context, tok theme.Tokens, key, label string, count int, on bool, choose func()) {
 	b := ui.ButtonBase(c.Key("snippet:tab:"+key)).Label(label).Role(ui.RoleTab).Selected(on).Padding(theme.Space(1), theme.Space(2.5)).
 		Gap(theme.Space(1.5)).Radius(theme.Capsule).AlignItems(ui.Center).Shrink(0).Cursor(ui.CursorPointer)
-	fg, muted := tok.Text, tok.TextMuted
+	// Chosen, it is raised as a segmented control's choice is.
+	fg := tok.TextMuted
 	switch {
 	case on:
-		b.Background(tok.Accent.Alpha(accentWash(tok)))
-		fg, muted = tok.Accent, tok.Accent.Alpha(0.75)
-	case b.Pressed():
+		theme.Shadow(tok.Card).On(b.Background(tok.Inset))
+		fg = tok.Text
+	case b.Pressed() || b.Hovered():
 		b.Background(tok.Press)
-	case b.Hovered():
-		b.Background(tok.Hover)
 	default:
 		b.Background(tok.Fill)
 	}
 	b.Children(func() {
 		ui.Text(c, label).FontSize(theme.Footnote).FontWeight(500).TextColor(fg).SingleLine().MaxWidth(chipLabelWidth)
-		ui.Text(c, strconv.Itoa(count)).FontSize(theme.Caption).TextColor(muted).SingleLine()
+		ui.Text(c, strconv.Itoa(count)).FontSize(theme.Caption).TextColor(tok.TextMuted).SingleLine()
 	})
 	if b.Clicked() {
 		choose()

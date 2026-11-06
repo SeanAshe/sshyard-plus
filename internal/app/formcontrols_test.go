@@ -1,9 +1,11 @@
 package app
 
 import (
+	"image"
 	"image/color"
 	"testing"
 
+	"github.com/Licoy/sshyard/internal/theme"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -42,7 +44,7 @@ func TestFormControlsCursorAndDisabled(t *testing.T) {
 				formDisabled(formSelect(c.Key("select"), &selected, []string{"first", "second", "third"}).Label("Choice").Width(240), disabled)
 				formDisabled(formSwitch(c.Key("switch"), &on).Label("Switch"), disabled)
 				formDisabled(formCheckbox(c.Key("check"), &checked, "Checkbox"), disabled)
-				formSegmentedState(c.Key("segment"), &segment, disabled, "One", "Two")
+				formSegmented(c.Key("segment"), &segment, disabled, "One", "Two")
 			})
 		}, 500, 500)
 		tt.Frame()
@@ -88,7 +90,7 @@ func TestFormControlsDisabledAncestor(t *testing.T) {
 			formSelect(c.Key("select"), &selected, []string{"first", "second"}).Label("Choice")
 			formSwitch(c.Key("switch"), &on).Label("Switch")
 			formCheckbox(c.Key("check"), &checked, "Checkbox")
-			formSegmented(c.Key("segment"), &segment, "One", "Two")
+			formSegmented(c.Key("segment"), &segment, false, "One", "Two")
 		})
 	}, 400, 400)
 	tt.Frame()
@@ -205,4 +207,87 @@ func TestFormSelectTranslucentFill(t *testing.T) {
 			t.Fatalf("dark=%v control hides different backgrounds with opaque fill: %v", dark, pixels)
 		}
 	}
+}
+
+func TestFormSegmentedRaisesSelected(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		tok := theme.LightTokens()
+		if dark {
+			tok = theme.DarkTokens()
+		}
+		selected := 0
+		tt := ui.NewTester(func(c *ui.Context) {
+			ui.Column(c).Fill().Background(tok.Canvas).Padding(20).Children(func() {
+				formSegmented(c, &selected, false, "One", "Two")
+			})
+		}, 400, 200)
+		tt.SetDark(dark)
+		tt.Frame()
+		one, two := mustFind(t, tt, "One"), mustFind(t, tt, "Two")
+		at := func(r ui.Rect) color.RGBA { return tt.Image().RGBAAt(int(r.X+4), int(r.Y+r.H/2)) }
+		got, want := at(one), tok.Inset
+		if absDiff(got.R, want.R) > 2 || absDiff(got.G, want.G) > 2 || absDiff(got.B, want.B) > 2 {
+			t.Fatalf("dark=%v selected segment fill = %v, want inset %v", dark, got, want)
+		}
+		if at(one) == at(two) {
+			t.Fatalf("dark=%v selected segment is not raised over the track", dark)
+		}
+	}
+}
+
+func TestFormPopupsLightNeutral(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		tok := theme.LightTokens()
+		if dark {
+			tok = theme.DarkTokens()
+		}
+		choice, search := "first", "first"
+		tt := ui.NewTester(func(c *ui.Context) {
+			c.SetTheme(tok.Apply(*c.Theme()))
+			ui.Column(c).Fill().Background(tok.Canvas).Padding(20).Gap(200).Children(func() {
+				formSelect(c.Key("select"), &choice, []string{"first", "second", "third"}).Label("Choice").Width(240)
+				formCombobox(c.Key("combo"), &search, []string{"first", "second", "third"}).Label("Search").Width(240)
+			})
+		}, 400, 500)
+		tt.SetDark(dark)
+		tt.Frame()
+		for _, label := range []string{"Choice", "Search"} {
+			mustClick(t, tt, label)
+			field, second, third := mustFind(t, tt, label), mustFind(t, tt, "second"), mustFind(t, tt, "third")
+			tt.Move(second.X+second.W/2, second.Y+second.H/2)
+			tt.Frame()
+			img := tt.Image()
+			// Left of the text, in the rows' padding.
+			lit := img.RGBAAt(int(second.X-5), int(second.Y+second.H/2))
+			rest := img.RGBAAt(int(third.X-5), int(third.Y+third.H/2))
+			if lit == rest || absDiff(lit.R, lit.B) > 6 || absDiff(lit.R, lit.G) > 6 {
+				t.Fatalf("dark=%v %s highlighted option %v, others %v: want a neutral tint", dark, label, lit, rest)
+			}
+			box := image.Rect(int(field.X), int(field.Y), int(field.X+field.W), int(field.Y+field.H))
+			if label == "Search" && bluePixels(img, box) == 0 {
+				t.Fatalf("dark=%v combobox lost its accent focus border", dark)
+			}
+			tt.Key(0, ui.KeyEscape)
+		}
+	}
+}
+
+// bluePixels counts the pixels of img in b tinted with the accent.
+func bluePixels(img *image.RGBA, b image.Rectangle) int {
+	n := 0
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			if p := img.RGBAAt(x, y); int(p.B)-int(p.R) > 24 {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+func absDiff(a, b uint8) uint8 {
+	if a > b {
+		return a - b
+	}
+	return b - a
 }

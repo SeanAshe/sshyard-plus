@@ -983,7 +983,7 @@ func (a *App) targetFields(c *ui.Context, m locales.Messages, tok theme.Tokens, 
 			a.targetHold.apply(c, f, in)
 		})
 		ui.Field(c, m.FieldType(), func() {
-			formSegmented(c.Key("bt:kind"), &f.kind, "WebDAV", "S3", "Gist").Label(m.FieldType())
+			formSegmented(c.Key("bt:kind"), &f.kind, false, "WebDAV", "S3", "Gist").Label(m.FieldType())
 		})
 		switch kind {
 		case settings.BackupWebDAV:
@@ -1059,7 +1059,7 @@ func (a *App) targetFields(c *ui.Context, m locales.Messages, tok theme.Tokens, 
 	if f.auto {
 		ui.Form(c, func() {
 			ui.Field(c, m.AutoBackupInterval(), func() {
-				formSegmented(c.Key("bt:every"), &f.every, m.BackupEvery6Hours(), m.BackupEveryDay(), m.BackupEveryWeek()).Label(m.AutoBackupInterval())
+				formSegmented(c.Key("bt:every"), &f.every, false, m.BackupEvery6Hours(), m.BackupEveryDay(), m.BackupEveryWeek()).Label(m.AutoBackupInterval())
 			})
 		})
 	}

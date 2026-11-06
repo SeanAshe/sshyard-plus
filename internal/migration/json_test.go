@@ -27,6 +27,8 @@ func TestMigrationJSON(t *testing.T) {
 		wantPort                         int
 	}{
 		{"wind", WindTerm, `[{"session.target":"alice@[2001:db8::1]","session.label":"日本","session.folder":"工作/生产","session.port":2222,"session.protocol":"SSH"}]`, "日本", "工作/生产", "2001:db8::1", 2222},
+		{"wind-nested", WindTerm, `[{"session.target":"host.example","session.label":"k3s","session.group":"工作>CMCC>k3s","session.protocol":"SSH"}]`, "k3s", "工作/CMCC/k3s", "host.example", 22},
+		{"wind-spaced", WindTerm, `[{"session.target":"host.example","session.label":"web","session.group":" Imported > WindTerm >","session.protocol":"SSH"}]`, "web", "Imported/WindTerm", "host.example", 22},
 		{"electerm", Electerm, `{"bookmarks":[{"id":"b","title":"server","host":"host.example","username":"alice","type":"ssh"}],"bookmarkGroups":[{"id":"a","title":"Parent","bookmarkGroupIds":["c"]},{"id":"c","title":"Child","bookmarkIds":["b"]}]}`, "server", "Parent/Child", "host.example", 22},
 		{"netcatty", Netcatty, `{"hosts":[{"id":"h","label":"server","hostname":"host.example","username":"bob","group":"A/B"}]}`, "server", "A/B", "host.example", 22},
 	}

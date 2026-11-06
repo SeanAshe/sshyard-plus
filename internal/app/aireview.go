@@ -389,7 +389,7 @@ func (a *App) reviewSettings(c *ui.Context, m locales.Messages, g *settingsGroup
 		levels := []string{settings.AIReviewLoose, settings.AIReviewStandard, settings.AIReviewStrict}
 		rc.strictness = slices.Index(levels, s.AIReviewStrictness)
 		g.row(m.AiReviewStrictness(), m.AiReviewStrictnessNote(), func() {
-			if formSegmented(c.Key("aistrict"), &rc.strictness, m.AiReviewLoose(), m.AiReviewStandard(), m.AiReviewStrict()).Label(m.AiReviewStrictness()).Changed() {
+			if formSegmented(c.Key("aistrict"), &rc.strictness, false, m.AiReviewLoose(), m.AiReviewStandard(), m.AiReviewStrict()).Label(m.AiReviewStrictness()).Changed() {
 				s.AIReviewStrictness = levels[rc.strictness]
 				*changed = true
 			}
@@ -432,7 +432,7 @@ func (a *App) reviewCustom(c *ui.Context, m locales.Messages, g *settingsGroup, 
 				labels[i] = reviewKindName(m, k)
 			}
 			rc.kind = max(slices.Index(kinds, s.AIReviewKind), 0)
-			if formSegmented(c.Key("aireviewk"), &rc.kind, labels...).Label(m.AiReviewKind()).Changed() {
+			if formSegmented(c.Key("aireviewk"), &rc.kind, false, labels...).Label(m.AiReviewKind()).Changed() {
 				s.AIReviewKind, s.AIReviewModel = kinds[rc.kind], ""
 				*changed = true
 			}

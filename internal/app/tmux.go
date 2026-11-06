@@ -545,7 +545,7 @@ func (a *App) tmuxFormView(c *ui.Context, m locales.Messages, tok theme.Tokens, 
 						}
 					})
 					ui.Field(c, m.TmuxOpenIn(), func() {
-						formSegmented(c.Key("tmuxwhere"), &f.where, m.TmuxThisTerminal(), m.NewTab(), m.TmuxOpenBackground()).
+						formSegmented(c.Key("tmuxwhere"), &f.where, false, m.TmuxThisTerminal(), m.NewTab(), m.TmuxOpenBackground()).
 							Label(m.TmuxOpenIn())
 					})
 				}

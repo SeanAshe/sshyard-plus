@@ -478,7 +478,7 @@ func (a *App) editorView(c *ui.Context, m locales.Messages) {
 							})
 							ui.Field(c, m.MetricsBar(), func() {
 								ui.Column(c).Gap(4).Children(func() {
-									formSegmentedState(c.Key("f:met"), &f.metricsIdx, !a.settings.MetricsEnabled, m.MetricsFollow(), m.MetricsHostOn(), m.MetricsHostOff()).Label(m.MetricsBar())
+									formSegmented(c.Key("f:met"), &f.metricsIdx, !a.settings.MetricsEnabled, m.MetricsFollow(), m.MetricsHostOn(), m.MetricsHostOff()).Label(m.MetricsBar())
 									if !a.settings.MetricsEnabled {
 										ui.Text(c, m.MetricsDisabledGlobally()).FontSize(theme.Caption).TextColor(tok.TextMuted)
 									}

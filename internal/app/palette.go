@@ -364,8 +364,8 @@ func (a *App) paletteRow(c *ui.Context, tok theme.Tokens, it paletteItem, chosen
 	ic := tok.TextMuted
 	switch {
 	case chosen:
-		row.Background(tok.Accent.Alpha(0.14))
-		ic = tok.Accent
+		row.Background(tok.Press)
+		ic = tok.Text
 		if a.palette.reveal {
 			row.ScrollIntoView()
 		}

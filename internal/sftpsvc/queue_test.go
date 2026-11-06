@@ -230,6 +230,36 @@ func TestQueueUploadsAndDownloadsTrees(t *testing.T) {
 	}
 }
 
+// An uploaded file keeps its mode and modification time, not the part
+// file's 0600 and the time it was written.
+func TestQueueUploadKeepsModeAndTime(t *testing.T) {
+	r, root := queueServer(t)
+	local := t.TempDir()
+	mod := time.Date(2024, 3, 4, 5, 6, 7, 0, time.UTC)
+	for name, mode := range map[string]fs.FileMode{"index.html": 0o644, "run.sh": 0o755} {
+		p := filepath.Join(local, name)
+		os.WriteFile(p, []byte(name), mode)
+		os.Chmod(p, mode)
+		os.Chtimes(p, mod, mod)
+	}
+	ts := newQueue(r)
+	ts.Add(Upload, filepath.Join(local, "index.html"), root+"/index.html", "index.html")
+	ts.Add(Upload, filepath.Join(local, "run.sh"), root+"/run.sh", "run.sh")
+	ts.Wait()
+	for name, want := range map[string]fs.FileMode{"index.html": 0o644, "run.sh": 0o755} {
+		fi, err := os.Stat(filepath.Join(root, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fi.Mode().Perm() != want {
+			t.Errorf("%s: mode %v, want %v", name, fi.Mode().Perm(), want)
+		}
+		if !fi.ModTime().Equal(mod) {
+			t.Errorf("%s: time %v, want %v", name, fi.ModTime(), mod)
+		}
+	}
+}
+
 func bigFile(t *testing.T, p string, n int) []byte {
 	data := make([]byte, n)
 	rand.Read(data)

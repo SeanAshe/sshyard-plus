@@ -478,13 +478,11 @@ func (ts *Transfers) copy(ctx context.Context, t *Transfer) error {
 			if err == nil {
 				err = setFileTimes(f, mod)
 			}
-		} else if f, ok := w.(interface {
-			Chmod(fs.FileMode) error
-			Chtimes(time.Time, time.Time) error
-		}); ok {
-			err = f.Chmod(fi.Mode().Perm())
-			if err == nil {
-				err = f.Chtimes(mod, mod)
+		} else if f, ok := w.(interface{ Chmod(fs.FileMode) error }); ok {
+			// A server that refuses it leaves the part's 0600: safe, so
+			// the upload still completes.
+			if cerr := f.Chmod(fi.Mode().Perm()); cerr != nil {
+				ts.logf("sftp: %s: keeping mode 0600: %v", t.Name, cerr)
 			}
 		}
 	}
@@ -493,6 +491,12 @@ func (ts *Transfers) copy(ctx context.Context, t *Transfer) error {
 	}
 	if err != nil {
 		return err
+	}
+	if r, ok := dst.(remoteFS); ok {
+		// *sftp.File cannot set times, so the closed part is set by path.
+		if cerr := r.chtimes(part, mod); cerr != nil {
+			ts.logf("sftp: %s: keeping upload time: %v", t.Name, cerr)
+		}
 	}
 	pi, err := dst.lstat(part)
 	if err != nil {
@@ -776,11 +780,9 @@ func (localFS) create(p string, keep bool) (writeSeekCloser, error) {
 	}
 	return os.OpenFile(p, flag, 0o600)
 }
-func (localFS) mkdirAll(p string) error       { return os.MkdirAll(p, 0o755) }
-func (localFS) remove(p string) error         { return os.Remove(p) }
-func (localFS) rename(from, to string) error  { return os.Rename(from, to) }
-func (localFS) chmod(p string, m fs.FileMode) { os.Chmod(p, LocalMode(m)) }
-func (localFS) chtimes(p string, t time.Time) { os.Chtimes(p, t, t) }
+func (localFS) mkdirAll(p string) error      { return os.MkdirAll(p, 0o755) }
+func (localFS) remove(p string) error        { return os.Remove(p) }
+func (localFS) rename(from, to string) error { return os.Rename(from, to) }
 
 type remoteFS struct{ c *Client }
 
@@ -817,5 +819,4 @@ func (r remoteFS) rename(from, to string) error {
 	// SFTP v3 rename must refuse an existing destination; never delete it.
 	return r.c.c.Rename(from, to)
 }
-func (r remoteFS) chmod(p string, m fs.FileMode) { r.c.c.Chmod(p, m) }
-func (r remoteFS) chtimes(p string, t time.Time) { r.c.c.Chtimes(p, t, t) }
+func (r remoteFS) chtimes(p string, t time.Time) error { return r.c.c.Chtimes(p, t, t) }

@@ -356,6 +356,7 @@ type App struct {
 	changingKey  bool
 	khQuery      string
 	askingKey    bool
+	field        welcomeField // the welcome page's dots
 	finding      bool
 	query        string
 	match        int

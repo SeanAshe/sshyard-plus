@@ -370,9 +370,7 @@ func (a *App) moreTab(c *ui.Context, m locales.Messages, tok theme.Tokens, t *la
 		Radius(theme.RadiusControl).Cursor(ui.CursorPointer).Label(label)
 	hov := row.Hovered()
 	switch {
-	case on:
-		row.Background(tok.Accent.Alpha(0.14))
-	case row.Pressed():
+	case on, row.Pressed():
 		row.Background(tok.Press)
 	case hov:
 		row.Background(tok.Hover)
@@ -395,10 +393,7 @@ func (a *App) moreTab(c *ui.Context, m locales.Messages, tok theme.Tokens, t *la
 			}
 		}
 		ui.Column(c).Gap(1).Grow(1).Shrink(1).MinWidth(0).Children(func() {
-			title := ui.Text(c, label).FontSize(theme.Footnote).FontWeight(600).SingleLine()
-			if on {
-				title.TextColor(tok.Accent)
-			}
+			ui.Text(c, label).FontSize(theme.Footnote).FontWeight(600).SingleLine()
 			if len(sub) > 0 {
 				ui.Text(c, strings.Join(sub, " · ")).FontSize(theme.Caption).TextColor(tok.TextMuted).SingleLine()
 			}

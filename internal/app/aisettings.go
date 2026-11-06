@@ -172,7 +172,7 @@ func (a *App) aiSettings(c *ui.Context, m locales.Messages, tok theme.Tokens, s 
 	a.settingsSection(c, tok, icons.ModeAsk, tok.TintAt(1), m.AiPermissionSection(), func(g *settingsGroup) {
 		g.row(m.AiDefaultMode(), "", func() {
 			a.aiModeIdx = modeIndex(s.AIDefaultMode)
-			if formSegmented(c.Key("aimodedef"), &a.aiModeIdx, m.AiModeAsk(), m.AiModeReview(), m.AiModeFull()).Label(m.AiDefaultMode()).Changed() {
+			if formSegmented(c.Key("aimodedef"), &a.aiModeIdx, false, m.AiModeAsk(), m.AiModeReview(), m.AiModeFull()).Label(m.AiDefaultMode()).Changed() {
 				mode := []string{"ask", "review", "full"}[a.aiModeIdx]
 				if mode == "full" && a.settings.AIDefaultMode != "full" {
 					a.openFull("settings", 0)
@@ -744,7 +744,7 @@ func (a *App) aiHostFields(c *ui.Context, m locales.Messages, tok theme.Tokens, 
 	ui.Collapsible(c.Key("f:ai"), m.AiSettings(), &f.aiOpen, func() {
 		ui.Column(c).Gap(8).FillWidth().Margin(8, 0, 0, 0).Children(func() {
 			ui.Text(c, m.AiHostMode()).FontSize(theme.Footnote).TextColor(tok.TextMuted)
-			if formSegmented(c.Key("f:aimode"), &f.aiIdx, m.AiModeInherit(), m.AiModeAsk(), m.AiModeReview(), m.AiModeFull()).Label(m.AiHostMode()).Changed() {
+			if formSegmented(c.Key("f:aimode"), &f.aiIdx, false, m.AiModeInherit(), m.AiModeAsk(), m.AiModeReview(), m.AiModeFull()).Label(m.AiHostMode()).Changed() {
 				if f.aiIdx == 3 && f.orig.AIPolicy.Mode != "full" && !f.fullOK {
 					f.aiIdx = f.aiPrev
 					a.openFull("host", 0)

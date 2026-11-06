@@ -71,7 +71,7 @@ func (a *App) backgroundSection(c *ui.Context, m locales.Messages, tok theme.Tok
 			if bg.Fit == "contain" {
 				idx = 1
 			}
-			if formSegmentedState(c.Key("background:fit"), &idx, a.background.busy, m.BackgroundCover(), m.BackgroundContain()).Label(m.BackgroundFit()).Changed() {
+			if formSegmented(c.Key("background:fit"), &idx, a.background.busy, m.BackgroundCover(), m.BackgroundContain()).Label(m.BackgroundFit()).Changed() {
 				bg.Fit = []string{"cover", "contain"}[idx]
 				s.Background, *changed = bg, true
 				a.setBackgroundPreview(nil)

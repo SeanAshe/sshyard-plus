@@ -119,7 +119,7 @@ func (f *hostForm) readPorts() {
 func (a *App) protocolField(c *ui.Context, m locales.Messages, f *hostForm) {
 	ui.Field(c, m.FieldProtocol(), func() {
 		prev := f.proto
-		if formSegmented(c.Key("f:proto"), &f.proto, m.ProtocolSSH(), m.ProtocolTelnet(), m.ProtocolSerial()).Label(m.FieldProtocol()).Changed() {
+		if formSegmented(c.Key("f:proto"), &f.proto, false, m.ProtocolSSH(), m.ProtocolTelnet(), m.ProtocolSerial()).Label(m.FieldProtocol()).Changed() {
 			a.setProtocol(m, f, prev)
 		}
 	})
@@ -168,7 +168,7 @@ func (a *App) serialFields(c *ui.Context, m locales.Messages, tok theme.Tokens, 
 		}
 	})
 	ui.Field(c, m.FieldDataBits(), func() {
-		formSegmented(c.Key("f:databits"), &f.dataBits, "5", "6", "7", "8").Label(m.FieldDataBits())
+		formSegmented(c.Key("f:databits"), &f.dataBits, false, "5", "6", "7", "8").Label(m.FieldDataBits())
 	})
 	ui.Field(c, m.FieldParity(), func() {
 		labels, codes := parityChoices(m)
@@ -178,7 +178,7 @@ func (a *App) serialFields(c *ui.Context, m locales.Messages, tok theme.Tokens, 
 		}
 	})
 	ui.Field(c, m.FieldStopBits(), func() {
-		formSegmented(c.Key("f:stopbits"), &f.stopBits, "1", "1.5", "2").Label(m.FieldStopBits())
+		formSegmented(c.Key("f:stopbits"), &f.stopBits, false, "1", "1.5", "2").Label(m.FieldStopBits())
 	})
 }
 
@@ -186,7 +186,7 @@ func (a *App) serialFields(c *ui.Context, m locales.Messages, tok theme.Tokens, 
 // or serial host.
 func (a *App) streamTermFields(c *ui.Context, m locales.Messages, tok theme.Tokens, f *hostForm) {
 	ui.Field(c, m.FieldNewLine(), func() {
-		formSegmented(c.Key("f:newline"), &f.newLine, newLineLabels...).Label(m.FieldNewLine())
+		formSegmented(c.Key("f:newline"), &f.newLine, false, newLineLabels...).Label(m.FieldNewLine())
 	})
 	ui.Field(c, "", func() {
 		ui.Column(c).Gap(6).Children(func() {

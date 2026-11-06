@@ -1,0 +1,54 @@
+package main
+
+// The welcome field's dots, from where fieldmotion.kage placed them
+// (image0, a pixel a dot): faint in Ink at rest, with broad swells of
+// light passing over them, and larger and in Glow where they are lit.
+// They are fainter behind Hole, the page's content (x, y, w, h in DIPs of
+// the pane, w 0 for none): Floor of their light there, coming back whole
+// Mask DIPs beyond its edge.
+
+var Time float
+var Spacing float
+var Origin vec2
+var Reach float
+var Dot float
+var Rest float
+var Ink vec3
+var Glow vec3
+var Opacity float
+var Hole vec4
+var Floor float
+var Mask float
+
+// beyond returns how far p lies outside Hole, negative inside it.
+func beyond(p vec2) float {
+	d := abs(p-Hole.xy-Hole.zw/2) - Hole.zw/2
+	return length(max(d, vec2(0))) + min(max(d.x, d.y), 0)
+}
+
+func Fragment(dst vec4, pos vec2) vec4 {
+	q := pos - Origin
+	cell := floor(q / Spacing)
+	size := image0Size()
+	if cell.x < 0 || cell.y < 0 || cell.x >= size.x || cell.y >= size.y {
+		return vec4(0)
+	}
+	v := image0At(cell + 0.5)
+	lit := v.z
+	home := (cell + 0.5) * Spacing
+	at := home + (v.xy*2-1)*Reach
+	fade := 1.0
+	if Hole.z > 0 {
+		fade = mix(Floor, 1, smoothstep(0, Mask, beyond(Origin+home)))
+	}
+	r := Dot * (1 + 0.6*lit*fade)
+	edge := 0.7 / pixelScale()
+	cover := 1 - smoothstep(r-edge, r+edge, length(q-at))
+	if cover <= 0 {
+		return vec4(0)
+	}
+
+	swell := 0.5 + 0.5*sin(dot(home, vec2(0.009, 0.006))+Time*0.3)*sin(dot(home, vec2(-0.005, 0.011))-Time*0.22)
+	a := mix(Rest*(0.45+0.55*swell), 0.5, lit) * cover * fade * Opacity
+	return vec4(mix(Ink, Glow, smoothstep(0, 0.5, lit))*a, a)
+}

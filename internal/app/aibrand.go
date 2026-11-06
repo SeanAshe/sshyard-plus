@@ -19,22 +19,11 @@ func brandImage(c *ui.Context, icon *aibrands.Icon, size float32) {
 }
 
 func providerFormatControl(c *ui.Context, m locales.Messages, selected *int) ui.Element {
-	tok := currentTokens(c)
 	labels := []string{m.AiFormatChat(), m.AiFormatResponses(), m.AiFormatAnthropic(), m.AiFormatTypeSafe()}
-	parts := ui.SegmentedBase(c, selected, len(labels))
-	quietControl(c, parts.Track).AlignItems(ui.Stretch).Padding(theme.Space(0.5)).Gap(theme.Space(0.5)).Children(func() {
-		for i, label := range labels {
-			segment := quietControl(c, parts.Segment(i)).Label(label).Padding(theme.Space(1.5), theme.Space(1)).Gap(theme.Space(1)).Radius(theme.Capsule)
-			if i == *selected {
-				segment.Background(tok.Accent.Alpha(0.12))
-			}
-			segment.Children(func() {
-				brandImage(c, aibrands.Provider(settings.AIProvider{Format: providerFormats[i]}), 14)
-				ui.Text(c, label).FontSize(theme.Footnote).TextColor(tok.Text).SingleLine()
-			})
-		}
-	})
-	return parts.Track.Label(m.AiFormat())
+	return segmentedControl(c, selected, false, labels, theme.Space(2), func(i int, col ui.Color) {
+		brandImage(c, aibrands.Provider(settings.AIProvider{Format: providerFormats[i]}), 14)
+		ui.Text(c, labels[i]).FontSize(theme.Footnote).FontWeight(500).TextColor(col).SingleLine()
+	}).Label(m.AiFormat())
 }
 
 // brandSelect keeps the native select's pointer, keyboard and accessibility behavior.
@@ -63,7 +52,7 @@ func brandAutocomplete(c *ui.Context, value *string, models []string, provider s
 					c.Key(model)
 					item := formPointer(cb.Item(model)).Padding(theme.Space(1.5), theme.Space(2)).Gap(theme.Space(1.5)).Radius(theme.RadiusSmall)
 					if item.Highlighted() {
-						item.Background(tok.Accent.Alpha(0.12))
+						item.Background(tok.Press)
 					}
 					item.Children(func() {
 						brandImage(c, aibrands.Model(model, provider), 16)

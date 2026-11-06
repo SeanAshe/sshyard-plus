@@ -68,7 +68,7 @@ func (a *App) defaultBackupKey() (vault.Key, error) {
 // from.
 func passwordSource(c *ui.Context, m locales.Messages, key string, source *int) {
 	ui.Field(c, m.BackupPasswordSource(), func() {
-		formSegmented(c.Key(key), source, m.DefaultBackupPassword(), m.CustomPassword()).Label(m.BackupPasswordSource())
+		formSegmented(c.Key(key), source, false, m.DefaultBackupPassword(), m.CustomPassword()).Label(m.BackupPasswordSource())
 	})
 }
 

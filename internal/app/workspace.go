@@ -226,24 +226,45 @@ func (a *App) terminalPage(c *ui.Context, m locales.Messages, tok theme.Tokens) 
 	t := a.ws.ActiveTab()
 	if t == nil {
 		a.finding = false
-		ui.Column(c).Fill().Center().Gap(12).Children(func() {
-			ui.Image(c, a.logo).Size(64, 64).Shrink(0).Radius(theme.RadiusSheet).Label(m.AppName())
-			ui.Text(c, m.WelcomeTitle()).FontWeight(600).FontSize(theme.Title1).MarginY(4)
-			ui.Text(c, m.WelcomeHint()).FontSize(theme.Body).TextColor(tok.TextMuted)
+		f, still := &a.field, c.Preferences().ReduceMotion
+		page := ui.Column(c.Key("welcome")).Fill().Center().Gap(12)
+		// A background image of the user's own shows without the dots.
+		// The page only watches the pointer: as the innermost handler it
+		// sees the presses on the buttons too, which must stay theirs.
+		if !a.hasBackground() {
+			page.Draw(func(p *ui.Painter, r ui.Rect) { f.draw(p, r, tok, still) }).
+				HandleInput(func(ev ui.InputEvent) bool {
+					if f.handle(ev, still) {
+						c.Invalidate()
+					}
+					return false
+				})
+		}
+		f.pane, f.content, f.controls = page.Bounds(), ui.Rect{}, f.controls[:0]
+		page.Children(func() {
+			f.hold(ui.Image(c, a.logo).Size(64, 64).Shrink(0).Radius(theme.RadiusSheet).Label(m.AppName()), false)
+			f.hold(ui.Text(c, m.WelcomeTitle()).FontWeight(600).FontSize(theme.Title1).MarginY(4), false)
+			f.hold(ui.Text(c, m.WelcomeHint()).FontSize(theme.Body).TextColor(tok.TextMuted), false)
 			ui.Row(c.Key("start")).FillWidth().Wrap().Justify(ui.Center).Gap(theme.Space(2)).MarginY(theme.Space(2)).Children(func() {
-				if pill(c, m.QuickMigration(), true, false, false) {
+				start := func(label string, primary bool) bool {
+					el, ok := pillEl(c, label, primary, false, false)
+					f.hold(el, true)
+					return ok
+				}
+				if start(m.QuickMigration(), true) {
 					a.openSettings(prefMigration)
 				}
-				if pill(c, m.QuickConnect(), false, false, false) {
+				if start(m.QuickConnect(), false) {
 					a.OpenQuickConnect()
 				}
-				if pill(c, m.NewHost(), false, false, false) {
+				if start(m.NewHost(), false) {
 					a.openEditor(nil)
 				}
 			})
 		})
 		return
 	}
+	a.field.leave()
 	cn := a.focused()
 	if cn == nil || cn.kind != layout.Terminal {
 		a.finding = false

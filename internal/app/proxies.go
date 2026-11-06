@@ -168,7 +168,7 @@ func (a *App) proxyView(c *ui.Context, m locales.Messages) {
 				})
 				ui.Field(c, m.FieldType(), func() {
 					prev := f.kind
-					if formSegmented(c.Key("pf:kind"), &f.kind, "SOCKS5", "HTTP").Label(m.FieldType()).Changed() {
+					if formSegmented(c.Key("pf:kind"), &f.kind, false, "SOCKS5", "HTTP").Label(m.FieldType()).Changed() {
 						// The usual port follows the kind, unless one was typed.
 						def := map[int]string{0: "1080", 1: "8080"}
 						if strings.TrimSpace(f.port) == "" || f.port == def[prev] {

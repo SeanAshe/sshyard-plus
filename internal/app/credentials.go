@@ -557,7 +557,7 @@ func (a *App) credView(c *ui.Context, m locales.Messages) {
 						a.credHold.apply(c, f, in)
 					})
 					ui.Field(c, m.FieldType(), func() {
-						if formSegmented(c.Key("cf:kind"), &f.kind, m.CredKindPassword(), m.CredKindPrivateKey()).Label(m.FieldType()).Changed() {
+						if formSegmented(c.Key("cf:kind"), &f.kind, false, m.CredKindPassword(), m.CredKindPrivateKey()).Label(m.FieldType()).Changed() {
 							f.err = ""
 						}
 					})
