@@ -64,7 +64,11 @@ jobs:
             if [ -n "$tested" ]; then
               echo "$GITHUB_REF_NAME reuses the passed CI run on main for $tested."
               test=false
-              if [ "$GITHUB_REF_NAME" = "v$(jq -r .version mygo.json)" ]; then build=false; fi
+              base="$(jq -r .version mygo.json)"
+              suffix="${GITHUB_REF_NAME#v${base}_}"
+              if [ "$GITHUB_REF_NAME" = "v$base" ] || { [ "$suffix" != "$GITHUB_REF_NAME" ] && [[ "$suffix" =~ ^[0-9]+$ ]]; }; then
+                build=false
+              fi
             fi
           fi
           echo "test=$test build=$build"
@@ -96,7 +100,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [windows-latest]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -113,12 +117,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, goos: linux, goarch: amd64 }
-          - { os: ubuntu-24.04-arm, goos: linux, goarch: arm64 }
           - { os: windows-latest, goos: windows, goarch: amd64 }
           - { os: windows-11-arm, goos: windows, goarch: arm64 }
-          - { os: macos-latest, goos: darwin, goarch: arm64 }
-          - { os: macos-latest, goos: darwin, goarch: amd64 } # cross-compiled on Apple silicon (no cgo)
     defaults:
       run:
         shell: bash
@@ -133,9 +133,10 @@ jobs:
         with:
           path: ~\AppData\Local\mygo\nsis-*
           key: nsis-${{ hashFiles('go.sum') }}
-      # Tags: v<version> (the version in mygo.json), or an internal beta
-      # v<version>-beta-<yyyymmddhhmmss>, whose base must be the version in
-      # mygo.json. A beta build carries its full version (About, file
+      # Tags: v<version> (the version in mygo.json), v<version>_<ahead>
+      # (a fork release; ahead is commits not in Licoy/sshyard), or an
+      # internal beta v<version>-beta-<yyyymmddhhmmss>, whose base must be
+      # the version in mygo.json. A beta build carries its full version (About, file
       # names, installers) and no update channel: "updates" is dropped from
       # mygo.json for the build, so it never checks for, is offered or
       # makes update manifests, and stable manifests are never touched.
@@ -175,8 +176,21 @@ jobs:
                 | .macos.infoPlist.CFBundleVersion = $n' mygo.json > mygo.json.beta
               mv mygo.json.beta mygo.json
               echo "Beta build $version: updates disabled."
+            elif [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+_[0-9]+$ ]]; then
+              full="$(bash .github/fork-version.sh)"
+              if [ "$tag" != "v$full" ]; then
+                echo "::error::Tag $tag does not match fork release version $full (mygo.json stays $version)."
+                exit 1
+              fi
+              rev="${full##*_}"
+              version="$full"
+              jq --arg v "$version" --arg n "$rev" '.version = $v
+                | .macos.infoPlist.CFBundleShortVersionString = $v
+                | .macos.infoPlist.CFBundleVersion = $n' mygo.json > mygo.json.fork
+              mv mygo.json.fork mygo.json
+              echo "Fork release $version."
             elif [ "$tag" != "v$version" ]; then
-              echo "::error::Tag $tag matches neither v$version nor v$version-beta-<yyyymmddhhmmss>."
+              echo "::error::Tag $tag matches neither v$version, v$version_<ahead> nor v$version-beta-<yyyymmddhhmmss>."
               exit 1
             fi
           fi

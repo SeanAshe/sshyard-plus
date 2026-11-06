@@ -144,26 +144,24 @@
   }
 
   (function downloads() {
-    var os = detectOS();
-    if (!os || !data.downloads) return;
-    doc.setAttribute("data-os", os);
-    arch(os).then(function (a) {
+    if (!data.downloads) return;
+    doc.setAttribute("data-os", "windows");
+    arch("windows").then(function (a) {
       var arm = a === "arm64";
-      var key = os === "linux" ? "linux"
-        : os === "windows" ? (arm && data.downloads.win_setup_arm64 ? "win_setup_arm64" : "win_setup")
-        : arm ? "mac_arm64" : "mac_amd64";
+      var key = arm && data.downloads.win_setup_arm64 ? "win_setup_arm64" : "win_setup";
+      if (!data.downloads[key]) return;
       $$("[data-dl-cta]").forEach(function (el) {
         var label = el.querySelector("[data-dl-label]");
-        if (label && data.cta[os]) label.textContent = data.cta[os];
-        if (key !== "linux") el.href = data.downloads[key].url; else el.href = data.linuxPage;
+        if (label && data.cta.windows) label.textContent = data.cta.windows;
+        el.href = data.downloads[key].url;
       });
       var meta = document.querySelector("[data-dl-meta]");
-      if (meta && key !== "linux") {
+      if (meta) {
         var d = data.downloads[key];
         meta.textContent = [data.labels[key], d.size].filter(Boolean).join(" · ");
       }
       // The visitor's architecture leads in their platform's card.
-      $$('[data-platform="' + os + '"] .dl-files').forEach(function (list) {
+      $$('[data-platform="windows"] .dl-files').forEach(function (list) {
         var chips = $$("[data-asset]", list);
         var mine = chips.filter(function (x) { return /_arm64$/.test(x.getAttribute("data-asset")) === arm; });
         if (!mine.length || mine[0] === chips[0]) return;

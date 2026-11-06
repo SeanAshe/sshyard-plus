@@ -72,7 +72,7 @@ class Page:
     platform: str | None = None
 
 
-PLATFORMS = ("macos", "windows", "linux")
+PLATFORMS = ("windows",)
 PAGES = [
     Page("home", "", "home.html"),
     Page("download", "download/", "download.html"),
@@ -83,25 +83,16 @@ PAGE = {p.key: p for p in PAGES}
 # Release assets, as named by .github/release-download-notes.sh, with the
 # name each has for a version when the release can't be read.
 ASSETS = {
-    "mac_arm64": (r"sshyard-.+-arm64\.dmg", "sshyard-{v}-arm64.dmg"),
-    "mac_amd64": (r"sshyard-.+-amd64\.dmg", "sshyard-{v}-amd64.dmg"),
     "win_setup": (r"sshyard-setup-.+-amd64\.exe", "sshyard-setup-{v}-amd64.exe"),
     "win_portable": (r"sshyard-.+-windows-amd64-portable\.zip", "sshyard-{v}-windows-amd64-portable.zip"),
     "win_setup_arm64": (r"sshyard-setup-.+-arm64\.exe", "sshyard-setup-{v}-arm64.exe"),
     "win_portable_arm64": (r"sshyard-.+-windows-arm64-portable\.zip", "sshyard-{v}-windows-arm64-portable.zip"),
-    "linux_deb": (r"sshyard_.+_amd64\.deb", "sshyard_{v}_amd64.deb"),
-    "linux_tar": (r"sshyard-.+-linux-amd64\.tar\.gz", "sshyard-{v}-linux-amd64.tar.gz"),
-    "linux_deb_arm64": (r"sshyard_.+_arm64\.deb", "sshyard_{v}_arm64.deb"),
-    "linux_tar_arm64": (r"sshyard-.+-linux-arm64\.tar\.gz", "sshyard-{v}-linux-arm64.tar.gz"),
-    "install_sh": (r"install\.sh", "install.sh"),
     "sha256sums": (r"SHA256SUMS", "SHA256SUMS"),
 }
-INSTALLERS = ("mac_arm64", "mac_amd64", "win_setup", "win_portable", "win_setup_arm64", "win_portable_arm64",
-              "linux_deb", "linux_tar", "linux_deb_arm64", "linux_tar_arm64")
-# Windows and Linux Arm64 builds start after 0.0.9: a release without them
-# lists none, and the pages show only the files a release has.
-OPTIONAL = {"win_setup_arm64", "win_portable_arm64", "linux_deb_arm64", "linux_tar_arm64"}
-PLATFORM_ICONS = {"macos": "apple-line", "windows": "windows-line", "linux": "ubuntu-line"}
+INSTALLERS = ("win_setup", "win_portable", "win_setup_arm64", "win_portable_arm64")
+# Arm64 builds are listed only when the release has them.
+OPTIONAL = {"win_setup_arm64", "win_portable_arm64"}
+PLATFORM_ICONS = {"windows": "windows-line"}
 
 # Screenshots from docs/, keyed as tour.items[].key, and the widths made.
 SHOTS = {
@@ -449,9 +440,7 @@ class Site:
             "banner": {l.code: {**self.cats[l.code]["banner"], "name": self.cats[l.code]["name"]} for l in LANGS},
             "downloads": dl,
             "cta": t["hero"]["cta_for"],
-            "labels": {**t["download"]["platforms"]["macos"]["files"], **t["download"]["platforms"]["windows"]["files"],
-                       **t["download"]["platforms"]["linux"]["files"]},
-            "linuxPage": self.path("download-linux", lang),
+            "labels": {**t["download"]["platforms"]["windows"]["files"]},
             "theme": {"auto": t["nav"]["theme_auto"], "light": t["nav"]["theme_light"], "dark": t["nav"]["theme_dark"]},
         }
         return Markup(script_json(data))

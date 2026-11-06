@@ -11,7 +11,7 @@ import (
 )
 
 // Repo is the GitHub repository SSHYard's releases are published in.
-const Repo = "Licoy/sshyard"
+const Repo = "SeanAshe/sshyard-plus"
 
 // MaxManifestSize bounds a manifest read from the network.
 const MaxManifestSize = 1 << 20

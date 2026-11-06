@@ -1,15 +1,17 @@
 name: Release
 
-# A v<version> tag (the version in mygo.json; bump.sh makes both) builds
-# every platform, signs the update manifests, waits for ci.yml to pass on
-# the tag, then publishes the release as latest with every asset at once:
+# A v<upstream>_<ahead> tag builds Windows (x64 and Arm64). mygo.json keeps the
+# upstream x.y.z. Ahead is the number of commits not in Licoy/sshyard
+# main (.github/fork-version.sh). The runner writes <upstream>_<ahead>
+# into its checkout before packaging and does not commit it. The workflow
+# signs the update manifests, waits for ci.yml to pass on the tag, then
+# publishes the release as latest with every asset at once:
 # MyGo's GitHub Releases channel reads update-<os>-<arch>.json from
 # releases/latest/download/. The notes come from cliff.toml: the release
 # gets them with download links, the update window without.
 #
-# Required signing and notarization secrets: see .github/RELEASING.md
-# Installed apps reject unsigned updates; production macOS builds require
-# Developer ID signing and successful Apple notarization before upload.
+# The updater signing key is MYGO_UPDATER_PRIVATE_KEY; see .github/RELEASING.md.
+# Installed apps reject unsigned updates.
 
 # Internal beta tags (v<version>-beta-<yyyymmddhhmmss>) never make a
 # release: they are excluded here, and only ci.yml builds them (as
@@ -33,28 +35,30 @@ jobs:
       tag: ${{ steps.v.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - name: Check the version, the release and required signing secrets
         id: v
         env:
           GH_TOKEN: ${{ github.token }}
           MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
-          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
         run: |
-          version="$(jq -r .version mygo.json)"
+          base="$(jq -r .version mygo.json)"
+          version="$(bash .github/fork-version.sh)"
           tag="v$version"
+          case "$version" in
+            "$base"_[0-9]*) ;;
+            *) echo "::error::Release version $version does not extend mygo.json $base."; exit 1 ;;
+          esac
           if [[ "$GITHUB_REF_NAME" == *-beta-* ]]; then
             echo "::error::$GITHUB_REF_NAME is an internal beta: betas are built by ci.yml only, never released."
             exit 1
           fi
           if [ "$GITHUB_REF_TYPE" != tag ] || [ "$GITHUB_REF_NAME" != "$tag" ]; then
-            echo "::error::$GITHUB_REF_NAME does not match mygo.json version $version (expected tag $tag)."
+            echo "::error::$GITHUB_REF_NAME does not match fork version $version (mygo.json stays $base; expected tag $tag)."
             exit 1
           fi
-          for name in MYGO_UPDATER_PRIVATE_KEY MACOS_CERTIFICATE_P12_BASE64 MACOS_CERTIFICATE_PASSWORD APPLE_API_KEY_P8 APPLE_API_KEY_ID APPLE_API_ISSUER_ID; do
+          for name in MYGO_UPDATER_PRIVATE_KEY; do
             if [ -z "${!name}" ]; then
               echo "::error::Required secret $name is not set; see .github/RELEASING.md"
               exit 1
@@ -95,7 +99,7 @@ jobs:
           mkdir -p release-notes
           printf '%s\n' "$RELEASE_NOTES" > release-notes/release-notes.md
           if ! grep -q '[^[:space:]]' release-notes/release-notes.md; then
-            printf 'Builds for macOS, Windows and Linux.\n' > release-notes/release-notes.md
+            printf 'Windows builds for x64 and Arm64.\n' > release-notes/release-notes.md
           fi
           { printf '## %s\n\n' "$VERSION"; cat release-notes/release-notes.md; } > release-notes/CHANGELOG.md
           cat release-notes/release-notes.md
@@ -151,12 +155,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, goos: linux, goarch: amd64 }
-          - { os: ubuntu-24.04-arm, goos: linux, goarch: arm64 }
           - { os: windows-latest, goos: windows, goarch: amd64 }
           - { os: windows-11-arm, goos: windows, goarch: arm64 }
-          - { os: macos-latest, goos: darwin, goarch: arm64 }
-          - { os: macos-latest, goos: darwin, goarch: amd64 }
     defaults:
       run:
         shell: bash
@@ -175,20 +175,27 @@ jobs:
         with:
           name: release-notes
           path: release-notes
-      # Only in the runner's checkout, as macos-release.sh does
+      # Only in the runner's checkout. mygo.json in git stays the upstream version.
+      - name: Stamp the fork version
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          base="$(jq -r .version mygo.json)"
+          rev="${VERSION#"$base"_}"
+          if [ "$VERSION" = "$rev" ] || [[ ! "$rev" =~ ^[0-9]+$ ]]; then
+            echo "::error::Release version $VERSION does not extend mygo.json $base."
+            exit 1
+          fi
+          # macOS: the short version is what About shows. CFBundleVersion
+          # must be numeric, so it is the ahead count.
+          jq --arg v "$VERSION" --arg n "$rev" '.version = $v
+            | .macos.infoPlist.CFBundleShortVersionString = $v
+            | .macos.infoPlist.CFBundleVersion = $n' mygo.json > mygo.json.fork
+          mv mygo.json.fork mygo.json
       - name: Use the release notes for the update window
         run: |
           jq '.updates.changelog = "release-notes/CHANGELOG.md"' mygo.json > mygo.json.notes
           mv mygo.json.notes mygo.json
-      - name: Prepare macOS signing and notarization
-        if: runner.os == 'macOS'
-        env:
-          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
-        run: bash .github/macos-release.sh prepare
       - name: Build and sign updates
         env:
           GH_TOKEN: ${{ github.token }}
@@ -200,21 +207,13 @@ jobs:
           jq -e '.signature | length > 0' "$m" > /dev/null || { echo "::error::$m is not signed"; exit 1; }
           jq -e '.notes | length > 0' "$m" > /dev/null || { echo "::error::$m has no release notes"; exit 1; }
       - name: Package Windows portable ZIP
-        if: runner.os == 'Windows'
         run: python .github/windows-portable.py "build/${{ matrix.goos }}-${{ matrix.goarch }}" "${{ matrix.goarch }}"
-      - name: Verify macOS signature and notarization tickets
-        if: runner.os == 'macOS'
-        run: bash .github/macos-release.sh verify "${{ matrix.goarch }}"
       - name: Collect release assets
         run: |
           shopt -s nullglob
           dir="build/${{ matrix.goos }}-${{ matrix.goarch }}"
           mkdir -p dist
-          files=("$dir"/*.tar.gz "$dir"/*.deb "$dir"/*.dmg "$dir"/*-setup-*.exe "$dir"/*-portable.zip "$dir"/*.delta "$dir"/update-*.json)
-          # install.sh is the same script for every target (it picks the
-          # archive by uname -m; macOS makes one too): the release takes
-          # linux/amd64's, so merged assets never clash
-          if [ "${{ matrix.goos }}/${{ matrix.goarch }}" = linux/amd64 ]; then files+=("$dir"/install.sh); fi
+          files=("$dir"/*.tar.gz "$dir"/*-setup-*.exe "$dir"/*-portable.zip "$dir"/*.delta "$dir"/update-*.json)
           [ "${#files[@]}" -gt 0 ] || { echo "::error::No release assets found"; exit 1; }
           cp "${files[@]}" dist/
           ls -la dist
@@ -223,9 +222,6 @@ jobs:
           name: assets-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/*
           if-no-files-found: error
-      - name: Remove macOS signing credentials
-        if: always() && runner.os == 'macOS'
-        run: bash .github/macos-release.sh cleanup
 
   # Every asset is built, signed and verified, and CI passed: the release
   # is made as a draft with all of them, then published as latest.

@@ -111,13 +111,13 @@ class WindowsPortableTest(unittest.TestCase):
                 f"[Portable ZIP](https://github.com/Licoy/sshyard/releases/download/v0.0.4/{name})",
                 result.stdout,
             )
-            for row in (
+            self.assertIn(
                 "| Arm64 | [Installer](https://github.com/Licoy/sshyard/releases/download/v0.0.4/sshyard-setup-0.0.4-arm64.exe)"
                 " · [Portable ZIP](https://github.com/Licoy/sshyard/releases/download/v0.0.4/sshyard-0.0.4-windows-arm64-portable.zip) |",
-                "| Arm64 (aarch64) | [.deb](https://github.com/Licoy/sshyard/releases/download/v0.0.4/sshyard_0.0.4_arm64.deb)"
-                " · [.tar.gz](https://github.com/Licoy/sshyard/releases/download/v0.0.4/sshyard-0.0.4-linux-arm64.tar.gz) |",
-            ):
-                self.assertIn(row, result.stdout)
+                result.stdout,
+            )
+            self.assertNotIn("macOS", result.stdout)
+            self.assertNotIn("Linux", result.stdout)
             (dist / "sshyard-0.0.5-windows-amd64-portable.zip").touch()
             result = subprocess.run(command, capture_output=True, encoding="utf-8")
             self.assertNotEqual(result.returncode, 0)

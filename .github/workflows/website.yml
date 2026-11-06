@@ -1,7 +1,8 @@
 name: Website
 
 # Builds the static site in website/ (website/build.py) and deploys it to
-# GitHub Pages. It runs when the site's sources change on main, after every
+# GitHub Pages. Download pages list Windows only. It runs when the site's
+# sources change on main, after every
 # new release (the version and download links come from the latest
 # release) and by hand. Pages must use "GitHub Actions" as its source
 # (Settings → Pages).
