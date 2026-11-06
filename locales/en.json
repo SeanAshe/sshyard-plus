@@ -179,6 +179,8 @@
   "cursorShapeNote": "Sets the default cursor shape; terminal programs can change it",
   "terminalCursorBlink": "Cursor blinking",
   "terminalCursorBlinkNote": "Turn off to keep the cursor steady",
+  "terminalStripe": "Striped background",
+  "terminalStripeNote": "Gives every other terminal row a slightly different background",
   "cursorBlock": "Block",
   "cursorBar": "Vertical bar",
   "cursorUnderline": "Underline",

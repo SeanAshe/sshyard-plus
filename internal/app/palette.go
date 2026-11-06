@@ -71,6 +71,7 @@ var paletteSettings = []paletteSetting{
 	{prefAppearance, locales.Messages.MaterialContent},
 	{prefAppearance, locales.Messages.InterfaceFont},
 	{prefTerminal, locales.Messages.ColorScheme},
+	{prefTerminal, locales.Messages.TerminalStripe},
 	{prefTerminal, locales.Messages.SchemeImport},
 	{prefTerminal, locales.Messages.TerminalFont},
 	{prefTerminal, locales.Messages.MonospacedOnly},

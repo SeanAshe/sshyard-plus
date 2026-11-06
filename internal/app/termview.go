@@ -48,6 +48,7 @@ type termView struct {
 	copyOnSelect bool
 	cursorStyle  vt.CursorStyle // user default, unless the program sets DECSCUSR
 	cursorBlink  bool           // user preference can force a steady cursor
+	stripe       bool           // every other row a step from the background (settings.TerminalStripe)
 	blink        cursorBlinkClock
 	// openLink opens a web address clicked with linkMods; link is the one
 	// under the pointer while they are held, underlined.
@@ -404,6 +405,15 @@ func (v *termView) paint(p *ui.Painter, r ui.Rect, pal *theme.Terminal, focused 
 	ox := float32(math.Round(float64((r.X+termPad)*s))) / s
 	oy := float32(math.Round(float64((r.Y+termPad)*s))) / s
 	cw, ch := v.cellW, v.cellH
+	if v.stripe && !v.clear {
+		band := pal.Stripe()
+		for y := 0; y < v.rows; y++ {
+			if (v.first+y)%2 == 0 {
+				continue
+			}
+			p.Fill(ui.Rect{X: r.X, Y: oy + float32(y)*ch, W: r.W, H: ch}, band, 0)
+		}
+	}
 
 	for y, line := range snap.Lines {
 		ry := oy + float32(y)*ch
@@ -546,7 +556,11 @@ func (v *termView) paint(p *ui.Painter, r ui.Rect, pal *theme.Terminal, focused 
 		for _, gl := range g {
 			w = max(w, gl.X+gl.Advance)
 		}
-		p.Fill(ui.Rect{X: cx, Y: cy, W: w, H: ch}, pal.Background, 0)
+		rowBG := pal.Background
+		if v.stripe && !v.clear && (snap.First+snap.CursorY)%2 == 1 {
+			rowBG = pal.Stripe()
+		}
+		p.Fill(ui.Rect{X: cx, Y: cy, W: w, H: ch}, rowBG, 0)
 		p.Glyphs(g, cx, cy+v.base, pal.Foreground)
 		p.Fill(ui.Rect{X: cx, Y: cy + ch - 1, W: w, H: 1}, pal.Foreground, 0)
 	}

@@ -179,6 +179,8 @@
   "cursorShapeNote": "기본 커서 모양을 설정하며 터미널 프로그램에서 변경할 수 있습니다",
   "terminalCursorBlink": "커서 깜박임",
   "terminalCursorBlinkNote": "끄면 커서가 깜박이지 않고 계속 표시됩니다",
+  "terminalStripe": "줄무늬 배경",
+  "terminalStripeNote": "터미널의 한 줄마다 배경을 조금 다르게 칠합니다",
   "cursorBlock": "블록",
   "cursorBar": "세로 막대",
   "cursorUnderline": "밑줄",

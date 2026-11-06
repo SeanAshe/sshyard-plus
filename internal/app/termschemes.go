@@ -26,6 +26,13 @@ func (a *App) termPalette(tok theme.Tokens) theme.Terminal {
 // colors, the built-in schemes and the imported ones, and imports more.
 func (a *App) schemeSection(c *ui.Context, m locales.Messages, tok theme.Tokens, s *settings.Settings, changed *bool) {
 	a.settingsSection(c, tok, icons.Appearance, tok.TintAt(3), m.ColorScheme(), func(g *settingsGroup) {
+		g.row(m.TerminalStripe(), m.TerminalStripeNote(), func() {
+			on := s.TerminalStripe
+			if formSwitch(c.Key("termstripe"), &on).Label(m.TerminalStripe()).Changed() {
+				s.TerminalStripe, *changed = on, true
+			}
+		})
+		g.divider()
 		grid := ui.Row(c.Key("schemes")).Wrap().Gap(10).Padding(14).FillWidth()
 		if grid.FileDragOver() {
 			grid.Background(tok.Accent.Alpha(0.08))

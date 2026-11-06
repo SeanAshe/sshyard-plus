@@ -49,6 +49,15 @@ type Terminal struct {
 	ANSI [16]ui.Color
 }
 
+// terminalStripe is how far a striped row steps from Background toward
+// Foreground: enough to separate the rows, in a light scheme and a dark one.
+const terminalStripe float32 = 0.03
+
+// Stripe is the background of every other terminal row.
+func (t Terminal) Stripe() ui.Color {
+	return t.Background.Mix(t.Foreground, terminalStripe)
+}
+
 // Radii are the corner radii, small to large. Shapes nest concentrically:
 // a shape inside another with padding p has the outer radius minus p.
 const (

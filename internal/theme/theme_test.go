@@ -61,6 +61,11 @@ func TestContrast(t *testing.T) {
 		if c := Contrast(tk.Terminal.Foreground, tk.Terminal.Background); c < 7 {
 			t.Errorf("dark=%v terminal contrast %.2f < 7", tk.Dark, c)
 		}
+		if s := tk.Terminal.Stripe(); s == tk.Terminal.Background {
+			t.Errorf("dark=%v stripe matches the background", tk.Dark)
+		} else if c := Contrast(tk.Terminal.Foreground, s); c < 7 {
+			t.Errorf("dark=%v stripe contrast %.2f < 7", tk.Dark, c)
+		}
 		if tk.Dark != (Luminance(tk.Background) < 0.2) {
 			t.Errorf("dark=%v background luminance %.2f", tk.Dark, Luminance(tk.Background))
 		}

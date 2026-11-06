@@ -1835,6 +1835,26 @@ func (msgs Messages) TerminalCursorBlinkNote() string {
 	return Catalog.Format(msgs.locale, "terminalCursorBlinkNote", nil)
 }
 
+// TerminalStripe says "Striped background"
+// in the language the app shows.
+func TerminalStripe() string { return In(i18n.Locale()).TerminalStripe() }
+
+// TerminalStripe says "Striped background"
+// in the language of msgs.
+func (msgs Messages) TerminalStripe() string {
+	return Catalog.Format(msgs.locale, "terminalStripe", nil)
+}
+
+// TerminalStripeNote says "Gives every other terminal row a slightly different background"
+// in the language the app shows.
+func TerminalStripeNote() string { return In(i18n.Locale()).TerminalStripeNote() }
+
+// TerminalStripeNote says "Gives every other terminal row a slightly different background"
+// in the language of msgs.
+func (msgs Messages) TerminalStripeNote() string {
+	return Catalog.Format(msgs.locale, "terminalStripeNote", nil)
+}
+
 // CursorBlock says "Block"
 // in the language the app shows.
 func CursorBlock() string { return In(i18n.Locale()).CursorBlock() }

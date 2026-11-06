@@ -179,6 +179,8 @@
   "cursorShapeNote": "既定のカーソル形状を設定します（端末プログラムが変更する場合があります）",
   "terminalCursorBlink": "カーソルの点滅",
   "terminalCursorBlinkNote": "オフにするとカーソルは点滅せずに表示されます",
+  "terminalStripe": "ストライプ背景",
+  "terminalStripeNote": "ターミナルの1行おきに、少し違う背景色を塗ります",
   "cursorBlock": "ブロック",
   "cursorBar": "縦線",
   "cursorUnderline": "下線",

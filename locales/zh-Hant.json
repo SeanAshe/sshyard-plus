@@ -179,6 +179,8 @@
   "cursorShapeNote": "設定預設游標形狀，終端程式可自行切換",
   "terminalCursorBlink": "游標閃爍",
   "terminalCursorBlinkNote": "關閉後游標保持常亮",
+  "terminalStripe": "條紋背景",
+  "terminalStripeNote": "終端每隔一行換一層略有深淺的背景",
   "cursorBlock": "方塊",
   "cursorBar": "豎線",
   "cursorUnderline": "底線",
