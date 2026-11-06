@@ -51,6 +51,8 @@ func presetName(m locales.Messages, id string) string {
 		return m.HighlightHTTP()
 	case "ids":
 		return m.HighlightIDs()
+	case "shell":
+		return m.HighlightShell()
 	}
 	return id
 }

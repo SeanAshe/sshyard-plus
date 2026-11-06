@@ -91,7 +91,18 @@ var ipv6 = func() string {
 
 // Presets are the built-in rules, in the order they match (the early
 // ones first): an earlier group's match wins over a later's.
+//
+// shell is the terminal's own reading of a plain prompt and command
+// output, in the order a shell line reads: who it is, its flags, then
+// the numbers, brackets and prompt marks a program left uncolored.
 var Presets = []Preset{
+	{ID: "shell", Sample: "root@debian:~# ls -al (192.168.7.3)", rules: []rule{
+		{re: regexp.MustCompile(`\b[A-Za-z0-9]+@[A-Za-z0-9\-.]+\b`), need: []string{"@"}, styles: one(Style{Color: magenta})},
+		{re: regexp.MustCompile(`(?:^|\s)(-{1,2}[A-Za-z0-9_-]+)`), groups: true, need: []string{"-"}, styles: one(Style{Color: yellow})},
+		{re: regexp.MustCompile(`\b\d+(?:[.:]\d+)+\b`), need: []string{".", ":"}, styles: one(Style{Color: green})},
+		{re: regexp.MustCompile(`[\[\]()]`), need: []string{"(", ")", "[", "]"}, styles: one(Style{Color: green})},
+		{re: regexp.MustCompile(`[#$]`), need: []string{"#", "$"}, styles: one(Style{Color: blue})},
+	}},
 	{ID: "errors", Sample: "ERROR connection refused: permission denied", rules: []rule{
 		{word: words("error", "errors", "err", "fatal", "fail", "failed", "failure", "panic", "critical", "crit", "emerg", "emergency", "alert", "exception", "traceback", "denied", "refused", "unreachable", "segfault", "killed", "abort", "aborted"), styles: one(Style{Color: red, Bold: true})},
 	}},

@@ -73,7 +73,7 @@ func TestHighlightSettings(t *testing.T) {
 
 	a.openSettings(prefTerminal)
 	tt.Frame()
-	for _, s := range []string{"Keyword Highlighting", "Highlight keywords", "Built-in Rules", "Errors", "UUIDs and hashes", "Custom Rules", "Preview"} {
+	for _, s := range []string{"Keyword Highlighting", "Highlight keywords", "Built-in Rules", "Errors", "Commands and prompts", "UUIDs and hashes", "Custom Rules", "Preview"} {
 		if !tt.HasText(s) {
 			t.Errorf("missing %q", s)
 		}

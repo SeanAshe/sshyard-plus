@@ -1,8 +1,8 @@
-// Package highlight colors keywords in a terminal's output: words such as
-// errors and warnings, addresses, links and times, by built-in rules
-// (Presets) and the user's own (Rule). It colors what the screen shows,
-// never what the program wrote, and leaves text the program colored as
-// it is unless asked otherwise.
+// Package highlight colors a terminal's output: a plain prompt and
+// command line, words such as errors and warnings, addresses, links and
+// times, by built-in rules (Presets) and the user's own (Rule). It
+// colors what the screen shows, never what the program wrote, and leaves
+// text the program colored as it is unless asked otherwise.
 package highlight
 
 import (

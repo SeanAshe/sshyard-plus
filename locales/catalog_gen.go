@@ -7143,11 +7143,11 @@ func (msgs Messages) HighlightOn() string {
 	return Catalog.Format(msgs.locale, "highlightOn", nil)
 }
 
-// HighlightOnNote says "Colors errors, warnings, addresses, links and times in the output. Text a program colored keeps its colors."
+// HighlightOnNote says "Colors prompts, flags, versions, errors, warnings, addresses, links and times in the output. Text a program colored k…"
 // in the language the app shows.
 func HighlightOnNote() string { return In(i18n.Locale()).HighlightOnNote() }
 
-// HighlightOnNote says "Colors errors, warnings, addresses, links and times in the output. Text a program colored keeps its colors."
+// HighlightOnNote says "Colors prompts, flags, versions, errors, warnings, addresses, links and times in the output. Text a program colored k…"
 // in the language of msgs.
 func (msgs Messages) HighlightOnNote() string {
 	return Catalog.Format(msgs.locale, "highlightOnNote", nil)
@@ -7301,6 +7301,16 @@ func HighlightIDs() string { return In(i18n.Locale()).HighlightIDs() }
 // in the language of msgs.
 func (msgs Messages) HighlightIDs() string {
 	return Catalog.Format(msgs.locale, "highlightIDs", nil)
+}
+
+// HighlightShell says "Commands and prompts"
+// in the language the app shows.
+func HighlightShell() string { return In(i18n.Locale()).HighlightShell() }
+
+// HighlightShell says "Commands and prompts"
+// in the language of msgs.
+func (msgs Messages) HighlightShell() string {
+	return Catalog.Format(msgs.locale, "highlightShell", nil)
 }
 
 // HighlightRules says "Custom Rules"

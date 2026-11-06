@@ -25,18 +25,18 @@ func TestPresets(t *testing.T) {
 		"ERROR: connection refused":               "[ERROR]: connection [refused]",
 		"no errorcode here":                       "no errorcode here",
 		"Warning: deprecated":                     "[Warning]: [deprecated]",
-		"[  OK  ] Started nginx, ok":              "[  [OK]  ] Started nginx, ok",
+		"[  OK  ] Started nginx, ok":              "[[]  [OK]  []] Started nginx, ok",
 		"from 192.168.1.20:22 port":               "from [192.168.1.20:22] port",
-		"10.0.0.0/8 and 999.1.1.1":                "[10.0.0.0/8] and 999.1.1.1",
+		"10.0.0.0/8 and 999.1.1.1":                "[10.0.0.0]/8 and [999.1.1.1]",
 		"link/ether 00:1a:2B:3c:4d:5e brd":        "link/ether [00:1a:2B:3c:4d:5e] brd",
 		"inet6 fe80::1/64 scope":                  "inet6 [fe80::1/64] scope",
 		"std::vector and 12:30:45":                "std::vector and [12:30:45]",
 		"open https://example.com/a?b=1.":         "open [https://example.com/a?b=1].",
-		"(see http://x.io/p)":                     "(see [http://x.io/p])",
+		"(see http://x.io/p)":                     "[(]see [http://x.io/p][)]",
 		"on https://0.0.0.0:8443/error ok":        "on [https://0.0.0.0:8443/error] ok",
 		"2026-11-05T09:30:00Z start":              "[2026-11-05T09:30:00Z] start",
-		"Nov  5 09:30:01 host sshd":               "[Nov  5 09:30:01] host sshd",
-		`"GET /a HTTP/1.1" 404 512`:               `"[GET] /a HTTP/1.1" [404] 512`,
+		"Nov  5 09:30:01 host sshd":               "Nov  5 [09:30:01] host sshd",
+		`"GET /a HTTP/1.1" 404 512`:               `"[GET] /a HTTP/[1.1]" [404] 512`,
 		"status=503 took 200ms":                   "status=[503] took 200ms",
 		"id 3f2b8c1e-9d4a-4b6f-8e2a-1c5d7f9b0a3e": "id [3f2b8c1e-9d4a-4b6f-8e2a-1c5d7f9b0a3e]",
 		"commit 1234567 deadbeef":                 "commit 1234567 deadbeef",
@@ -46,11 +46,29 @@ func TestPresets(t *testing.T) {
 			t.Errorf("%q: got %q, want %q", text, got, want)
 		}
 	}
-	// A status shows in its class's color.
-	for text, want := range map[string]uint8{"HTTP/1.1 204": green, "code: 301": cyan, "Status=429": yellow, `HTTP/2" 500`: red} {
-		if s := h.Spans(text); len(s) != 1 || s[0].Style.Color != want {
-			t.Errorf("%q: %+v, want color %d", text, s, want)
+	// A status shows in its class's color. A version beside it is its own match.
+	for text, want := range map[string]struct {
+		code  string
+		color uint8
+	}{
+		"HTTP/1.1 204": {"204", green},
+		"code: 301":    {"301", cyan},
+		"Status=429":   {"429", yellow},
+		`HTTP/2" 500`:  {"500", red},
+	} {
+		var color uint8
+		var n int
+		for _, s := range h.Spans(text) {
+			if text[s.From:s.To] == want.code {
+				color, n = s.Style.Color, n+1
+			}
 		}
+		if n != 1 || color != want.color {
+			t.Errorf("%q: %+v, want %s in color %d", text, h.Spans(text), want.code, want.color)
+		}
+	}
+	if s := h.Spans("from 192.168.1.20:22 port"); len(s) != 1 || s[0].Style.Color != green {
+		t.Errorf("address: %+v", s)
 	}
 	if got := marked(h, "sha1 2fd4e1c67a2d28fced849ee1bb76e7391b93eb12"); got != "sha1 [2fd4e1c67a2d28fced849ee1bb76e7391b93eb12]" {
 		t.Errorf("hash: %q", got)
@@ -62,6 +80,39 @@ func TestPresets(t *testing.T) {
 	}
 	if !New(nil, nil).Empty() {
 		t.Error("rules without presets on")
+	}
+}
+
+func TestShellPreset(t *testing.T) {
+	h := New(nil, PresetIDs())
+	text := "root@Debian-base:~# ls -al (192.168.7.3) Nov  2 15:47 7.0.14-15"
+	want := map[string]uint8{
+		"root@Debian-base": magenta,
+		"#":                blue,
+		"-al":              yellow,
+		"(":                green,
+		"192.168.7.3":      green,
+		")":                green,
+		"15:47":            green,
+		"7.0.14":           green,
+	}
+	got := map[string]uint8{}
+	for _, s := range h.Spans(text) {
+		got[text[s.From:s.To]] = s.Style.Color
+	}
+	for part, color := range want {
+		if got[part] != color {
+			t.Errorf("%q color %d, spans %q", part, got[part], marked(h, text))
+		}
+	}
+	// A prompt the shell already colored stays that color.
+	ls := screen(24, 1, "\x1b[32mroot@debian:~#\x1b[0m")
+	h.Apply(ls, false)
+	if c := ls[0].Cells[0]; c.FG != vt.Indexed(2) {
+		t.Errorf("colored prompt: %+v", c)
+	}
+	if c := ls[0].Cells[13]; c.Rune != '#' || c.FG != vt.Indexed(2) {
+		t.Errorf("colored prompt mark: %+v", c)
 	}
 }
 
