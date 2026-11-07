@@ -8955,6 +8955,120 @@ func (msgs Messages) DockerNoLogs() string {
 	return Catalog.Format(msgs.locale, "dockerNoLogs", nil)
 }
 
+// DockerComposeUp says "Compose Up"
+// in the language the app shows.
+func DockerComposeUp() string { return In(i18n.Locale()).DockerComposeUp() }
+
+// DockerComposeUp says "Compose Up"
+// in the language of msgs.
+func (msgs Messages) DockerComposeUp() string {
+	return Catalog.Format(msgs.locale, "dockerComposeUp", nil)
+}
+
+// DockerComposeDown says "Compose Down"
+// in the language the app shows.
+func DockerComposeDown() string { return In(i18n.Locale()).DockerComposeDown() }
+
+// DockerComposeDown says "Compose Down"
+// in the language of msgs.
+func (msgs Messages) DockerComposeDown() string {
+	return Catalog.Format(msgs.locale, "dockerComposeDown", nil)
+}
+
+// DockerComposeStart says "Compose Start"
+// in the language the app shows.
+func DockerComposeStart() string { return In(i18n.Locale()).DockerComposeStart() }
+
+// DockerComposeStart says "Compose Start"
+// in the language of msgs.
+func (msgs Messages) DockerComposeStart() string {
+	return Catalog.Format(msgs.locale, "dockerComposeStart", nil)
+}
+
+// DockerComposeStop says "Compose Stop"
+// in the language the app shows.
+func DockerComposeStop() string { return In(i18n.Locale()).DockerComposeStop() }
+
+// DockerComposeStop says "Compose Stop"
+// in the language of msgs.
+func (msgs Messages) DockerComposeStop() string {
+	return Catalog.Format(msgs.locale, "dockerComposeStop", nil)
+}
+
+// DockerComposeRestart says "Compose Restart"
+// in the language the app shows.
+func DockerComposeRestart() string { return In(i18n.Locale()).DockerComposeRestart() }
+
+// DockerComposeRestart says "Compose Restart"
+// in the language of msgs.
+func (msgs Messages) DockerComposeRestart() string {
+	return Catalog.Format(msgs.locale, "dockerComposeRestart", nil)
+}
+
+// DockerComposeLogs says "Compose Logs"
+// in the language the app shows.
+func DockerComposeLogs() string { return In(i18n.Locale()).DockerComposeLogs() }
+
+// DockerComposeLogs says "Compose Logs"
+// in the language of msgs.
+func (msgs Messages) DockerComposeLogs() string {
+	return Catalog.Format(msgs.locale, "dockerComposeLogs", nil)
+}
+
+// DockerComposeRunning says "{running} of {count} running"
+// in the language the app shows.
+func DockerComposeRunning(running string, count string) string {
+	return In(i18n.Locale()).DockerComposeRunning(running, count)
+}
+
+// DockerComposeRunning says "{running} of {count} running"
+// in the language of msgs.
+func (msgs Messages) DockerComposeRunning(running string, count string) string {
+	return Catalog.Format(msgs.locale, "dockerComposeRunning", map[string]any{"running": running, "count": count})
+}
+
+// DockerComposeDownConfirm says "Stop and remove the containers of “{name}”? Data that is not in a volume is lost."
+// in the language the app shows.
+func DockerComposeDownConfirm(name string) string {
+	return In(i18n.Locale()).DockerComposeDownConfirm(name)
+}
+
+// DockerComposeDownConfirm says "Stop and remove the containers of “{name}”? Data that is not in a volume is lost."
+// in the language of msgs.
+func (msgs Messages) DockerComposeDownConfirm(name string) string {
+	return Catalog.Format(msgs.locale, "dockerComposeDownConfirm", map[string]any{"name": name})
+}
+
+// DockerComposeLogsOf says "Compose logs of {name}"
+// in the language the app shows.
+func DockerComposeLogsOf(name string) string { return In(i18n.Locale()).DockerComposeLogsOf(name) }
+
+// DockerComposeLogsOf says "Compose logs of {name}"
+// in the language of msgs.
+func (msgs Messages) DockerComposeLogsOf(name string) string {
+	return Catalog.Format(msgs.locale, "dockerComposeLogsOf", map[string]any{"name": name})
+}
+
+// DockerComposeDir says "Directory"
+// in the language the app shows.
+func DockerComposeDir() string { return In(i18n.Locale()).DockerComposeDir() }
+
+// DockerComposeDir says "Directory"
+// in the language of msgs.
+func (msgs Messages) DockerComposeDir() string {
+	return Catalog.Format(msgs.locale, "dockerComposeDir", nil)
+}
+
+// DockerComposeFile says "Compose file"
+// in the language the app shows.
+func DockerComposeFile() string { return In(i18n.Locale()).DockerComposeFile() }
+
+// DockerComposeFile says "Compose file"
+// in the language of msgs.
+func (msgs Messages) DockerComposeFile() string {
+	return Catalog.Format(msgs.locale, "dockerComposeFile", nil)
+}
+
 // TmuxManager says "tmux Sessions"
 // in the language the app shows.
 func TmuxManager() string { return In(i18n.Locale()).TmuxManager() }

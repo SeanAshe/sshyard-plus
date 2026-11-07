@@ -107,3 +107,54 @@ func TestDockerCommand(t *testing.T) {
 		t.Error("a full image reference refused")
 	}
 }
+
+func TestGroupCompose(t *testing.T) {
+	lab := func(project, service string) string {
+		return "com.docker.compose.project=" + project +
+			",com.docker.compose.service=" + service +
+			",com.docker.compose.project.working_dir=/srv/shop" +
+			",com.docker.compose.project.config_files=/srv/shop/compose.yml,/srv/shop/extra.yml" +
+			",com.docker.compose.version=2.29.1"
+	}
+	cs := []Container{
+		{ID: "a", Name: "web", State: "running", Labels: lab("shop", "web")},
+		{ID: "b", Name: "redis", State: "running"},
+		{ID: "c", Name: "db", State: "exited", Labels: lab("shop", "db")},
+	}
+	gs := GroupCompose(cs)
+	if len(gs) != 2 || !gs[0].Project() || gs[0].Compose.Name != "shop" || gs[0].Compose.Dir != "/srv/shop" {
+		t.Fatalf("%+v", gs)
+	}
+	if len(gs[0].Containers) != 2 || gs[0].Containers[0].Name != "web" || gs[0].Containers[1].Name != "db" {
+		t.Fatalf("containers %+v", gs[0].Containers)
+	}
+	if len(gs[0].Compose.Files) != 2 || gs[0].Compose.Files[1] != "/srv/shop/extra.yml" {
+		t.Fatalf("files %+v", gs[0].Compose.Files)
+	}
+	if gs[1].Project() || len(gs[1].Containers) != 1 || gs[1].Containers[0].Name != "redis" {
+		t.Fatalf("redis %+v", gs[1])
+	}
+	if _, ok := cs[1].Compose(); ok {
+		t.Error("a container without labels belongs to a project")
+	}
+}
+
+func TestComposeCommand(t *testing.T) {
+	p := Compose{Name: "shop", Dir: "/srv/shop", Files: []string{"/srv/shop/compose.yml", "/srv/shop/extra.yml"}}
+	got := ComposeCommand(ComposeStop, p)
+	want := `$D compose -p 'shop' --project-directory '/srv/shop' -f '/srv/shop/compose.yml' -f '/srv/shop/extra.yml' stop`
+	if !strings.Contains(got, want) {
+		t.Fatalf("%q", got)
+	}
+	if !strings.HasSuffix(ComposeCommand(ComposeUp, p), "up -d") {
+		t.Fatal("up")
+	}
+	for _, bad := range []Compose{{Name: ""}, {Name: "a\nb"}, {Name: "has\r"}} {
+		if ComposeCommand(ComposeStop, bad) != "" {
+			t.Errorf("%q let through", bad.Name)
+		}
+	}
+	if q := ComposeCommand(ComposeStop, Compose{Name: "o'reilly"}); !strings.Contains(q, shellQuote("o'reilly")) {
+		t.Fatalf("quote: %q", q)
+	}
+}

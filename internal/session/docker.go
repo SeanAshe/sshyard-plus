@@ -54,6 +54,14 @@ type Container struct {
 	Status  string `json:"Status"`
 	Ports   string `json:"Ports"`
 	Created string `json:"RunningFor"`
+	// Labels is the comma-joined "key=value" list docker ps prints.
+	// Project, WorkDir, ConfigFiles and Service override it when set:
+	// a compose file path can itself contain a comma.
+	Labels      string `json:"Labels"`
+	Project     string `json:"Project"`
+	WorkDir     string `json:"WorkDir"`
+	ConfigFiles string `json:"ConfigFiles"`
+	Service     string `json:"Service"`
 }
 
 // Running reports whether the container runs (paused or not).
@@ -224,5 +232,228 @@ func DockerLogs(ctx context.Context, client *ssh.Client, ref string, lines int) 
 		lines = 500
 	}
 	out, err := runDocker(ctx, client, dockerPrelude+`$D logs --tail `+strconv.Itoa(lines)+` "$1" 2>&1`, ref)
+	return string(out), err
+}
+
+// Compose is the Docker Compose project a container belongs to, from the
+// labels compose writes onto it. Files are the compose files, Dir the
+// project directory; either can be empty when the daemon did not record it.
+type Compose struct {
+	Name    string
+	Dir     string
+	Files   []string
+	Service string
+}
+
+// Compose reports the project c belongs to.
+func (c Container) Compose() (Compose, bool) {
+	name, dir, files, service := c.Project, c.WorkDir, c.ConfigFiles, c.Service
+	if name == "" || dir == "" || files == "" || service == "" {
+		labs := parseDockerLabels(c.Labels)
+		if name == "" {
+			name = labs["com.docker.compose.project"]
+		}
+		if dir == "" {
+			dir = labs["com.docker.compose.project.working_dir"]
+		}
+		if files == "" {
+			files = labs["com.docker.compose.project.config_files"]
+			if files == "" {
+				files = labs["com.docker.compose.config_files"]
+			}
+		}
+		if service == "" {
+			service = labs["com.docker.compose.service"]
+		}
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return Compose{}, false
+	}
+	return Compose{Name: name, Dir: strings.TrimSpace(dir), Files: splitComposeFiles(files), Service: strings.TrimSpace(service)}, true
+}
+
+// parseDockerLabels reads the Labels field of docker ps. A value may
+// contain commas (a list of compose files does); a piece without its own
+// key continues the value before it.
+func parseDockerLabels(s string) map[string]string {
+	out := map[string]string{}
+	var key, val string
+	have := false
+	flush := func() {
+		if have {
+			out[key] = val
+		}
+	}
+	for _, part := range strings.Split(s, ",") {
+		if i := strings.IndexByte(part, '='); i > 0 && dockerLabelKey(part[:i]) {
+			flush()
+			key, val, have = part[:i], part[i+1:], true
+			continue
+		}
+		if have {
+			val += "," + part
+		}
+	}
+	flush()
+	return out
+}
+
+func dockerLabelKey(s string) bool {
+	if s == "" || len(s) > 256 {
+		return false
+	}
+	for i, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case i > 0 && (r == '.' || r == '_' || r == '-'):
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func splitComposeFiles(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// ComposeGroup is one row of a compose layout: a project and the
+// containers that belong to it, or a single container that belongs to
+// none (its Compose name empty). Order is the order docker ps listed them,
+// a project taking the place of its first container.
+type ComposeGroup struct {
+	Compose    Compose
+	Containers []Container
+}
+
+// Project reports whether g is a Compose project.
+func (g ComposeGroup) Project() bool { return g.Compose.Name != "" }
+
+// GroupCompose lays containers out by Compose project, as the Containers
+// view does: a project holds its containers, and a container with no
+// project stands on its own.
+func GroupCompose(cs []Container) []ComposeGroup {
+	var out []ComposeGroup
+	at := map[string]int{}
+	for _, c := range cs {
+		comp, ok := c.Compose()
+		if !ok {
+			out = append(out, ComposeGroup{Containers: []Container{c}})
+			continue
+		}
+		i, seen := at[comp.Name]
+		if !seen {
+			at[comp.Name] = len(out)
+			out = append(out, ComposeGroup{Compose: comp, Containers: []Container{c}})
+			continue
+		}
+		g := &out[i]
+		g.Containers = append(g.Containers, c)
+		if g.Compose.Dir == "" {
+			g.Compose.Dir = comp.Dir
+		}
+		if len(g.Compose.Files) == 0 {
+			g.Compose.Files = comp.Files
+		}
+	}
+	return out
+}
+
+// ComposeAction is a docker compose command run against a project.
+type ComposeAction string
+
+const (
+	ComposeUp      ComposeAction = "up -d"
+	ComposeDown    ComposeAction = "down"
+	ComposeStart   ComposeAction = "start"
+	ComposeStop    ComposeAction = "stop"
+	ComposeRestart ComposeAction = "restart"
+)
+
+// ComposeOK reports whether p may be given to docker compose. The name is
+// quoted into the command; a control character is refused.
+func ComposeOK(p Compose) bool {
+	return composeTextOK(p.Name) && len(p.Name) <= 128
+}
+
+func composeTextOK(s string) bool {
+	if s == "" || len(s) > 4096 {
+		return false
+	}
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
+func composeActionOK(a ComposeAction) bool {
+	switch a {
+	case ComposeUp, ComposeDown, ComposeStart, ComposeStop, ComposeRestart:
+		return true
+	}
+	return false
+}
+
+// composePrefix is "$D compose" with the project's name, directory and
+// files, each quoted. A path that may not be quoted is left out.
+func composePrefix(p Compose) string {
+	var b strings.Builder
+	b.WriteString(dockerPrelude)
+	b.WriteString("$D compose -p ")
+	b.WriteString(shellQuote(p.Name))
+	if composeTextOK(p.Dir) {
+		b.WriteString(" --project-directory ")
+		b.WriteString(shellQuote(p.Dir))
+	}
+	for _, f := range p.Files {
+		if composeTextOK(f) {
+			b.WriteString(" -f ")
+			b.WriteString(shellQuote(f))
+		}
+	}
+	b.WriteByte(' ')
+	return b.String()
+}
+
+// ComposeCommand is the script running action on p, "" when either may not be.
+func ComposeCommand(action ComposeAction, p Compose) string {
+	if !composeActionOK(action) || !ComposeOK(p) {
+		return ""
+	}
+	return composePrefix(p) + string(action)
+}
+
+// ComposeDo runs action on the project p.
+func ComposeDo(ctx context.Context, client *ssh.Client, action ComposeAction, p Compose) error {
+	script := ComposeCommand(action, p)
+	if script == "" {
+		return errors.New("session: bad compose project")
+	}
+	_, err := runDocker(ctx, client, script)
+	return err
+}
+
+// ComposeLogs is the last lines of a project's services, stdout and stderr
+// together.
+func ComposeLogs(ctx context.Context, client *ssh.Client, p Compose, lines int) (string, error) {
+	if !ComposeOK(p) {
+		return "", errors.New("session: bad compose project")
+	}
+	if lines <= 0 || lines > 5000 {
+		lines = 500
+	}
+	out, err := runDocker(ctx, client, composePrefix(p)+"logs --tail "+strconv.Itoa(lines)+" --no-color")
 	return string(out), err
 }

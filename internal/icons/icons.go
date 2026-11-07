@@ -151,6 +151,7 @@ var (
 	DockerOn    = load("ship-2-fill")
 	Tmux        = load("stack-line")
 	TmuxOn      = load("stack-fill")
+	Compose     = Tmux // a Compose project; the glyph is the stack
 	Detach      = load("logout-box-r-line")
 	OpenInTab   = load("window-line")
 	Halt        = load("stop-line")
