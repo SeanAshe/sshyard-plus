@@ -47,9 +47,7 @@ func TestSnippetUIManageWithoutTerminal(t *testing.T) {
 	if a.snippets.err != "" {
 		t.Fatal("row should preview without sending", a.snippets.err)
 	}
-	mustClick(t, tt, m.SnippetMore(n.Name))
-	tt.Frame()
-	mustClick(t, tt, m.Edit())
+	mustClick(t, tt, m.SnippetEditAction(n.Name))
 	tt.Frame()
 	mustClick(t, tt, m.SnippetImmediate())
 	tt.Frame()
@@ -65,9 +63,7 @@ func TestSnippetUIManageWithoutTerminal(t *testing.T) {
 	if !n.SendEnter {
 		t.Fatal("mode not saved")
 	}
-	mustClick(t, tt, m.SnippetMore(n.Name))
-	tt.Frame()
-	mustClick(t, tt, m.SnippetDuplicate())
+	mustClick(t, tt, m.SnippetDuplicateAction(n.Name))
 	tt.Frame()
 	if a.snippets.form.meta.ID != "" || a.snippets.form.meta.SendEnter || a.snippets.form.content != "echo first\necho second" {
 		t.Fatal("bad duplicate")
@@ -80,9 +76,7 @@ func TestSnippetUIManageWithoutTerminal(t *testing.T) {
 	if len(a.store.Snippets()) != 2 {
 		t.Fatal("copy missing")
 	}
-	mustClick(t, tt, m.SnippetMore("copy"))
-	tt.Frame()
-	mustClick(t, tt, m.Delete())
+	mustClick(t, tt, m.SnippetDeleteAction("copy"))
 	tt.Frame()
 	if a.snippets.deleteID == "" || len(a.store.Snippets()) != 2 {
 		t.Fatal("deleted without a confirmation")

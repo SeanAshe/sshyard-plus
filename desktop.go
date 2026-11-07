@@ -25,6 +25,11 @@ type desktop struct {
 	trayErr            error
 	quitting           bool
 	changingVisibility bool
+	panel              *mygo.Window
+	panelView          *app.TrayPanel
+	panelNative        desktopPanelNative
+	openingPanel       bool
+	panelResize        desktopPanelResize
 }
 
 func newDesktop(a *app.App, w *mygo.Window) *desktop {
@@ -32,15 +37,7 @@ func newDesktop(a *app.App, w *mygo.Window) *desktop {
 	d.createTray()
 	w.OnClose(d.close)
 	mygo.App.OnBeforeQuit(d.beforeQuit)
-	mygo.App.OnActivate(func(bool) {
-		// A user reopening the app restores it even while its Dock is hidden.
-		if d.changingVisibility {
-			return
-		}
-		if !w.IsVisible() || w.IsMinimized() {
-			d.show()
-		}
-	})
+	mygo.App.OnActivate(func(bool) { d.activate() })
 	if d.trayErr != nil {
 		log.Printf("create tray: %v", d.trayErr)
 		if a.Settings().CloseBehavior == settings.CloseToTray {
@@ -49,10 +46,15 @@ func newDesktop(a *app.App, w *mygo.Window) *desktop {
 		return d
 	}
 	d.updateMenu()
-	mygo.App.OnLocaleChanged(func(string) { d.updateMenu() })
+	mygo.App.OnLocaleChanged(func(string) {
+		d.updateMenu()
+		d.refreshPanel()
+	})
+	mygo.Theme.OnUpdated(d.refreshPanel)
 	if runtime.GOOS != "linux" {
-		d.tray.OnClick(d.show)
+		d.tray.OnClick(d.clickTray)
 		d.tray.OnRightClick(func() {
+			d.closePanel()
 			d.tray.SetMenu(d.menu())
 			defer d.tray.SetMenu(nil)
 			d.tray.PopUpMenu()
@@ -91,11 +93,24 @@ func (d *desktop) refreshTrayIcon() {
 }
 
 func (d *desktop) menu() *mygo.Menu {
-	return mygo.NewMenu([]*mygo.MenuItem{
-		{Label: locales.TrayShowWindow(), Click: func(*mygo.MenuItem, *mygo.Window) { d.show() }},
-		mygo.Separator(),
-		{Label: locales.TrayQuit(), Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
-	})
+	items := []*mygo.MenuItem{}
+	if runtime.GOOS == "linux" {
+		items = append(items, &mygo.MenuItem{Label: locales.TrayOpenHosts(), Click: func(*mygo.MenuItem, *mygo.Window) { d.openPanel() }})
+	}
+	for _, item := range []struct {
+		label  string
+		action app.TrayAction
+	}{
+		{locales.TrayShowWindow(), app.TrayOpenMain},
+		{locales.Settings(), app.TraySettings},
+		{locales.QuickConnect(), app.TrayQuickConnect},
+		{locales.LocalTerminal(), app.TrayLocalTerminal},
+		{locales.NewHost(), app.TrayNewHost},
+	} {
+		items = append(items, &mygo.MenuItem{Label: item.label, Click: func(*mygo.MenuItem, *mygo.Window) { d.trayAction(item.action) }})
+	}
+	items = append(items, mygo.Separator(), &mygo.MenuItem{Label: locales.TrayQuit(), Click: func(*mygo.MenuItem, *mygo.Window) { d.trayAction(app.TrayQuit) }})
+	return mygo.NewMenu(items)
 }
 
 func (d *desktop) updateMenu() {
@@ -105,7 +120,18 @@ func (d *desktop) updateMenu() {
 	}
 }
 
+// activate handles an explicit reopen (for example a Dock click), not focus.
+func (d *desktop) activate() {
+	if d.changingVisibility || d.openingPanel {
+		return
+	}
+	if !d.window.IsVisible() || d.window.IsMinimized() {
+		d.show()
+	}
+}
+
 func (d *desktop) show() {
+	d.closePanel()
 	d.changingVisibility = true
 	defer func() { d.changingVisibility = false }()
 	if runtime.GOOS == "darwin" {
@@ -145,10 +171,11 @@ func (d *desktop) close(e *mygo.CloseEvent) {
 }
 
 func (d *desktop) beforeQuit(e *mygo.QuitEvent) {
+	d.closePanel()
 	// MyGo closes windows in map order and exposes no quit-cancel callback,
 	// so ask editors first, while the main window can still be retained.
 	for _, w := range mygo.Windows() {
-		if w == d.window {
+		if w == d.window || w.IsFlyout() {
 			continue
 		}
 		w.Close()

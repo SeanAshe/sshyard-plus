@@ -21,6 +21,8 @@ type IconButton struct {
 	On *icons.Icon
 	// Label names the action, from the locale catalog.
 	Label string
+	// InstantTooltip shows a tip immediately on hover or keyboard focus.
+	InstantTooltip bool
 	// Active shows the button on: a toggle that is set, a view that shows.
 	Active bool
 	// Toggle reports Active to assistive technology as a toggle's state.
@@ -63,7 +65,10 @@ func (b IconButton) Show(c *ui.Context, key string) ui.Element {
 	case size <= Small:
 		pad = 5
 	}
-	el := ui.ButtonBase(c.Key("ib:" + key)).Label(b.Label).Tooltip(b.Label).Padding(pad).Radius(theme.Capsule).Disabled(b.Disabled)
+	el := ui.ButtonBase(c.Key("ib:" + key)).Label(b.Label).Padding(pad).Radius(theme.Capsule).Disabled(b.Disabled)
+	if !b.InstantTooltip {
+		el.Tooltip(b.Label)
+	}
 	if !el.IsDisabled() {
 		el.Cursor(ui.CursorPointer)
 	}
@@ -114,6 +119,9 @@ func (b IconButton) Show(c *ui.Context, key string) ui.Element {
 			})
 		}
 	})
+	if b.InstantTooltip && !b.Disabled {
+		instantIconTooltip(c, el, b.Label, key)
+	}
 	return el
 }
 

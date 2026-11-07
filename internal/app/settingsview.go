@@ -363,6 +363,7 @@ func (a *App) prefAppearance(c *ui.Context, m locales.Messages, tok theme.Tokens
 				*changed = true
 			}
 		})
+		a.trayPreferences(c, m, g, s, changed)
 		g.row(m.UiZoom(), m.UiZoomDesc(), func() {
 			opts := []string{m.ZoomSystem()}
 			for _, z := range settings.UIZooms {

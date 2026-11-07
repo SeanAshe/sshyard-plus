@@ -33,6 +33,7 @@ const (
 	actSendBreak      = "sendBreak"
 	actBroadcast      = "broadcast"
 	actSessionLogs    = "sessionLogs"
+	actHistory        = "commandHistory"
 )
 
 // action is an action with a shortcut: what it is called, its icon in the
@@ -68,6 +69,7 @@ var actions = []action{
 	{actSendBreak, locales.Messages.SendBreak, icons.SendBreak, keymap.Combo{Mods: appMods, Key: ui.KeyB}, false},
 	{actBroadcast, locales.Messages.Broadcast, icons.Broadcast, keymap.Combo{Mods: aiMods, Key: ui.KeyM}, false},
 	{actSessionLogs, locales.Messages.SessionLogs, icons.FileText, keymap.Combo{Mods: aiMods, Key: ui.KeyL}, false},
+	{actHistory, locales.Messages.CommandHistory, icons.History, keymap.Combo{Mods: aiMods, Key: ui.KeyH}, false},
 }
 
 // actionOf is the action with id.
@@ -280,5 +282,7 @@ func (a *App) runAction(id string) {
 		a.ToggleTool(layout.Broadcast)
 	case actSessionLogs:
 		a.ToggleTool(layout.Logs)
+	case actHistory:
+		a.togglePanel(inspectHistory)
 	}
 }

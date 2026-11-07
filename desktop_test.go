@@ -44,7 +44,7 @@ func TestDesktopNativeLifecycle(t *testing.T) {
 	if os.Getenv("SSHYARD_NATIVE_TEST") != "1" {
 		t.Skip("set SSHYARD_NATIVE_TEST=1 on a desktop session to run real MyGo windows and tray")
 	}
-	for _, mode := range []string{"tray", "quit", "unavailable"} {
+	for _, mode := range []string{"tray", "quit", "unavailable", "panel"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 			defer cancel()
@@ -200,6 +200,9 @@ func driveNativeDesktop(mode string, d *desktop, draft *string, base, token stri
 		nativeCheck(d.trayErr == nil, "style or appearance update broke tray")
 	})
 	nativeCheck(nativeMCP(base, token) == nil, "MCP tool unavailable while main window hidden")
+	if mode == "panel" {
+		driveNativePanel(d, draft, base, token)
+	}
 	mygo.RunOnMain(func() {
 		d.show()
 		d.show()
@@ -232,11 +235,16 @@ func driveNativeDesktop(mode string, d *desktop, draft *string, base, token stri
 		nativeCheck(!d.window.IsVisible() && !d.window.IsDestroyed(), "editor veto left permanent quit flag")
 		nativeDock(false)
 		d.show()
+		if mode == "panel" {
+			d.openPanel()
+			nativeCheck(d.panel != nil, "open panel before cancelled quit")
+		}
 		// The tray's explicit Quit action must be retryable after the veto.
-		d.menu().Items()[2].Click(nil, nil)
+		d.menu().Items()[len(d.menu().Items())-1].Click(nil, nil)
 	})
 	mygo.RunOnMain(func() {
 		nativeCheck(!d.window.IsDestroyed() && !editor.IsDestroyed(), "tray quit ignored editor veto")
+		nativeCheck(d.panel == nil && d.panelView == nil, "cancelled quit retained popup state")
 		nativeDock(true)
 		allowEditor = true
 		if mode == "unavailable" {
@@ -251,7 +259,11 @@ func driveNativeDesktop(mode string, d *desktop, draft *string, base, token stri
 			nativeCheck(d.app.ApplySettings(s) == nil, "choose complete exit")
 			d.window.Close()
 		} else {
-			d.menu().Items()[2].Click(nil, nil)
+			if mode == "panel" {
+				d.openPanel()
+				nativeCheck(d.panel != nil, "open panel before complete quit")
+			}
+			d.menu().Items()[len(d.menu().Items())-1].Click(nil, nil)
 		}
 	})
 }

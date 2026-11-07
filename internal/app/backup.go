@@ -306,6 +306,7 @@ func mergeSettings(cur, in settings.Settings) settings.Settings {
 	out.RememberLayout = cur.RememberLayout
 	out.SidebarWidth, out.SidebarHidden = cur.SidebarWidth, cur.SidebarHidden
 	out.ChromeMaterial, out.ContentMaterial = cur.ChromeMaterial, cur.ContentMaterial
+	out.TrayClick, out.TrayMaterial, out.TrayHeight = cur.TrayClick, cur.TrayMaterial, cur.TrayHeight
 	out.UIFont, out.TerminalFont = cur.UIFont, cur.TerminalFont
 	out.FilesDual, out.FilesSplit = cur.FilesDual, cur.FilesSplit
 	out.EditorTreeWidth, out.EditorTreeHidden = cur.EditorTreeWidth, cur.EditorTreeHidden

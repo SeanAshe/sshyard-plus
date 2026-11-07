@@ -24,6 +24,12 @@ var (
 // nil means the write started; snippetSendResult reports its completion on the
 // UI thread. Neither result confirms that a command executed successfully.
 func (a *App) sendSnippet(id string, sendEnter bool) error {
+	return a.sendInput(func() (string, error) { return a.snippetContent(id) }, sendEnter)
+}
+
+// sendInput is sendSnippet for the text content reads once the terminal is
+// known to take it: a snippet's body, or a command of the history.
+func (a *App) sendInput(content func() (string, error), sendEnter bool) error {
 	c := a.focused()
 	if c == nil || c.kind != layout.Terminal || c.tv == nil || c.s == nil {
 		return errSnippetNoTerminal
@@ -39,11 +45,11 @@ func (a *App) sendSnippet(id string, sendEnter bool) error {
 	if err != nil {
 		return errSnippetDisconnected
 	}
-	content, err := a.snippetContent(id)
+	text, err := content()
 	if err != nil {
 		return err
 	}
-	payload, err := snippetBytes(content, sendEnter, v.target.Terminal().Modes())
+	payload, err := snippetBytes(text, sendEnter, v.target.Terminal().Modes())
 	if err != nil {
 		return err
 	}

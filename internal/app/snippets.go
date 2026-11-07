@@ -145,16 +145,22 @@ func (a *App) snippetList(c *ui.Context, m locales.Messages, tok theme.Tokens, a
 	})
 }
 
-// snippetSearch is the search field, as the hosts' one: a magnifier, the
-// text and, while it holds any, an IconButton clearing it, as Escape does.
+// snippetSearch is the search field of the snippets.
 func (a *App) snippetSearch(c *ui.Context, m locales.Messages, tok theme.Tokens) {
-	ui.Row(c.Key("snippet:search")).FillWidth().Height(30).Padding(0, theme.Space(1), 0, theme.Space(2.5)).Gap(theme.Space(1.5)).AlignItems(ui.Center).
+	searchField(c, m, tok, "snippet:search", &a.snippets.query, m.SnippetSearch())
+}
+
+// searchField is a panel's search field, as the hosts' one: a magnifier,
+// the text and, while it holds any, an IconButton clearing it, as Escape
+// does.
+func searchField(c *ui.Context, m locales.Messages, tok theme.Tokens, key string, q *string, placeholder string) {
+	ui.Row(c.Key(key)).FillWidth().Height(30).Padding(0, theme.Space(1), 0, theme.Space(2.5)).Gap(theme.Space(1.5)).AlignItems(ui.Center).
 		Radius(theme.RadiusControl).Background(tok.Fill).Children(func() {
 		ui.Icon(c, icons.Search.SVG).Size(14, 14).Shrink(0).TextColor(tok.TextMuted)
-		in := ui.TextInputBase(c.Key("q"), &a.snippets.query).Placeholder(m.SnippetSearch()).Label(m.SnippetSearch()).Grow(1).Shrink(1).MinWidth(40)
-		if a.snippets.query != "" {
+		in := ui.TextInputBase(c.Key("q"), q).Placeholder(placeholder).Label(placeholder).Grow(1).Shrink(1).MinWidth(40)
+		if *q != "" {
 			if (IconButton{Icon: icons.ClearText, Label: m.ClearSearch(), Size: Small}).Clicked(c, "clear") || in.Shortcut(0, ui.KeyEscape) {
-				a.snippets.query = ""
+				*q = ""
 				in.Focus()
 			}
 		} else {
@@ -287,12 +293,11 @@ func (a *App) snippetRow(c *ui.Context, m locales.Messages, tok theme.Tokens, n 
 		body = snippetErrorText(m, err)
 		preview = body
 	}
-	more := "snippet:more:" + n.ID
 	box := ui.Column(c.Key("snippet:row:" + n.ID)).FillWidth().Radius(theme.RadiusControl)
 	switch {
 	case sel:
 		box.Background(tok.Accent.Alpha(accentWash(tok)))
-	case box.Hovered() || a.menu.key == more:
+	case box.Hovered():
 		box.Background(tok.Hover)
 	}
 	box.Children(func() {
@@ -320,7 +325,7 @@ func (a *App) snippetRow(c *ui.Context, m locales.Messages, tok theme.Tokens, n 
 			if (IconButton{Icon: ic, Label: label, Disabled: disabled, Size: Small}).Clicked(c, "snippet:send:"+n.ID) {
 				a.startSnippet(m, n.ID, n.SendEnter)
 			}
-			a.menuButton(c, more, IconButton{Icon: icons.More, Label: m.SnippetMore(n.Name), Size: Small}, func() []menuEntry { return a.snippetMenu(m, n, disabled) })
+			a.snippetActions(c, m, n, disabled)
 		})
 		if !sel {
 			return
@@ -343,6 +348,27 @@ func (a *App) snippetRow(c *ui.Context, m locales.Messages, tok theme.Tokens, n 
 	})
 	a.contextMenu(box, func() []menuEntry { return a.snippetMenu(m, n, disabled) })
 }
+
+// snippetActions are an entry's actions beside its own, each an
+// IconButton: inserting one that sends Enter, editing, duplicating and
+// deleting it. The right click lists them too (snippetMenu).
+func (a *App) snippetActions(c *ui.Context, m locales.Messages, n assets.Snippet, disabled bool) {
+	if n.SendEnter {
+		if (IconButton{Icon: icons.Paste, Label: m.SnippetInsertAction(n.Name), Disabled: disabled, Size: Small}).Clicked(c, "snippet:insert:"+n.ID) {
+			a.startSnippet(m, n.ID, false)
+		}
+	}
+	if (IconButton{Icon: icons.Edit, Label: m.SnippetEditAction(n.Name), Size: Small}).Clicked(c, "snippet:edit:"+n.ID) {
+		a.openSnippet(m, n, false)
+	}
+	if (IconButton{Icon: icons.Copy, Label: m.SnippetDuplicateAction(n.Name), Size: Small}).Clicked(c, "snippet:dup:"+n.ID) {
+		a.openSnippet(m, n, true)
+	}
+	if (IconButton{Icon: icons.Delete, Label: m.SnippetDeleteAction(n.Name), Danger: true, Size: Small}).Clicked(c, "snippet:delete:"+n.ID) {
+		a.snippets.deleteID, a.snippets.deleting = n.ID, true
+	}
+}
+
 func (a *App) snippetMenu(m locales.Messages, n assets.Snippet, disabled bool) []menuEntry {
 	out := []menuEntry{{Icon: icons.Edit, Label: m.Edit(), Do: func() { a.openSnippet(m, n, false) }}, {Icon: icons.Copy, Label: m.SnippetDuplicate(), Do: func() { a.openSnippet(m, n, true) }}, {Icon: icons.Delete, Label: m.Delete(), Danger: true, Do: func() { a.snippets.deleteID = n.ID; a.snippets.deleting = true }}}
 	if n.SendEnter {

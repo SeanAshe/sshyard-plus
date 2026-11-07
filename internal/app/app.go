@@ -331,11 +331,12 @@ type App struct {
 	// tmuxWarned are the hosts whose terminals were told that their
 	// server has no tmux, by ID
 	tmuxWarned map[string]bool
-	// usage, docker and tmux are what the usage, Docker and tmux panels
-	// read
+	// usage, docker, tmux and hist are what the usage, Docker, tmux and
+	// command history panels read
 	usage       *usageState
 	docker      *dockerState
 	tmux        *tmuxState
+	hist        *historyState
 	selected    string // host chosen in the sidebar
 	search      string
 	searchFocus bool // the search field takes the focus next frame
