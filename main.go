@@ -106,8 +106,24 @@ func windowVibrancy() mygo.Vibrancy {
 // bar: on Linux and Windows. macOS keeps its traffic lights.
 func ownWindowButtons() bool { return runtime.GOOS != "darwin" }
 
+// appMenu is MyGo's default menu bar (macOS) with Close Window on ⇧⌘W:
+// ⌘W closes the focused pane, as in Terminal, and the menu would take it
+// before the window does.
+func appMenu() *mygo.Menu {
+	return mygo.NewMenu([]*mygo.MenuItem{
+		{Role: mygo.RoleAppMenu},
+		{Role: mygo.RoleFileMenu, Submenu: []*mygo.MenuItem{{Role: mygo.RoleClose, Accelerator: "CmdOrCtrl+Shift+W"}}},
+		{Role: mygo.RoleEditMenu},
+		{Role: mygo.RoleViewMenu},
+		{Role: mygo.RoleWindowMenu},
+	})
+}
+
 func main() {
 	mygo.Use(updatePlugin())
+	if runtime.GOOS == "darwin" {
+		mygo.App.SetMenu(appMenu())
+	}
 	mygo.App.WhenReady(func() {
 		// Linux: size the window buttons' bar to its buttons, and keep text
 		// in its color with cairo before 1.17.8 (see gtkfix).

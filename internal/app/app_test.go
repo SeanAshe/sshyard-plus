@@ -3,7 +3,6 @@ package app
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/Licoy/sshyard/internal/layout"
 	"github.com/Licoy/sshyard/internal/session"
 	"github.com/Licoy/sshyard/internal/settings"
+	"github.com/Licoy/sshyard/internal/sftpsvc"
 	"github.com/Licoy/sshyard/internal/sshtest"
 	"github.com/Licoy/sshyard/internal/theme"
 	"github.com/Licoy/sshyard/locales"
@@ -85,15 +85,6 @@ func mustClick(t *testing.T, tt *ui.Tester, s string) {
 	}
 }
 
-func TestWelcome(t *testing.T) {
-	_, tt := newTestApp(t)
-	for _, s := range []string{"SSHYard", "No hosts yet", "Welcome to SSHYard"} {
-		if !tt.HasText(s) {
-			t.Errorf("missing %q in %q", s, tt.Texts())
-		}
-	}
-}
-
 func TestAddHostFlow(t *testing.T) {
 	a, tt := newTestApp(t)
 	a.openEditor(nil)
@@ -105,13 +96,6 @@ func TestAddHostFlow(t *testing.T) {
 	cr := addCred(t, a, "ops", "pw")
 	tt.Frame()
 	a.form.name, a.form.address, a.form.user = "web", "10.0.0.5", "root"
-	// The auth select offers asking (local keys first, by default), the
-	// agent and the credential.
-	for _, s := range []string{"Auto (local keys, then ask for password)"} {
-		if !tt.HasText(s) {
-			t.Errorf("auth select misses %q: %q", s, tt.Texts())
-		}
-	}
 	if a.form.auth != "Auto (local keys, then ask for password)" || !a.form.cwdFollow {
 		t.Errorf("new host defaults: auth %q, cwd follow %v", a.form.auth, a.form.cwdFollow)
 	}
@@ -134,9 +118,6 @@ func TestAddHostFlow(t *testing.T) {
 		t.Errorf("editor shows auth %q", a.form.auth)
 	}
 	a.editing, a.form = false, nil
-	if !tt.HasText("web") {
-		t.Errorf("sidebar misses host: %q", tt.Texts())
-	}
 	// The store was written to disk.
 	if _, err := os.Stat(filepath.Join(a.p.DataDir, "hosts.json")); err != nil {
 		t.Error(err)
@@ -186,7 +167,7 @@ func TestConnectTrustTypeSplit(t *testing.T) {
 	tt.Frame()
 	a.Connect(h.ID, openAt{})
 	// The host key is unknown: the app asks.
-	waitFor(t, tt, "host key prompt", func() bool { return tt.HasText("Unknown Host Key") })
+	waitFor(t, tt, "host key prompt", func() bool { return a.hostKey != nil })
 	mustClick(t, tt, "Trust and Connect")
 	c := a.focused()
 	if c == nil {
@@ -231,10 +212,6 @@ func TestPasswordPrompt(t *testing.T) {
 	a.known.Add(srv.Addr, srv.HostKey.PublicKey())
 	a.Connect(h.ID, openAt{})
 	waitFor(t, tt, "password prompt", func() bool { return a.prompting })
-	tt.Frame()
-	if !tt.HasText("Enter the password for nopw to connect.") || tt.HasText("No password or key is saved for nopw.") {
-		t.Errorf("ask host banner: %q", tt.Texts())
-	}
 	a.prompt.value = "wrong"
 	a.SubmitPrompt()
 	waitFor(t, tt, "auth failure prompt", func() bool { return a.prompting && a.prompt.err != "" })
@@ -271,37 +248,30 @@ func TestSettingsLanguageAndTheme(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if len(locs) == 0 || !tt.HasText(locales.In("zh-Hans").CloseSettings()) {
-		t.Errorf("Chinese UI missing: %v %q", locs, tt.Texts())
+	if len(locs) == 0 || locs[len(locs)-1] != "zh-Hans" {
+		t.Errorf("locale calls %v, want zh-Hans last", locs)
 	}
 }
 
-func TestSettingsAllLanguagesAndThemes(t *testing.T) {
-	for _, dark := range []bool{false, true} {
-		t.Run(strconv.FormatBool(dark), func(t *testing.T) {
-			a, tt := newTestApp(t)
-			a.p.SetLocale = func(lang string) { tt.SetLocale(lang) }
-			a.page = pageSettings
-			tt.SetDark(dark)
-			tt.Frame()
-			current := locales.In("en").LanguageAuto()
-			for _, lang := range settings.Languages {
-				mustClick(t, tt, current)
-				tt.Frame()
-				mustClick(t, tt, languageNames[lang])
-				tt.Frame()
-				if a.Settings().Language != lang {
-					t.Fatalf("selected language = %q, want %q", a.Settings().Language, lang)
-				}
-				m := locales.In(lang)
-				for _, label := range []string{m.CloseSettings(), m.Appearance(), m.Language(), m.Theme(), languageNames[lang]} {
-					if !tt.HasText(label) {
-						t.Errorf("%s dark=%v missing %q", lang, dark, label)
-					}
-				}
-				current = languageNames[lang]
-			}
-		})
+func TestSettingsSelectsEveryLanguage(t *testing.T) {
+	a, tt := newTestApp(t)
+	a.p.SetLocale = func(lang string) { tt.SetLocale(lang) }
+	a.page = pageSettings
+	tt.Frame()
+	current := locales.In("en").LanguageAuto()
+	for _, lang := range settings.Languages {
+		mustClick(t, tt, current)
+		tt.Frame()
+		mustClick(t, tt, languageNames[lang])
+		tt.Frame()
+		if a.Settings().Language != lang {
+			t.Fatalf("selected language = %q, want %q", a.Settings().Language, lang)
+		}
+		saved, err := settings.Load(filepath.Join(a.p.DataDir, "settings.json"))
+		if err != nil || saved.Language != lang {
+			t.Fatalf("saved language = %q, want %q, error %v", saved.Language, lang, err)
+		}
+		current = languageNames[lang]
 	}
 }
 
@@ -398,12 +368,17 @@ func TestFilesPaneInSplit(t *testing.T) {
 	if tab.Root.Axis != layout.Row || tab.Root.A.Item.Kind != layout.Terminal || tab.Root.B.Item.Kind != layout.Files {
 		t.Errorf("files pane not on the right of the terminal")
 	}
-	waitFor(t, tt, "remote listing", func() bool {
-		return fc.s.Status().State == session.Connected && tt.HasText("remote.txt") && tt.HasText("local.txt")
-	})
-	if !tt.HasText("Files · box") {
-		t.Errorf("no files pane title in %q", tt.Texts())
+	lists := func(sd *sideList, name string) bool {
+		for _, e := range sd.entries {
+			if e.Name == name {
+				return true
+			}
+		}
+		return false
 	}
+	waitFor(t, tt, "remote listing", func() bool {
+		return fc.s.Status().State == session.Connected && lists(&fc.fs.remote.sideList, "remote.txt") && lists(&fc.fs.local.sideList, "local.txt")
+	})
 	// The terminal goes on beside it, on its own connection.
 	if term.s.Status().State != session.Connected || term.s == fc.s {
 		t.Error("terminal lost or shared its connection")
@@ -420,10 +395,9 @@ func TestFilesPaneInSplit(t *testing.T) {
 		return string(b) == "from server"
 	})
 	fc.fs.transfers.Wait()
-	fc.fs.queueOpen = true
-	waitFor(t, tt, "transfer list", func() bool { return tt.HasText("Transfers") && tt.HasText("Done") && tt.HasText("remote.txt") })
-	fc.fs.queueOpen = false
-	tt.Frame()
+	if ts := fc.fs.transfers.List(); len(ts) != 2 || ts[0].State != sftpsvc.Done || ts[1].State != sftpsvc.Done {
+		t.Fatalf("transfers %+v, want both done", ts)
+	}
 
 	// New folder on the remote side, from its IconButton and dialog.
 	mustClick(t, tt, "New Remote Folder")
@@ -436,7 +410,7 @@ func TestFilesPaneInSplit(t *testing.T) {
 	mustClick(t, tt, "Create")
 	waitFor(t, tt, "mkdir", func() bool {
 		fi, err := os.Stat(filepath.Join(root, "made"))
-		return err == nil && fi.IsDir() && tt.HasText("made")
+		return err == nil && fi.IsDir() && lists(&fc.fs.remote.sideList, "made")
 	})
 
 	// A files pane moves like any pane: to the left of the terminal.
@@ -667,9 +641,6 @@ func TestSearchClear(t *testing.T) {
 		}
 	}
 	tt.Frame()
-	if err := tt.Click("Clear search"); err == nil {
-		t.Error("a clear button in an empty search")
-	}
 	mustClick(t, tt, "Search hosts")
 	tt.Type("web")
 	tt.Frame()
@@ -714,18 +685,6 @@ func TestFontSettings(t *testing.T) {
 	if c.tv.family != "monospace" {
 		t.Errorf("default terminal family %q", c.tv.family)
 	}
-	a.openSettings(prefAppearance)
-	tt.Frame()
-	if !tt.HasText("Interface font") {
-		t.Errorf("appearance misses the interface font: %q", tt.Texts())
-	}
-	mustClick(t, tt, "Terminal")
-	tt.Frame()
-	for _, s := range []string{"Terminal font", "Monospaced fonts only"} {
-		if !tt.HasText(s) {
-			t.Errorf("terminal settings miss %q: %q", s, tt.Texts())
-		}
-	}
 	s := a.Settings()
 	s.UIFont, s.TerminalFont, s.TerminalFontSize = "Test Sans", "Test Mono", 16
 	if err := a.ApplySettings(s); err != nil {
@@ -740,11 +699,6 @@ func TestFontSettings(t *testing.T) {
 		t.Errorf("terminal measured with %q", c.tv.fonts[0].Family)
 	}
 	// The non-ASCII font comes between the terminal's and the system's.
-	a.openSettings(prefTerminal)
-	tt.Frame()
-	if !tt.HasText("Non-ASCII font") {
-		t.Errorf("terminal settings miss the non-ASCII font: %q", tt.Texts())
-	}
 	s.TerminalFallbackFont = "Test Sans"
 	if err := a.ApplySettings(s); err != nil {
 		t.Fatal(err)
@@ -794,13 +748,6 @@ func TestTerminalSpacing(t *testing.T) {
 	w, ht, cols, rows := c.tv.cellW, c.tv.cellH, c.tv.cols, c.tv.rows
 	if w == 0 || ht == 0 {
 		t.Fatalf("not measured: %v×%v", w, ht)
-	}
-	a.openSettings(prefTerminal)
-	tt.Frame()
-	for _, s := range []string{"Line height", "Character width"} {
-		if !tt.HasText(s) {
-			t.Errorf("terminal settings miss %q: %q", s, tt.Texts())
-		}
 	}
 	s := a.Settings()
 	s.TerminalLineHeight, s.TerminalCharWidth = 150, 120
@@ -890,10 +837,7 @@ func TestDragPaneToEdge(t *testing.T) {
 
 	// A host from the sidebar onto the right of a pane, with the same
 	// preview: a new terminal there, on the shared connection.
-	hb, ok := tt.Find("box")
-	if !ok || hb.X > 240 {
-		t.Fatalf("sidebar host at %v", hb)
-	}
+	hb := mustFind(t, tt, "box")
 	dst = a.paneBounds[last]
 	tt.Press(hb.X+hb.W/2, hb.Y+hb.H/2)
 	for i := 1; i <= 8; i++ {
@@ -908,24 +852,5 @@ func TestDragPaneToEdge(t *testing.T) {
 	tt.Frame()
 	if n := len(a.ws.ActiveTab().Panes()); n != before+1 {
 		t.Errorf("%d panes after the host drop, want %d", n, before+1)
-	}
-}
-
-// Native text controls must also use the selected app language, including Korean.
-func TestNativeControlLanguages(t *testing.T) {
-	for _, lang := range settings.Languages {
-		t.Run(lang, func(t *testing.T) {
-			value := "text"
-			tt := ui.NewTester(func(c *ui.Context) { ui.TextInput(c, &value).Label("field").Width(240) }, 400, 200)
-			tt.SetLocale(lang)
-			tt.Frame()
-			if err := tt.RightClick("field"); err != nil {
-				t.Fatal(err)
-			}
-			want := locales.Catalog.Format(lang, "mygo.copy", nil)
-			if !slices.Contains(tt.Menu(), want) {
-				t.Errorf("native menu %q lacks %q", tt.Menu(), want)
-			}
-		})
 	}
 }

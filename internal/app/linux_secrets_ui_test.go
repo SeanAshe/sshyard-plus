@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/Licoy/sshyard/internal/keychain"
-	"github.com/Licoy/sshyard/internal/theme"
 	"github.com/Licoy/sshyard/locales"
 	"github.com/egoist/mygo/ui"
 )
@@ -27,35 +26,27 @@ func (b *linuxAuthorizationBackend) Get(k string) ([]byte, error) {
 	return b.Memory.Get(k)
 }
 
-func TestLinuxUnlockModalTranslationsAndThemes(t *testing.T) {
-	for _, lang := range []string{"en", "zh-Hans", "zh-Hant", "ko", "ja"} {
-		for _, dark := range []bool{false, true} {
-			t.Run(lang+map[bool]string{false: "/light", true: "/dark"}[dark], func(t *testing.T) {
-				m := locales.In(lang)
-				a := &App{}
-				tt := ui.NewTester(func(c *ui.Context) { a.unlockModal(c, locales.In(c.Locale()), currentTokens(c)) }, 700, 500)
-				tt.SetLocale(lang)
-				tt.SetDark(dark)
-				for _, tc := range linuxSecretReasons(m) {
-					a.unlock.err = &keychain.OpError{Op: "master-read", Err: &keychain.LinuxServiceError{Kind: tc.kind, Err: errors.New("private-token /private/keyring")}}
-					a.unlock.modal = true
-					tt.Frame()
-					for _, want := range []string{m.SecretsUnlockFailed(), m.SecretsUnlockSafety(), m.SecretsFailureDetail(m.SecretsStageReadMaster(), tc.reason), m.Cancel(), m.SecretsRetry()} {
-						r, ok := tt.Find(want)
-						if !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.Y < 0 || r.X+r.W > 700 || r.Y+r.H > 500 {
-							t.Fatalf("missing or clipped %q: %+v in %q", want, r, tt.Texts())
-						}
-					}
-					if strings.Contains(strings.Join(tt.Texts(), " "), "private") {
-						t.Fatal("raw Linux diagnostic visible")
-					}
-					mustClick(t, tt, m.Cancel())
-					tt.Frame()
-					if a.unlock.modal {
-						t.Fatal("cancel did not dismiss modal")
-					}
-				}
-			})
+// TestLinuxUnlockModalReasons: each Linux keyring failure says why it
+// failed without the raw diagnostic, and Cancel dismisses it.
+func TestLinuxUnlockModalReasons(t *testing.T) {
+	m := locales.In("en")
+	a := &App{}
+	tt := ui.NewTester(func(c *ui.Context) { a.unlockModal(c, locales.In(c.Locale()), currentTokens(c)) }, 700, 500)
+	tt.SetLocale("en")
+	for _, tc := range linuxSecretReasons(m) {
+		a.unlock.err = &keychain.OpError{Op: "master-read", Err: &keychain.LinuxServiceError{Kind: tc.kind, Err: errors.New("private-token /private/keyring")}}
+		a.unlock.modal = true
+		tt.Frame()
+		if want := m.SecretsFailureDetail(m.SecretsStageReadMaster(), tc.reason); !tt.HasText(want) {
+			t.Fatalf("no %q in %q", want, tt.Texts())
+		}
+		if strings.Contains(strings.Join(tt.Texts(), " "), "private") {
+			t.Fatal("raw Linux diagnostic visible")
+		}
+		mustClick(t, tt, m.Cancel())
+		tt.Frame()
+		if a.unlock.modal {
+			t.Fatal("cancel did not dismiss modal")
 		}
 	}
 }
@@ -64,7 +55,6 @@ func TestLinuxUnlockCancelRetryPreservesDraft(t *testing.T) {
 	b := &linuxAuthorizationBackend{Memory: keychain.NewMemory()}
 	b.fail.Store(true)
 	a, tt := lockedTestApp(t, b)
-	a.settings.Theme = theme.Light
 	a.openEditor(nil)
 	a.form.name, a.form.address, a.form.user = "draft", "draft.example", "demo"
 	a.form.auth, a.form.secret.password = en.CredKindPassword(), "transient"

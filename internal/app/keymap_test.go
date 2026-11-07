@@ -3,9 +3,11 @@ package app
 import (
 	"path/filepath"
 	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/Licoy/sshyard/internal/keymap"
+	"github.com/Licoy/sshyard/internal/layout"
 	"github.com/Licoy/sshyard/locales"
 	"github.com/egoist/mygo/ui"
 )
@@ -28,6 +30,8 @@ func TestShortcutRule(t *testing.T) {
 		{"darwin", quick, k(ui.Super|ui.Shift, ui.KeyZ), ruleReserved},
 		{"darwin", quick, k(ui.Super, ui.KeyEnter), ruleKey},
 		{"darwin", save, k(ui.Super, ui.KeyW), ruleReserved},
+		// The menu bar's Close Window, which takes it before the window.
+		{"darwin", quick, k(ui.Super|ui.Shift, ui.KeyW), ruleReserved},
 		{"linux", quick, k(ui.Ctrl, ui.KeyJ), ruleMods},
 		{"linux", quick, k(ui.Ctrl|ui.Shift, ui.KeyF5), ruleOK},
 		{"linux", quick, k(ui.Ctrl|ui.Shift, ui.KeyC), ruleReserved},
@@ -174,4 +178,43 @@ func TestEditorRecordedSave(t *testing.T) {
 	}
 	et.Key(rec.Mods, rec.Key)
 	waitFor(t, et, "saved", func() bool { return read(file) == "two\n" && !ed.saving })
+}
+
+// TestDefaultShortcutsDistinct gives each action of the main window a
+// default shortcut of its own, one it may have.
+func TestDefaultShortcutsDistinct(t *testing.T) {
+	seen := map[keymap.Combo]string{}
+	for _, ac := range actions {
+		if ac.editor {
+			continue
+		}
+		if other, ok := seen[ac.def]; ok {
+			t.Errorf("%s and %s share %s", ac.id, other, ac.def)
+		}
+		seen[ac.def] = ac.id
+		if slices.Contains(reserved(runtime.GOOS, false), ac.def) {
+			t.Errorf("%s defaults to the reserved %s", ac.id, ac.def)
+		}
+	}
+}
+
+func TestToolPaneShortcuts(t *testing.T) {
+	a, _ := newTestApp(t)
+	for _, tc := range []struct {
+		id   string
+		kind layout.Kind
+	}{{actBroadcast, layout.Broadcast}, {actSessionLogs, layout.Logs}} {
+		a.runAction(tc.id)
+		c := a.toolPane(tc.kind)
+		if c == nil || !a.toolHere(tc.kind) {
+			t.Fatalf("%s opened no pane", tc.id)
+		}
+		if a.focused() != nil {
+			t.Fatalf("%s: a tool pane is the focused session", tc.id)
+		}
+		a.runAction(tc.id)
+		if a.toolPane(tc.kind) != nil || len(a.ws.Tabs) != 0 {
+			t.Fatalf("%s did not close its pane", tc.id)
+		}
+	}
 }

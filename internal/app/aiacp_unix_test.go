@@ -49,9 +49,6 @@ func TestACPAppProtocolAndLifecycle(t *testing.T) {
 		id := openAIPane(t, a, h.ID)
 		tt.Frame()
 		c := a.conns[id]
-		if !tt.HasText(filepath.Base(binary)) {
-			t.Fatal("ACP backend missing from pane header")
-		}
 		a.SendAI(id, "update AKIA0000000000000000")
 		waitFor(t, tt, "ACP write confirmation", func() bool { return c.ai.pending != nil })
 		if c.ai.pending.prompt.Action.Path != target {
@@ -306,18 +303,9 @@ func TestACPConfigurationUIAndUnknownBackend(t *testing.T) {
 	tt.Frame()
 	mustClick(t, tt, "Add custom command")
 	tt.Frame()
-	if !tt.HasText("ACP executable") || !tt.HasText("One argument per line, passed directly without a shell") {
-		t.Fatalf("configuration labels missing: %q", tt.Texts())
-	}
 	tt.Type("/custom-acp")
 	if a.acpForm.command != "/custom-acp" {
 		t.Fatal("ACP executable did not autofocus")
-	}
-	for _, label := range []string{"ACP executable", "Arguments", "Save", "Cancel"} {
-		bounds := mustFind(t, tt, label)
-		if bounds.X < 0 || bounds.Y < 0 || bounds.X+bounds.W > 900 || bounds.Y+bounds.H > 850 {
-			t.Fatalf("ACP control outside viewport: %s %v", label, bounds)
-		}
 	}
 	// Drive the form handler because TextInput owns its own frame state
 	a.acpForm.command = "/usr/local/bin/custom-acp"

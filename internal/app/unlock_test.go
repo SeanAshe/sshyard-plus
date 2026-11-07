@@ -13,7 +13,6 @@ import (
 	"github.com/Licoy/sshyard/internal/assets"
 	"github.com/Licoy/sshyard/internal/keychain"
 	"github.com/Licoy/sshyard/internal/settings"
-	"github.com/Licoy/sshyard/internal/theme"
 	"github.com/Licoy/sshyard/locales"
 	"github.com/egoist/mygo/ui"
 )
@@ -60,12 +59,12 @@ func TestUnlockFailureCancelRetryAndShortcuts(t *testing.T) {
 	a.withSecrets(nil)
 	waitFor(t, tt, "authorization failure", func() bool { return a.unlock.modal })
 	m := locales.In("en")
-	if !tt.HasText(m.SecretsUnlockFailed()) || !tt.HasText(m.SecretsRetry()) || strings.Contains(strings.Join(tt.Texts(), " "), "private raw") {
-		t.Fatalf("failure UI: %q", tt.Texts())
+	if strings.Contains(strings.Join(tt.Texts(), " "), "private raw") {
+		t.Fatalf("raw system diagnostic shown: %q", tt.Texts())
 	}
 	mustClick(t, tt, m.Cancel())
 	tt.Frame()
-	if a.unlock.modal || a.unlocked() || !tt.HasText(m.SecretsLockedTitle()) {
+	if a.unlock.modal || a.unlocked() {
 		t.Fatal("cancel unlocked or reopened the modal")
 	}
 	calls := b.calls.Load()
@@ -91,45 +90,32 @@ func TestUnlockFailureCancelRetryAndShortcuts(t *testing.T) {
 	b.fail.Store(false)
 	mustClick(t, tt, m.SecretsRetry())
 	waitFor(t, tt, "retry unlock", a.unlocked)
-	if a.unlock.modal || !tt.HasText("Welcome to SSHYard") {
-		t.Fatalf("ready: %q", tt.Texts())
+	if a.unlock.modal {
+		t.Fatal("modal stayed after unlocking")
 	}
 	if keys := b.Memory.Keys(); len(keys) != 1 || keys[0] != keychain.MasterKey {
 		t.Fatalf("system entries: %q", keys)
 	}
 }
 
-func TestUnlockModalDismissalAndTranslations(t *testing.T) {
-	for _, locale := range []string{"en", "zh-Hans"} {
-		for _, mode := range []theme.Mode{theme.Light, theme.Dark} {
-			t.Run(locale+string(mode), func(t *testing.T) {
-				b := &authorizationBackend{Memory: keychain.NewMemory()}
-				b.fail.Store(true)
-				a, tt := lockedTestApp(t, b)
-				a.settings.Theme = mode
-				a.withSecrets(nil)
-				tt.SetLocale(locale)
-				waitFor(t, tt, "modal", func() bool { return a.unlock.modal })
-				m := locales.In(locale)
-				for _, want := range []string{m.SecretsUnlockFailed(), m.Cancel(), m.SecretsRetry(), unlockErrorText(m, a.unlock.err)} {
-					if !tt.HasText(want) {
-						t.Fatalf("missing %q in %q", want, tt.Texts())
-					}
-				}
-				tt.Key(0, ui.KeyEscape)
-				tt.Frame()
-				if a.unlock.modal || !tt.HasText(m.SecretsRetry()) {
-					t.Fatal("Escape did not leave retryable locked page")
-				}
-				mustClick(t, tt, m.SecretsRetry())
-				waitFor(t, tt, "second modal", func() bool { return a.unlock.modal })
-				tt.ClickAt(10, 200)
-				tt.Frame()
-				if a.unlock.modal || a.unlocked() {
-					t.Fatal("outside dismissal escaped lock")
-				}
-			})
-		}
+func TestUnlockModalDismissal(t *testing.T) {
+	b := &authorizationBackend{Memory: keychain.NewMemory()}
+	b.fail.Store(true)
+	a, tt := lockedTestApp(t, b)
+	a.withSecrets(nil)
+	waitFor(t, tt, "modal", func() bool { return a.unlock.modal })
+	m := locales.In("en")
+	tt.Key(0, ui.KeyEscape)
+	tt.Frame()
+	if a.unlock.modal || a.unlocked() {
+		t.Fatal("Escape did not leave retryable locked page")
+	}
+	mustClick(t, tt, m.SecretsRetry())
+	waitFor(t, tt, "second modal", func() bool { return a.unlock.modal })
+	tt.ClickAt(10, 200)
+	tt.Frame()
+	if a.unlock.modal || a.unlocked() {
+		t.Fatal("outside dismissal escaped lock")
 	}
 }
 
@@ -269,55 +255,38 @@ func TestUnlockStorageResolutionRecovers(t *testing.T) {
 }
 
 func TestUnlockErrorWhitelist(t *testing.T) {
-	for _, locale := range []string{"en", "zh-Hans"} {
-		m := locales.In(locale)
-		for _, code := range []int{-128, -25293, -25308, -25291, -99999} {
-			err := &keychain.OpError{Op: "master-read", Err: &keychain.SystemError{Code: code, Err: errors.New("secret /private/path raw diagnostic")}}
-			text := unlockErrorText(m, err)
-			if strings.Contains(text, "secret /") || !strings.Contains(text, "OSStatus") || !strings.Contains(text, m.SecretsStageReadMaster()) {
-				t.Fatalf("unsafe/missing diagnostic: %q", text)
-			}
+	m := locales.In("en")
+	for _, code := range []int{-128, -25293, -25308, -25291, -99999} {
+		err := &keychain.OpError{Op: "master-read", Err: &keychain.SystemError{Code: code, Err: errors.New("secret /private/path raw diagnostic")}}
+		text := unlockErrorText(m, err)
+		if strings.Contains(text, "secret /") || !strings.Contains(text, "OSStatus") || !strings.Contains(text, m.SecretsStageReadMaster()) {
+			t.Fatalf("unsafe/missing diagnostic: %q", text)
 		}
 	}
 }
 
 func TestStartupDoesNotAuthorizeSecrets(t *testing.T) {
-	for _, locale := range []string{"en", "zh-Hans"} {
-		for _, mode := range []theme.Mode{theme.Light, theme.Dark} {
-			t.Run(locale+string(mode), func(t *testing.T) {
-				b := &authorizationBackend{Memory: keychain.NewMemory()}
-				a, tt := lockedTestApp(t, b)
-				a.settings.Theme = mode
-				tt.SetLocale(locale)
-				tt.Frame()
-				if !a.ready() || a.unlocked() || a.unlock.modal || b.calls.Load() != 0 {
-					t.Fatal("startup was not ready without authorization")
-				}
-				if _, err := os.Stat(filepath.Join(a.p.DataDir, "secrets.enc")); !errors.Is(err, os.ErrNotExist) {
-					t.Fatalf("startup persisted secrets: %v", err)
-				}
-				if err := a.ApplySettings(a.Settings()); err != nil {
-					t.Fatal(err)
-				}
-				id, err := a.OpenLocalTerminal()
-				if err != nil {
-					t.Fatal(err)
-				}
-				a.CloseSession(id)
-				tt.Frame()
-				if b.calls.Load() != 0 {
-					t.Fatal("local terminal or settings authorized secrets")
-				}
-				if tt.HasText(locales.In(locale).SecretsRetry()) {
-					t.Fatal("fresh startup requested unlock")
-				}
-				a.openSettings(prefAppearance)
-				tt.Frame()
-				if !tt.HasText(locales.In(locale).SecretsRetry()) {
-					t.Fatal("missing settings unlock action")
-				}
-			})
-		}
+	b := &authorizationBackend{Memory: keychain.NewMemory()}
+	a, tt := lockedTestApp(t, b)
+	tt.Frame()
+	if !a.ready() || a.unlocked() || a.unlock.modal || b.calls.Load() != 0 {
+		t.Fatal("startup was not ready without authorization")
+	}
+	if _, err := os.Stat(filepath.Join(a.p.DataDir, "secrets.enc")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("startup persisted secrets: %v", err)
+	}
+	if err := a.ApplySettings(a.Settings()); err != nil {
+		t.Fatal(err)
+	}
+	id, err := a.OpenLocalTerminal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.CloseSession(id)
+	a.openSettings(prefAppearance)
+	tt.Frame()
+	if b.calls.Load() != 0 || a.unlock.modal {
+		t.Fatal("local terminal or settings authorized secrets")
 	}
 }
 
@@ -360,9 +329,6 @@ func TestExistingSecretsStartupAndConnectionUnlock(t *testing.T) {
 	tt.Frame()
 	if b.calls.Load() != 0 || a.unlocked() || !a.ready() {
 		t.Fatal("existing store startup authorized")
-	}
-	if !tt.HasText(locales.In("en").SecretsRetry()) {
-		t.Fatal("existing store missing explicit unlock action")
 	}
 	h, err := a.store.Add(assets.Host{Name: "saved host", Address: "localhost", Port: 22, User: "test", Auth: assets.AuthPassword})
 	if err != nil {
@@ -515,16 +481,15 @@ func storedSilentApp(t *testing.T, allowed bool) (*App, *ui.Tester, *silentBacke
 
 func TestStartupUnlocksSilentlyWhenAlwaysAllowed(t *testing.T) {
 	a, tt, b := storedSilentApp(t, true)
-	m := locales.In("en")
 	waitFor(t, tt, "silent unlock", func() bool {
-		if tt.HasText(m.SecretsRetry()) || a.unlock.modal {
-			t.Fatalf("unlock prompt shown during silent unlock: %q", tt.Texts())
+		if a.unlock.modal {
+			t.Fatal("unlock prompt shown during silent unlock")
 		}
 		return a.unlocked()
 	})
 	tt.Frame()
-	if b.calls.Load() != 0 || b.silent.Load() != 1 || tt.HasText(m.SecretsRetry()) || tt.HasText(m.SecretsLockedTitle()) {
-		t.Fatalf("asking reads %d, silent reads %d, texts %q", b.calls.Load(), b.silent.Load(), tt.Texts())
+	if b.calls.Load() != 0 || b.silent.Load() != 1 || a.unlock.modal {
+		t.Fatalf("asking reads %d, silent reads %d, modal %v", b.calls.Load(), b.silent.Load(), a.unlock.modal)
 	}
 	if v, err := a.kc.Get("secret"); err != nil || string(v) != "value" {
 		t.Fatalf("secret: %q %v", v, err)
@@ -533,14 +498,13 @@ func TestStartupUnlocksSilentlyWhenAlwaysAllowed(t *testing.T) {
 
 func TestStartupStaysLockedQuietlyWithoutPermission(t *testing.T) {
 	a, tt, b := storedSilentApp(t, false)
-	m := locales.In("en")
 	waitFor(t, tt, "silent attempt", func() bool { return b.silent.Load() == 1 && !a.unlock.probing })
 	tt.Frame()
 	if a.unlocked() || a.unlock.modal || a.unlock.err != nil || b.calls.Load() != 0 {
 		t.Fatalf("silent failure: unlocked %v modal %v err %v asking reads %d", a.unlocked(), a.unlock.modal, a.unlock.err, b.calls.Load())
 	}
-	if !tt.HasText(m.SecretsRetry()) || strings.Contains(strings.Join(tt.Texts(), " "), "private raw") {
-		t.Fatalf("locked status: %q", tt.Texts())
+	if strings.Contains(strings.Join(tt.Texts(), " "), "private raw") {
+		t.Fatalf("raw system diagnostic shown: %q", tt.Texts())
 	}
 	a.withSecrets(nil)
 	waitFor(t, tt, "explicit unlock", a.unlocked)

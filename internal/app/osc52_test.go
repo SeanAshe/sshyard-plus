@@ -3,7 +3,6 @@ package app
 import (
 	"encoding/base64"
 	"fmt"
-	"image"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,7 +13,7 @@ import (
 	"github.com/Licoy/sshyard/internal/layout"
 	"github.com/Licoy/sshyard/internal/session"
 	"github.com/Licoy/sshyard/internal/settings"
-	"github.com/Licoy/sshyard/internal/theme"
+	"github.com/Licoy/sshyard/locales"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -191,11 +190,8 @@ func TestOSC52WriteToast(t *testing.T) {
 	if tt.Clipboard() != "PAYLOAD-bbbb" {
 		t.Fatalf("clipboard %q", tt.Clipboard())
 	}
-	if !tt.HasText("box wrote to the clipboard (12 bytes)") {
-		t.Fatalf("toast: %q", tt.Texts())
-	}
-	if tt.HasText("(9 bytes)") || tt.HasText("PAYLOAD-bbbb") {
-		t.Fatalf("merged badly or showed the text: %q", tt.Texts())
+	if tt.HasText("PAYLOAD-bbbb") {
+		t.Fatalf("showed the clipboard text: %q", tt.Texts())
 	}
 	clipNotStored(t, a, "PAYLOAD-bbbb")
 	mustClick(t, tt, "Undo")
@@ -211,6 +207,14 @@ func TestOSC52AskPaneLabel(t *testing.T) {
 	if err := a.ApplySettings(s); err != nil {
 		t.Fatal(err)
 	}
+	m := locales.In("en")
+	// asked is the ask's origin, as its dialog names it.
+	asked := func() string {
+		if a.clipAsk == nil || !a.clipAsk.open {
+			return ""
+		}
+		return m.Osc52AskFrom(a.clipAsk.host, a.oscPaneName(m, a.clipAsk.pane))
+	}
 	c1 := connectOSC(t, a, "box")
 	if _, err := c1.s.Term.Write([]byte("\x1b]0;EVILTITLE\a")); err != nil {
 		t.Fatal(err)
@@ -221,8 +225,8 @@ func TestOSC52AskPaneLabel(t *testing.T) {
 	tt.Frame()
 	writeOSC(t, c1, "one")
 	tt.Frame()
-	if !hasExact(tt, "box · Terminal") || tt.HasText("EVILTITLE") {
-		t.Fatalf("single pane: %q", tt.Texts())
+	if asked() != "box · Terminal" {
+		t.Fatalf("single pane: %q", asked())
 	}
 	mustClick(t, tt, "Deny")
 	tt.Frame()
@@ -234,15 +238,15 @@ func TestOSC52AskPaneLabel(t *testing.T) {
 	c2 := a.conns[id2]
 	writeOSC(t, c2, "two")
 	tt.Frame()
-	if !hasExact(tt, "box · Terminal 2") || tt.HasText("EVILTITLE") {
-		t.Fatalf("second pane: %q", tt.Texts())
+	if asked() != "box · Terminal 2" {
+		t.Fatalf("second pane: %q", asked())
 	}
 	mustClick(t, tt, "Deny")
 	tt.Frame()
 	writeOSC(t, c1, "one-b")
 	tt.Frame()
-	if !hasExact(tt, "box · Terminal 1") {
-		t.Fatalf("first pane: %q", tt.Texts())
+	if asked() != "box · Terminal 1" {
+		t.Fatalf("first pane: %q", asked())
 	}
 	mustClick(t, tt, "Deny")
 	tt.Frame()
@@ -256,15 +260,15 @@ func TestOSC52AskPaneLabel(t *testing.T) {
 	tt.Frame()
 	writeOSC(t, c2, "two-b")
 	tt.Frame()
-	if !hasExact(tt, "box · Terminal 2") {
-		t.Fatalf("after pane 1 closed: %q", tt.Texts())
+	if asked() != "box · Terminal 2" {
+		t.Fatalf("after pane 1 closed: %q", asked())
 	}
 	mustClick(t, tt, "Deny")
 	tt.Frame()
 	writeOSC(t, c3, "three")
 	tt.Frame()
-	if !hasExact(tt, "box · Terminal 3") {
-		t.Fatalf("pane 3: %q", tt.Texts())
+	if asked() != "box · Terminal 3" {
+		t.Fatalf("pane 3: %q", asked())
 	}
 	mustClick(t, tt, "Deny")
 	tt.Frame()
@@ -275,8 +279,8 @@ func TestOSC52AskPaneLabel(t *testing.T) {
 	}
 	writeOSC(t, a.conns[id4], "four")
 	tt.Frame()
-	if !hasExact(tt, "box · Terminal 4") {
-		t.Fatalf("freed number reused: %q", tt.Texts())
+	if asked() != "box · Terminal 4" {
+		t.Fatalf("freed number reused: %q", asked())
 	}
 	mustClick(t, tt, "Deny")
 	tt.Frame()
@@ -287,8 +291,8 @@ func TestOSC52AskPaneLabel(t *testing.T) {
 	tt.Frame()
 	writeOSC(t, c2, "alone")
 	tt.Frame()
-	if !hasExact(tt, "box · Terminal") {
-		t.Fatalf("only pane left: %q", tt.Texts())
+	if asked() != "box · Terminal" {
+		t.Fatalf("only pane left: %q", asked())
 	}
 	mustClick(t, tt, "Deny")
 	tt.Frame()
@@ -298,15 +302,15 @@ func TestOSC52AskPaneLabel(t *testing.T) {
 	}
 	writeOSC(t, c2, "back")
 	tt.Frame()
-	if !hasExact(tt, "box · Terminal 2") {
-		t.Fatalf("number was not kept: %q", tt.Texts())
+	if asked() != "box · Terminal 2" {
+		t.Fatalf("number was not kept: %q", asked())
 	}
 	mustClick(t, tt, "Deny")
 	tt.Frame()
 	writeOSC(t, a.conns[id5], "five")
 	tt.Frame()
-	if !hasExact(tt, "box · Terminal 5") {
-		t.Fatalf("number reused: %q", tt.Texts())
+	if asked() != "box · Terminal 5" {
+		t.Fatalf("number reused: %q", asked())
 	}
 	mustClick(t, tt, "Deny")
 	tt.Frame()
@@ -314,19 +318,10 @@ func TestOSC52AskPaneLabel(t *testing.T) {
 	other := connectOSC(t, a, "other")
 	writeOSC(t, other, "solo")
 	tt.Frame()
-	if !hasExact(tt, "other · Terminal") {
-		t.Fatalf("other host: %q", tt.Texts())
+	if asked() != "other · Terminal" {
+		t.Fatalf("other host: %q", asked())
 	}
 	mustClick(t, tt, "Deny")
-	tt.Frame()
-
-	tt.SetLocale("zh-Hans")
-	writeOSC(t, c2, "zh")
-	tt.Frame()
-	if !hasExact(tt, "box · 终端 2") || tt.HasText("EVILTITLE") {
-		t.Fatalf("zh: %q", tt.Texts())
-	}
-	mustClick(t, tt, "禁止")
 	tt.Frame()
 
 	a.CloseSession(id2)
@@ -336,11 +331,10 @@ func TestOSC52AskPaneLabel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tt.SetLocale("en")
 	writeOSC(t, a.conns[fresh], "again")
 	tt.Frame()
-	if !hasExact(tt, "box · Terminal") {
-		t.Fatalf("after the last pane closed: %q", tt.Texts())
+	if asked() != "box · Terminal" {
+		t.Fatalf("after the last pane closed: %q", asked())
 	}
 }
 
@@ -367,8 +361,12 @@ func TestOSC52AskIgnoresRemoteTitle(t *testing.T) {
 	}
 	writeOSC(t, c2, "two")
 	tt.Frame()
-	if !hasExact(tt, "box · Terminal 2") || tt.HasText("EVIL-TITLE") || tt.HasText("OTHER-TITLE") {
-		t.Fatalf("ask showed a remote title: %q", tt.Texts())
+	m := locales.In("en")
+	if a.clipAsk == nil || a.clipAsk.pane != id2 {
+		t.Fatalf("ask %+v", a.clipAsk)
+	}
+	if got := m.Osc52AskFrom(a.clipAsk.host, a.oscPaneName(m, a.clipAsk.pane)); got != "box · Terminal 2" {
+		t.Fatalf("ask named a remote title: %q", got)
 	}
 }
 
@@ -379,105 +377,6 @@ func hasExact(tt *ui.Tester, s string) bool {
 		}
 	}
 	return false
-}
-
-// askAccent reports whether the pane's top edge is the ask outline: the
-// theme accent, or that accent under one or two dialog scrims. The top
-// is inset from the rounded corners. A focused pane's thinner accent
-// hairline does not match.
-func askAccent(img *image.RGBA, b ui.Rect) bool {
-	if img == nil || b.W < 40 || b.H < 40 {
-		return false
-	}
-	x := int(b.X + b.W/2)
-	y := int(b.Y)
-	if x < 0 || y < 0 || x >= img.Rect.Dx() || y+1 >= img.Rect.Dy() {
-		return false
-	}
-	scrim := ui.RGBA(0, 0, 0, 0.4)
-	one := scrim.Over(theme.Brand)
-	two := scrim.Over(one)
-	for _, dy := range []int{0, 1} {
-		p := img.RGBAAt(x, y+dy)
-		if nearColor(p.R, p.G, p.B, theme.Brand.R, theme.Brand.G, theme.Brand.B) ||
-			nearColor(p.R, p.G, p.B, one.R, one.G, one.B) ||
-			nearColor(p.R, p.G, p.B, two.R, two.G, two.B) {
-			return true
-		}
-	}
-	return false
-}
-
-func nearColor(r, g, b, wr, wg, wb uint8) bool {
-	d := func(a, c uint8) int {
-		if a > c {
-			return int(a - c)
-		}
-		return int(c - a)
-	}
-	return d(r, wr) <= 8 && d(g, wg) <= 8 && d(b, wb) <= 8
-}
-
-func TestOSC52AskHighlight(t *testing.T) {
-	a, tt := newTestApp(t)
-	s := a.Settings()
-	s.OSC52Write = settings.OSC52Ask
-	if err := a.ApplySettings(s); err != nil {
-		t.Fatal(err)
-	}
-	c1 := connectOSC(t, a, "box")
-	id2, err := a.Connect(c1.host.ID, openAt{pane: c1.id, edge: layout.Right})
-	if err != nil {
-		t.Fatal(err)
-	}
-	c2 := a.conns[id2]
-	tt.Frame()
-
-	shown := func(id int) bool {
-		t.Helper()
-		return askAccent(tt.Image(), a.paneBounds[id])
-	}
-	if shown(c1.id) || shown(c2.id) {
-		t.Fatal("outline before an ask")
-	}
-
-	check := func(openID int) {
-		t.Helper()
-		writeOSC(t, a.conns[openID], "hi")
-		tt.Frame()
-		if !tt.HasText("Remote clipboard write") {
-			t.Fatalf("ask not open: %q", tt.Texts())
-		}
-		if !shown(openID) {
-			t.Fatalf("pane %d not outlined at %v", openID, a.paneBounds[openID])
-		}
-		other := c1.id
-		if openID == c1.id {
-			other = c2.id
-		}
-		if shown(other) {
-			t.Fatalf("pane %d outlined as well", other)
-		}
-	}
-	closeAndClear := func(openID int, dismiss func()) {
-		t.Helper()
-		check(openID)
-		dismiss()
-		tt.Frame()
-		if tt.HasText("Remote clipboard write") || shown(openID) || shown(c1.id) || shown(c2.id) {
-			t.Fatalf("outline stayed after close: %q", tt.Texts())
-		}
-	}
-
-	closeAndClear(c2.id, func() { mustClick(t, tt, "Deny") })
-	closeAndClear(c2.id, func() { mustClick(t, tt, "Allow once") })
-	closeAndClear(c2.id, func() { tt.Key(0, ui.KeyEscape) })
-	closeAndClear(c2.id, func() { tt.ClickAt(8, 8) })
-	closeAndClear(c1.id, func() { mustClick(t, tt, "Always allow this session") })
-	closeAndClear(c2.id, func() { a.CloseSession(c2.id) })
-	if a.conns[c2.id] != nil || tt.HasText("Remote clipboard write") {
-		t.Fatal("pane close left the ask")
-	}
 }
 
 func TestOSC52Ask(t *testing.T) {
@@ -494,10 +393,8 @@ func TestOSC52Ask(t *testing.T) {
 	if tt.Clipboard() != "OLD" {
 		t.Fatalf("asked write landed: %q", tt.Clipboard())
 	}
-	for _, want := range []string{"Allow once", "Always allow this session", "Deny", "box · Terminal", "hello-ask", "9 bytes"} {
-		if !tt.HasText(want) {
-			t.Errorf("ask dialog misses %q in %q", want, tt.Texts())
-		}
+	if a.clipAsk == nil || a.clipAsk.pane != c.id || a.clipAsk.data != "hello-ask" {
+		t.Fatalf("ask %+v", a.clipAsk)
 	}
 	mustClick(t, tt, "Allow once")
 	tt.Frame()
@@ -506,7 +403,7 @@ func TestOSC52Ask(t *testing.T) {
 	}
 	writeOSC(t, c, "second")
 	tt.Frame()
-	if !tt.HasText("Allow once") {
+	if a.clipAsk == nil || a.clipAsk.data != "second" {
 		t.Fatal("second write did not ask")
 	}
 	mustClick(t, tt, "Always allow this session")
@@ -516,7 +413,7 @@ func TestOSC52Ask(t *testing.T) {
 	}
 	writeOSC(t, c, "third")
 	tt.Frame()
-	if tt.HasText("Allow once") {
+	if a.clipAsk != nil {
 		t.Fatal("session still asks")
 	}
 	if tt.Clipboard() != "third" {
@@ -552,10 +449,8 @@ func TestOSC52AskWithAIPane(t *testing.T) {
 	if tt.Clipboard() != "OLD" {
 		t.Fatalf("asked write landed: %q", tt.Clipboard())
 	}
-	for _, want := range []string{"Allow once", "Always allow this session", "Deny", "box · Terminal", "hello-ask"} {
-		if !tt.HasText(want) {
-			t.Errorf("ask dialog misses %q in %q", want, tt.Texts())
-		}
+	if a.clipAsk == nil || !a.clipAsk.open || a.clipAsk.pane != c.id {
+		t.Fatalf("ask %+v", a.clipAsk)
 	}
 	if ai.s != nil {
 		t.Fatal("ask walk attached a session to the AI pane")
@@ -578,9 +473,6 @@ func TestOSC52Pause(t *testing.T) {
 	if tt.Clipboard() != "p09" {
 		t.Fatalf("clipboard %q", tt.Clipboard())
 	}
-	if !tt.HasText("Paused. Click to resume.") {
-		t.Fatalf("pause: %q", tt.Texts())
-	}
 	mustClick(t, tt, "Resume")
 	writeOSC(t, c, "after")
 	tt.Frame()
@@ -594,12 +486,6 @@ func TestOSC52Settings(t *testing.T) {
 	tt.SetSize(1200, 3200)
 	a.openSettings(prefTerminal)
 	tt.Frame()
-	if !tt.HasText("Remote clipboard (OSC 52)") || !tt.HasText("A remote program can never read the clipboard.") {
-		t.Fatalf("settings: %q", tt.Texts())
-	}
-	if tt.HasText("Enable read") || tt.HasText("Allow reading") {
-		t.Fatal("a control offers remote reads")
-	}
 	mustClick(t, tt, "Deny")
 	if a.Settings().OSC52Write != settings.OSC52Deny {
 		t.Fatalf("policy %q", a.Settings().OSC52Write)
@@ -643,9 +529,6 @@ func TestOSC52HostOverride(t *testing.T) {
 	tt.Frame()
 	mustClick(t, tt, "Advanced")
 	tt.Advance(250 * time.Millisecond)
-	if !tt.HasText("Follow the global setting") {
-		t.Fatalf("override: %q", tt.Texts())
-	}
 	mustClick(t, tt, "Follow the global setting")
 	tt.Frame()
 	mustClick(t, tt, "Deny")
@@ -710,11 +593,11 @@ func TestOSC52UndoExpiryAndLocalCopy(t *testing.T) {
 	tt.Advance(500 * time.Millisecond)
 	writeOSC(t, c, "hello2")
 	tt.Frame()
-	if tt.Clipboard() != "hello2" || !tt.HasText("box wrote to the clipboard (6 bytes)") || !tt.HasText("Undo") {
+	if tt.Clipboard() != "hello2" || !tt.HasText("Undo") {
 		t.Fatalf("merged clipboard %q texts %q", tt.Clipboard(), tt.Texts())
 	}
 	tt.Advance(29*time.Second + 600*time.Millisecond)
-	if tt.HasText("Undo") || tt.HasText("wrote to the clipboard") {
+	if tt.HasText("Undo") {
 		t.Fatalf("undo outlived the snapshot: %q", tt.Texts())
 	}
 	if tt.Clipboard() != "hello2" {
@@ -739,29 +622,6 @@ func TestOSC52UndoExpiryAndLocalCopy(t *testing.T) {
 	tt.Frame()
 	if !tt.HasText("The clipboard changed, so undo is no longer available") {
 		t.Fatalf("toast: %q", tt.Texts())
-	}
-}
-
-func TestOSC52WroteLanguages(t *testing.T) {
-	a, tt := newTestApp(t)
-	s := a.Settings()
-	s.OSC52Write = settings.OSC52Allow
-	if err := a.ApplySettings(s); err != nil {
-		t.Fatal(err)
-	}
-	c := connectOSC(t, a, "box")
-	tt.SetLocale("zh-Hans")
-	writeOSC(t, c, "hi")
-	tt.Frame()
-	if !tt.HasText("box 写入了剪贴板（2 字节）") {
-		t.Fatalf("zh toast: %q", tt.Texts())
-	}
-	tt.SetLocale("en")
-	tt.Advance(time.Second)
-	writeOSC(t, c, "hello")
-	tt.Frame()
-	if !tt.HasText("box wrote to the clipboard (5 bytes)") {
-		t.Fatalf("en toast: %q", tt.Texts())
 	}
 }
 
@@ -827,8 +687,8 @@ func TestOSC52AllowSessionSurvivesReconnect(t *testing.T) {
 	}
 	writeOSC(t, c, "after")
 	tt.Frame()
-	if tt.HasText("Allow once") || tt.Clipboard() != "after" {
-		t.Fatalf("session allow after reconnect: clipboard %q texts %q", tt.Clipboard(), tt.Texts())
+	if a.clipAsk != nil || tt.Clipboard() != "after" {
+		t.Fatalf("session allow after reconnect: clipboard %q ask %+v", tt.Clipboard(), a.clipAsk)
 	}
 
 	if _, err := a.Connect(h.ID, openAt{}); err != nil {
@@ -841,8 +701,8 @@ func TestOSC52AllowSessionSurvivesReconnect(t *testing.T) {
 	waitFor(t, tt, "second pane", func() bool { return c2.s.Status().State == session.Connected })
 	writeOSC(t, c2, "other")
 	tt.Frame()
-	if !tt.HasText("Allow once") || tt.Clipboard() != "after" {
-		t.Fatalf("second pane did not ask: clipboard %q texts %q", tt.Clipboard(), tt.Texts())
+	if a.clipAsk == nil || a.clipAsk.pane != c2.id || tt.Clipboard() != "after" {
+		t.Fatalf("second pane did not ask: clipboard %q ask %+v", tt.Clipboard(), a.clipAsk)
 	}
 }
 

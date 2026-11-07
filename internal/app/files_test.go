@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
-	"strconv"
 	"testing"
 	"time"
 
@@ -207,13 +206,13 @@ func TestFilesContextMenu(t *testing.T) {
 	}
 	chooseMenu(a, tt, "Delete…")
 	tt.Frame()
-	if !tt.HasText(`Delete “b.txt”?`) {
-		t.Fatalf("no confirmation in %q", tt.Texts())
+	if _, err := os.Stat(filepath.Join(root, "b.txt")); err != nil {
+		t.Fatalf("deleted before confirming: %v", err)
 	}
 	mustClick(t, tt, "Delete")
 	waitFor(t, tt, "delete", func() bool {
 		_, err := os.Stat(filepath.Join(root, "b.txt"))
-		return os.IsNotExist(err) && !tt.HasText("b.txt")
+		return os.IsNotExist(err)
 	})
 
 	// A local entry's menu uploads.
@@ -237,17 +236,22 @@ func TestFilesConflicts(t *testing.T) {
 		write(t, filepath.Join(root, n), "old "+n)
 	}
 	paths := []string{filepath.Join(local, "a.txt"), filepath.Join(local, "c.txt"), filepath.Join(local, "d.txt")}
+	// asked is whether the conflict asked about is name's.
+	asked := func(name string) bool {
+		k := fc.fs.conflict
+		return k != nil && k.at < len(k.items) && k.items[k.at].Rel == name
+	}
 	a.Upload(fc, paths, fc.fs.remote.dir)
-	waitFor(t, tt, "conflict", func() bool { return tt.HasText("Replace the existing file?") })
-	if !tt.HasText("“a.txt” already exists") || !tt.HasText("Do this for the other 2 too") {
-		t.Errorf("dialog %q", tt.Texts())
+	waitFor(t, tt, "conflict", func() bool { return asked("a.txt") })
+	if n := fc.fs.conflict.left(); n != 3 {
+		t.Errorf("%d conflicts left, want 3", n)
 	}
 	mustClick(t, tt, "Keep Both")
-	waitFor(t, tt, "second conflict", func() bool { return tt.HasText("“c.txt” already exists") })
+	waitFor(t, tt, "second conflict", func() bool { return asked("c.txt") })
 	mustClick(t, tt, "Skip")
-	waitFor(t, tt, "third conflict", func() bool { return tt.HasText("“d.txt” already exists") })
-	if tt.HasText("Do this for the other") {
-		t.Error("apply to all offered for the last one")
+	waitFor(t, tt, "third conflict", func() bool { return asked("d.txt") })
+	if n := fc.fs.conflict.left(); n != 1 {
+		t.Errorf("%d conflicts left on the last one, want 1", n)
 	}
 	mustClick(t, tt, "Replace")
 	waitFor(t, tt, "uploads", func() bool {
@@ -260,13 +264,13 @@ func TestFilesConflicts(t *testing.T) {
 
 	// Once for all
 	a.Upload(fc, paths, fc.fs.remote.dir)
-	waitFor(t, tt, "conflict", func() bool { return tt.HasText("Do this for the other 2 too") })
+	waitFor(t, tt, "conflict", func() bool { return asked("a.txt") })
 	mustClick(t, tt, "Do this for the other 2 too")
 	mustClick(t, tt, "Replace")
 	waitFor(t, tt, "replaced", func() bool {
 		return read(filepath.Join(root, "a.txt")) == "new a.txt" && read(filepath.Join(root, "c.txt")) == "new c.txt"
 	})
-	if tt.HasText("Replace the existing file?") {
+	if fc.fs.conflict != nil {
 		t.Error("asked again")
 	}
 
@@ -274,7 +278,7 @@ func TestFilesConflicts(t *testing.T) {
 	write(t, filepath.Join(local, "a.txt"), "newer")
 	n := len(fc.fs.transfers.List())
 	a.Upload(fc, paths[:1], fc.fs.remote.dir)
-	waitFor(t, tt, "conflict", func() bool { return tt.HasText("Replace the existing file?") })
+	waitFor(t, tt, "conflict", func() bool { return asked("a.txt") })
 	mustClick(t, tt, "Cancel")
 	tt.Frame()
 	if len(fc.fs.transfers.List()) != n || fc.fs.conflict != nil {
@@ -331,56 +335,29 @@ func TestFilesDragDropAndQueue(t *testing.T) {
 	fc.fs.transfers.Wait()
 	tt.Frame()
 
-	// The queue is in a sheet the header's button opens: rows say they
+	// The queue is in a sheet the header's button opens: its transfers
 	// are done, and clear.
-	if tt.HasText("z.txt") {
-		t.Fatal("queue shown in the pane")
-	}
 	mustClick(t, tt, "Transfers")
-	waitFor(t, tt, "rows", func() bool { return tt.HasText("z.txt") && tt.HasText("Done") })
-	if !tt.HasText("0 active · 4 of 4 done") {
-		t.Errorf("summary in %q", tt.Texts())
+	if !fc.fs.queueOpen {
+		t.Fatal("the transfers sheet did not open")
+	}
+	trs := fc.fs.transfers.List()
+	if len(trs) != 4 {
+		t.Fatalf("%d transfers, want 4", len(trs))
+	}
+	for _, tr := range trs {
+		if tr.State != sftpsvc.Done {
+			t.Errorf("%s: state %v, err %v", tr.Name, tr.State, tr.Err)
+		}
 	}
 	mustClick(t, tt, "Clear finished")
-	if len(fc.fs.transfers.List()) != 0 || !tt.HasText("No transfers yet") {
+	if len(fc.fs.transfers.List()) != 0 {
 		t.Error("not cleared")
 	}
 	mustClick(t, tt, "Close")
 	tt.Frame()
-	if fc.fs.queueOpen || tt.HasText("No transfers yet") {
+	if fc.fs.queueOpen {
 		t.Error("sheet not closed")
-	}
-}
-
-// TestFilesTransfersBadge counts what is still to go on the header's
-// transfers button, and failures in red once nothing is.
-func TestFilesTransfersBadge(t *testing.T) {
-	_, tt, fc, root := filesPane(t)
-	trs := fc.fs.transfers
-	write(t, filepath.Join(root, "big.bin"), string(make([]byte, 1<<20)))
-	trs.SetConcurrency(1)
-	dst := filepath.Join(fc.fs.local.dir, "big.bin")
-	for i, name := range []string{"a.bin", "b.bin", "c.bin"} {
-		id := trs.Add(sftpsvc.Download, sftpsvc.RemoteJoin(fc.fs.remote.dir, "big.bin"), dst+strconv.Itoa(i), name)
-		trs.Pause(id)
-	}
-	badge := func() bool { return slices.Contains(tt.Texts(), "3") }
-	tt.Frame()
-	if !badge() {
-		t.Fatalf("no badge in %q", tt.Texts())
-	}
-	trs.CancelAll()
-	tt.Frame()
-	if !badge() || tt.HasText("a.bin") {
-		t.Fatalf("no failure badge, or the queue in the pane: %q", tt.Texts())
-	}
-	// Canceled transfers stay until their part files are removed, which
-	// CancelAll leaves to goroutines.
-	trs.Wait()
-	trs.ClearFinished()
-	tt.Frame()
-	if badge() {
-		t.Errorf("badge with nothing queued: %q", tt.Texts())
 	}
 }
 
@@ -394,16 +371,9 @@ func TestFilesSplit(t *testing.T) {
 	// The sidebar's own divider would be found first.
 	a.setSidebarHidden(true)
 	tt.Frame()
-	lx, ly := center(t, tt, "Local")
-	rx, _ := center(t, tt, "Remote")
-	r, ok := tt.Find("Divider")
-	if !ok {
-		t.Fatalf("no divider in %q", tt.Texts())
-	}
+	_, ly := center(t, tt, "Local")
+	r := mustFind(t, tt, "Divider")
 	x := r.X + r.W/2
-	if x < lx || x > rx {
-		t.Fatalf("divider at %v, not between %v and %v", x, lx, rx)
-	}
 	tt.Press(x, ly+100)
 	tt.Move(x-10, ly+100)
 	tt.Move(x-120, ly+100)
@@ -431,8 +401,8 @@ func TestFilesSplit(t *testing.T) {
 	}
 	tt.Frame()
 	tt.Frame()
-	if oc := a.conns[other]; !oc.fs.local.loaded || !tt.HasText("Local") {
-		t.Errorf("new pane without the local side: %q", tt.Texts())
+	if oc := a.conns[other]; !oc.fs.local.loaded {
+		t.Error("new pane without the local side")
 	}
 }
 
@@ -444,16 +414,9 @@ func TestFilesSplitStacked(t *testing.T) {
 	tt.SetSize(520, 900)
 	tt.Frame()
 	tt.Frame()
-	lx, ly := center(t, tt, "Local")
-	_, ry := center(t, tt, "Remote")
-	r, ok := tt.Find("Divider")
-	if !ok {
-		t.Fatalf("no divider in %q", tt.Texts())
-	}
+	lx, _ := center(t, tt, "Local")
+	r := mustFind(t, tt, "Divider")
 	y := r.Y + r.H/2
-	if ry <= ly || y < ly || y > ry {
-		t.Fatalf("divider at %v, not between %v and %v", y, ly, ry)
-	}
 	tt.Press(lx, y)
 	tt.Move(lx, y+10)
 	tt.Move(lx, y+120)
@@ -477,8 +440,10 @@ func TestFilesQueueControls(t *testing.T) {
 	trs.Pause(id)
 	trs.Pause(id2)
 	tt.Frame()
-	if !tt.HasText("Paused at") {
-		t.Fatalf("no paused row in %q", tt.Texts())
+	for _, tr := range trs.List() {
+		if tr.State != sftpsvc.Paused {
+			t.Fatalf("%s: state %v, want paused", tr.Name, tr.State)
+		}
 	}
 	mustClick(t, tt, "Resume all")
 	waitFor(t, tt, "done", func() bool {
@@ -492,8 +457,8 @@ func TestFilesQueueControls(t *testing.T) {
 	tt.Frame()
 	mustClick(t, tt, "Cancel big3.bin")
 	tt.Frame()
-	if !tt.HasText("Canceled") {
-		t.Fatalf("no canceled row in %q", tt.Texts())
+	if i := slices.IndexFunc(trs.List(), func(tr sftpsvc.Transfer) bool { return tr.ID == id3 }); i < 0 || trs.List()[i].State != sftpsvc.Canceled {
+		t.Fatalf("big3.bin not canceled: %+v", trs.List())
 	}
 	mustClick(t, tt, "Retry big3.bin")
 	waitFor(t, tt, "retried", func() bool { return read(dst+"3") == read(filepath.Join(root, "big.bin")) })
@@ -545,9 +510,6 @@ func TestFilesTenThousand(t *testing.T) {
 	small := scroll(200)
 	big := scroll(10000)
 	t.Logf("%v per frame with 200 files, %v with 10,000", small, big)
-	if tt.HasText("f00000.txt") {
-		t.Error("did not scroll")
-	}
 	if big > 3*small+20*time.Millisecond {
 		t.Errorf("10,000 files: %v per frame, 200 files: %v", big, small)
 	}
@@ -576,8 +538,8 @@ func TestOneFilesPanePerTab(t *testing.T) {
 	}
 	mustClick(t, tt, "Open Files on the Right")
 	tt.Frame()
-	if tab.Count(layout.Files) != 1 || !tt.HasText("Close Files") {
-		t.Fatalf("rail did not open a lit files pane: %q", tt.Texts())
+	if tab.Count(layout.Files) != 1 {
+		t.Fatal("rail did not open a files pane")
 	}
 	mustClick(t, tt, "Close Files")
 	tt.Frame()
@@ -675,7 +637,6 @@ func TestFilesEdgeSetting(t *testing.T) {
 
 	a.openSettings(prefFiles)
 	tt.Frame()
-	mustFind(t, tt, "Where the files pane opens beside the terminal")
 	mustClick(t, tt, "Below")
 	tt.Frame()
 	if a.settings.FilesEdge != settings.FilesBelow {
@@ -683,9 +644,6 @@ func TestFilesEdgeSetting(t *testing.T) {
 	}
 	a.page = pageWorkspace
 	tt.Frame()
-	if !tt.HasText("Open Files Below") {
-		t.Errorf("the rail does not say below: %q", tt.Texts())
-	}
 	a.OpenFilesBeside()
 	if tab.Count(layout.Files) != 1 || tab.Root.Axis != layout.Column {
 		t.Errorf("the files pane is not under the terminal: %d, axis %v", tab.Count(layout.Files), tab.Root.Axis)

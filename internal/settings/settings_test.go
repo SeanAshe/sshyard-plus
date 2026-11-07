@@ -380,3 +380,19 @@ func TestRenewalNotifyDefault(t *testing.T) {
 		t.Fatalf("reloaded %v %v %v", got.RenewalNotify, got.RenewalNotified, err)
 	}
 }
+
+func TestSessionLogDir(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "s.json")
+	dir := filepath.Join(t.TempDir(), "logs")
+	for in, want := range map[string]string{"": "", "  " + dir + " ": dir, "relative/logs": "", "~/logs": ""} {
+		s := Default()
+		s.SessionLog.Dir = in
+		if err := Save(p, s); err != nil {
+			t.Fatal(err)
+		}
+		got, err := Load(p)
+		if err != nil || got.SessionLog.Dir != want {
+			t.Errorf("dir %q loaded as %q, want %q (%v)", in, got.SessionLog.Dir, want, err)
+		}
+	}
+}

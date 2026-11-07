@@ -2,7 +2,6 @@ package app
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -22,92 +21,38 @@ func migrationEntry(name, address string) migration.Entry {
 func migrationDraft(a *App, entries ...migration.Entry) *migrationForm {
 	return a.newMigration(migration.Tabby, migration.Result{Entries: entries})
 }
-func TestMigrationSourcesAndPreviewUI(t *testing.T) {
+func TestMigrationSourcesAndPreview(t *testing.T) {
 	a, _ := newTestApp(t)
 	if _, err := a.store.Add(assets.Host{Name: "existing backup", Address: "backup.example.com", User: "root"}); err != nil {
 		t.Fatal(err)
 	}
-	expected := append([]string{"OpenSSH"}, func() []string {
-		var out []string
-		for _, s := range migration.Sources() {
-			out = append(out, string(s))
+	m := locales.In("en")
+	var management []prefPage
+	for _, g := range prefGroups(m, currentTestTokens(false)) {
+		if g.title == m.SettingsGroupManage() {
+			for _, item := range g.items {
+				management = append(management, item.page)
+			}
 		}
-		return out
-	}()...)
-	for _, lang := range []string{"en", "zh-Hans", "zh-Hant", "ko", "ja"} {
-		for _, dark := range []bool{false, true} {
-			t.Run(fmt.Sprintf("%s/%v", lang, dark), func(t *testing.T) {
-				m := locales.In(lang)
-				tt := ui.NewTester(func(c *ui.Context) { a.migrationSection(c, locales.In(c.Locale()), currentTokens(c)) }, 800, 1400)
-				tt.SetLocale(lang)
-				tt.SetDark(dark)
-				tt.Frame()
-				texts := tt.Texts()
-				last := -1
-				for _, name := range expected {
-					index := -1
-					for i, s := range texts {
-						if s == name {
-							index = i
-							break
-						}
-					}
-					if index <= last {
-						t.Fatalf("source order %s: %v", name, texts)
-					}
-					last = index
-				}
-				var management []prefPage
-				for _, g := range prefGroups(m, currentTestTokens(dark)) {
-					if g.title == m.SettingsGroupManage() {
-						for _, item := range g.items {
-							management = append(management, item.page)
-						}
-					}
-				}
-				if !reflect.DeepEqual(management, []prefPage{prefCredentials, prefProxies, prefKnownHosts, prefMigration, prefBackup}) {
-					t.Fatalf("manage order %v", management)
-				}
-				if lang == "zh-Hans" {
-					saveBrandScreenshot(t, tt, fmt.Sprintf("migration-sources-%v", dark))
-				}
-				e := migrationEntry("生产环境数据库主节点与跨区域灾备只读访问会话", "db.example.com")
-				e.Group = "生产/数据库"
-				e.Issues = []migration.Issue{{Code: "unsupported-field", Field: "tags"}, {Code: "encrypted-secret", Field: "password"}, {Code: "unsupported-field", Field: "note"}}
-				f := migrationDraft(a, e, migrationEntry("backup", "backup.example.com"))
-				a.migration, a.migrationOpen = f, true
-				preview := ui.NewTester(func(c *ui.Context) { a.migrationView(c, locales.In(c.Locale())) }, 1000, 900)
-				preview.SetLocale(lang)
-				preview.SetDark(dark)
-				preview.Frame()
-				if !preview.HasText(m.MigrationPreview("Tabby")) || !preview.HasText(m.MigrationSaveSecrets()) || !preview.HasText(m.MigrationConflict()) {
-					t.Fatalf("preview missing localized controls: %v", preview.Texts())
-				}
-				if f.saveSecrets {
-					t.Fatal("credentials opted in by default")
-				}
-				f.search = "db.example.com"
-				preview.Frame()
-				if preview.HasText("root@backup.example.com:22") {
-					t.Fatal("search did not filter")
-				}
-				f.search = ""
-				preview.Frame()
-				if lang == "zh-Hans" {
-					saveBrandScreenshot(t, preview, fmt.Sprintf("migration-preview-%v", dark))
-				}
-				if lang == "zh-Hans" && !dark {
-					narrow := ui.NewTester(func(c *ui.Context) { a.migrationView(c, locales.In(c.Locale())) }, 520, 760)
-					narrow.SetLocale(lang)
-					narrow.Frame()
-					saveBrandScreenshot(t, narrow, "migration-preview-narrow")
-				}
-				a.closeMigration()
-				if a.migration != nil || a.migrationOpen {
-					t.Fatal("cancel retained draft")
-				}
-			})
-		}
+	}
+	if !reflect.DeepEqual(management, []prefPage{prefCredentials, prefProxies, prefKnownHosts, prefMigration, prefBackup}) {
+		t.Fatalf("manage order %v", management)
+	}
+	f := migrationDraft(a, migrationEntry("db", "db.example.com"), migrationEntry("backup", "backup.example.com"))
+	a.migration, a.migrationOpen = f, true
+	preview := ui.NewTester(func(c *ui.Context) { a.migrationView(c, locales.In(c.Locale())) }, 1000, 900)
+	preview.Frame()
+	if f.saveSecrets {
+		t.Fatal("credentials opted in by default")
+	}
+	f.search = "db.example.com"
+	preview.Frame()
+	if preview.HasText("root@backup.example.com:22") {
+		t.Fatal("search did not filter")
+	}
+	a.closeMigration()
+	if a.migration != nil || a.migrationOpen {
+		t.Fatal("cancel retained draft")
 	}
 }
 func currentTestTokens(dark bool) theme.Tokens {

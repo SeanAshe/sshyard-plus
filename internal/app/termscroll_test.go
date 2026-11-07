@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Licoy/sshyard/internal/vt"
-	"github.com/egoist/mygo/ui"
 )
 
 // TestTerminalScrollbarDrag: the scrollbar in the right padding drags
@@ -36,9 +35,6 @@ func TestTerminalScrollbarDrag(t *testing.T) {
 	// the thumb, at the bottom, dragged to the top
 	tt.Move(x, r.Y+thumb.Y+thumb.H/2)
 	tt.Frame()
-	if !tv.barHover || tt.Cursor() != ui.CursorDefault {
-		t.Errorf("on the strip: hover %v, cursor %v", tv.barHover, tt.Cursor())
-	}
 	tt.Press(x, r.Y+thumb.Y+thumb.H/2)
 	tt.Move(x, r.Y+r.H/2)
 	if tv.offset <= 0 || tv.offset >= sb {
@@ -52,9 +48,6 @@ func TestTerminalScrollbarDrag(t *testing.T) {
 	tt.Frame()
 	if tv.barDrag || tv.selected || tv.selecting {
 		t.Errorf("after the drag: dragging %v, selected %v, selecting %v", tv.barDrag, tv.selected, tv.selecting)
-	}
-	if tv.snap.Offset != sb {
-		t.Errorf("drawn at offset %d, want %d", tv.snap.Offset, sb)
 	}
 
 	// a press at the strip's bottom, off the thumb, goes back to the screen

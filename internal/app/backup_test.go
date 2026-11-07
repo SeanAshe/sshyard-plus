@@ -278,7 +278,11 @@ func TestMergeSettings(t *testing.T) {
 	in.AIConsentHosts = []string{"h1", "h2"}
 	cur.BackupTargets = []settings.BackupTarget{{ID: "here", Name: "NAS", Kind: settings.BackupWebDAV}}
 	in.BackupTargets = []settings.BackupTarget{{ID: "there", Name: "Other", Kind: settings.BackupS3}}
+	cur.SessionLog.Dir, in.SessionLog.Dir = "/here/logs", "/there/logs"
 	out := mergeSettings(cur, in)
+	if out.SessionLog.Dir != "/here/logs" {
+		t.Fatalf("session log folder %q", out.SessionLog.Dir)
+	}
 	if out.RememberLayout || out.SidebarWidth != 260 || out.UIFont != "Local Font" || out.KeepAliveSeconds != 99 ||
 		!out.FilesDual || out.FilesSplit != 30 || out.EditorTreeWidth != 300 || out.EditorTreeHidden {
 		t.Fatalf("merged %+v", out)

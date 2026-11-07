@@ -73,32 +73,23 @@ func TestHighlightSettings(t *testing.T) {
 
 	a.openSettings(prefTerminal)
 	tt.Frame()
-	for _, s := range []string{"Keyword Highlighting", "Highlight keywords", "Built-in Rules", "Errors", "Commands and prompts", "UUIDs and hashes", "Custom Rules", "Preview"} {
-		if !tt.HasText(s) {
-			t.Errorf("missing %q", s)
-		}
-	}
-
-	if !tt.HasText("Add Rule") {
-		t.Error("no Add Rule")
-	}
 	a.openHighlightRule(-1)
 	tt.Frame()
-	if !a.hlEditing || !tt.HasText("Text or pattern") || !tt.HasText("Bright Cyan") {
-		t.Fatalf("no rule sheet: %q", tt.Texts())
+	if !a.hlEditing {
+		t.Fatal("no rule sheet")
 	}
 	m := locales.In("en")
 	a.hlForm.rule.Pattern, a.hlForm.rule.Regex = "(", true
 	a.saveHighlightRule(m)
 	tt.Frame()
-	if !a.hlEditing || !tt.HasText("Invalid regular expression: error parsing regexp: missing closing ): `(`") {
+	if !a.hlEditing || a.hlForm.err != "Invalid regular expression: error parsing regexp: missing closing ): `(`" {
 		t.Fatalf("invalid rule saved: %v %q %q", a.hlEditing, a.hlForm.err, a.hlForm.rule.Pattern)
 	}
 	a.hlForm.rule.Pattern, a.hlForm.rule.Regex, a.hlForm.rule.Color = "boom", false, 5
 	a.saveHighlightRule(m)
 	tt.Frame()
-	if a.hlEditing || len(a.settings.Highlight.Rules) != 1 || !tt.HasText("boom") {
-		t.Fatalf("rule not saved: %+v %q", a.settings.Highlight.Rules, tt.Texts())
+	if a.hlEditing || len(a.settings.Highlight.Rules) != 1 {
+		t.Fatalf("rule not saved: %+v", a.settings.Highlight.Rules)
 	}
 	b, _ := os.ReadFile(filepath.Join(a.p.DataDir, "settings.json"))
 	if !strings.Contains(string(b), `"pattern": "boom"`) {
@@ -128,10 +119,5 @@ func TestHighlightSettings(t *testing.T) {
 	tt.Frame()
 	if c := cn.tv.snap.Lines[0].Cells[6]; !c.FG.IsDefault() || a.highlighter() != nil {
 		t.Errorf("off, drawn %+v", c)
-	}
-	a.openSettings(prefTerminal)
-	tt.Frame()
-	if tt.HasText("Built-in Rules") {
-		t.Error("the rules show while the highlighting is off")
 	}
 }

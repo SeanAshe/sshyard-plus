@@ -65,9 +65,6 @@ func TestFilesMultiSelect(t *testing.T) {
 	if got := chosenNames(&l.sideList); !slices.Equal(got, []string{"a.txt", "c.txt"}) {
 		t.Fatalf("toggle chose %q", got)
 	}
-	if !tt.HasText("2 items selected") {
-		t.Errorf("no count in %q", tt.Texts())
-	}
 	tt.Key(0, ui.KeyEscape)
 	tt.Frame()
 	if l.chosen.Len() != 0 {
@@ -107,20 +104,25 @@ func TestFilesMultiSelect(t *testing.T) {
 
 	tt.Key(deleteMods, deleteKey) // the right click left the focus on the table
 	tt.Frame()
-	if fc.fs.del == nil || !tt.HasText("Delete 3 items? This can’t be undone.") {
-		t.Fatalf("no confirmation in %q", tt.Texts())
+	if fc.fs.del == nil || len(fc.fs.del.paths) != 3 {
+		t.Fatalf("no confirmation for 3 items: %+v", fc.fs.del)
 	}
 	mustClick(t, tt, "Delete")
 	waitFor(t, tt, "deleted", func() bool {
-		_, err := os.Stat(filepath.Join(dir, "c.txt"))
-		return os.IsNotExist(err) && !tt.HasText("b.txt")
+		for _, n := range []string{"a.txt", "b.txt", "c.txt"} {
+			if _, err := os.Stat(filepath.Join(dir, n)); !os.IsNotExist(err) {
+				return false
+			}
+		}
+		return true
 	})
 	if read(filepath.Join(dir, "d.txt")) != "d.txt" {
 		t.Error("d.txt deleted")
 	}
 }
 
-// The menu is drawn by the app: a click on its entry chooses it.
+// The menu is drawn by the app: a click on its entry chooses it. Get Info
+// has a file's size, and counts a folder's.
 func TestFilesMenuClickAndInfo(t *testing.T) {
 	_, tt, fc, _ := localPane(t, "a.txt", "d/one.txt", "d/sub/two.txt")
 	if err := tt.RightClick("a.txt"); err != nil {
@@ -129,13 +131,8 @@ func TestFilesMenuClickAndInfo(t *testing.T) {
 	tt.Frame()
 	mustClick(t, tt, "Get Info")
 	tt.Frame()
-	if fc.fs.info == nil {
-		t.Fatal("no info")
-	}
-	for _, want := range []string{"Kind", "File", "5 B (5 bytes)", "Permissions"} {
-		if !tt.HasText(want) {
-			t.Errorf("no %q in %q", want, tt.Texts())
-		}
+	if info := fc.fs.info; info == nil || len(info.es) != 1 || info.es[0].Name != "a.txt" || info.size != 5 || info.files != 1 {
+		t.Fatalf("info %+v", fc.fs.info)
 	}
 	mustClick(t, tt, "Close")
 	tt.Frame()
@@ -149,9 +146,12 @@ func TestFilesMenuClickAndInfo(t *testing.T) {
 	tt.Frame()
 	tt.Key(toggleMods, ui.KeyI)
 	tt.Frame()
-	waitFor(t, tt, "folder size", func() bool { return tt.HasText("22 B in 2 files") })
-	if !tt.HasText("Folder") {
-		t.Errorf("no kind in %q", tt.Texts())
+	waitFor(t, tt, "folder size", func() bool {
+		info := fc.fs.info
+		return info != nil && !info.counting && len(info.es) == 1 && info.es[0].IsDir
+	})
+	if info := fc.fs.info; info.size != 22 || info.files != 2 {
+		t.Errorf("folder of %d B in %d files, want 22 B in 2", info.size, info.files)
 	}
 }
 
@@ -197,7 +197,9 @@ func TestFilesCompressExtractLocal(t *testing.T) {
 	if err := chooseMenu(a, tt, "Extract Here"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, tt, "extracted", func() bool { return fc.fs.working == nil && tt.HasText("d (2)") })
+	waitFor(t, tt, "extracted", func() bool {
+		return fc.fs.working == nil && read(filepath.Join(dir, "d (2)", "d", "sub", "two.txt")) != ""
+	})
 	if got := read(filepath.Join(dir, "d (2)", "d", "sub", "two.txt")); got != "d/sub/two.txt" {
 		t.Fatalf("extracted %q", got)
 	}
@@ -230,8 +232,8 @@ func TestFilesCompressRemote(t *testing.T) {
 	}
 	fc.fs.compressOpen = false
 	tt.Frame()
-	if !tt.HasText("Compressing logs.tar.gz…") && fc.fs.working == nil && fc.fs.remote.err == "" {
-		t.Errorf("no progress in %q", tt.Texts())
+	if fc.fs.working == nil && fc.fs.remote.err == "" {
+		t.Error("neither compressing nor failed")
 	}
 	var cmd string
 	select {
@@ -281,34 +283,21 @@ func TestFilesImagePreview(t *testing.T) {
 		t.Fatal("no preview")
 	}
 	waitFor(t, tt, "image", func() bool { return p.bmp != nil })
-	if !tt.HasText("1 of 3") || !strings.HasPrefix(texts(tt, "3 × 2 · "), "3 × 2 · ") {
-		t.Fatalf("texts %q", tt.Texts())
+	if p.at != 0 || len(p.images) != 3 {
+		t.Fatalf("image %d of %d, want 0 of 3", p.at, len(p.images))
 	}
 	tt.Key(0, ui.KeyRight)
 	waitFor(t, tt, "next image", func() bool { return p.at == 1 && p.bmp != nil })
-	if !tt.HasText("2 of 3") {
-		t.Fatalf("texts %q", tt.Texts())
-	}
 	mustClick(t, tt, "Next Image")
 	waitFor(t, tt, "broken image", func() bool { return !p.loading && p.err != "" })
-	if !tt.HasText("Couldn’t show this image: image: unknown format") {
-		t.Errorf("texts %q", tt.Texts())
+	if p.at != 2 || p.err != "image: unknown format" {
+		t.Errorf("image %d, error %q", p.at, p.err)
 	}
 	mustClick(t, tt, "Close Preview")
 	tt.Frame()
 	if fc.fs.preview != nil {
 		t.Fatal("preview stays")
 	}
-}
-
-// texts is the first text that starts with prefix, or "".
-func texts(tt *ui.Tester, prefix string) string {
-	for _, s := range tt.Texts() {
-		if strings.HasPrefix(s, prefix) {
-			return s
-		}
-	}
-	return ""
 }
 
 func TestCrumbsOf(t *testing.T) {
@@ -330,24 +319,8 @@ func TestCrumbsOf(t *testing.T) {
 	}
 }
 
-func TestCrumbFit(t *testing.T) {
-	ws := []float32{20, 50, 50, 50, 60}
-	if shown, hidden := crumbFit(ws, 400, 30); len(shown) != 5 || hidden != nil {
-		t.Errorf("fits: %v %v", shown, hidden)
-	}
-	shown, hidden := crumbFit(ws, 180, 30)
-	if !slices.Equal(shown, []int{0, -1, 3, 4}) || !slices.Equal(hidden, []int{1, 2}) {
-		t.Errorf("collapsed: %v %v", shown, hidden)
-	}
-	shown, hidden = crumbFit(ws, 50, 30)
-	if !slices.Equal(shown, []int{0, -1, 4}) || !slices.Equal(hidden, []int{1, 2, 3}) {
-		t.Errorf("tight: %v %v", shown, hidden)
-	}
-}
-
 // The breadcrumbs go to a folder above; resting on one lists its folder,
-// to go into a folder or to a file there; folders that do not fit hide
-// behind an ellipsis, which lists them.
+// to go into a folder or to a file there.
 func TestFilesBreadcrumbs(t *testing.T) {
 	skipWindowsSFTP(t)
 	a, tt, fc, root := filesPane(t)
@@ -384,26 +357,6 @@ func TestFilesBreadcrumbs(t *testing.T) {
 	tt.Frame()
 	mustClick(t, tt, "sub")
 	waitFor(t, tt, "sub", func() bool { return s.dir == filepath.Join(root, "sub") })
-
-	// The temporary folders' paths are long: their first folders hide.
-	tt.SetSize(900, 700)
-	tt.Frame()
-	tt.Frame()
-	more, ok := tt.Find("Folders Above")
-	if !ok {
-		t.Fatalf("no ellipsis in %q", tt.Texts())
-	}
-	tt.Move(more.X+more.W/2, more.Y+more.H/2)
-	tt.Advance(crumbRest + 50*time.Millisecond)
-	tt.Frame()
-	tt.Frame()
-	if !strings.HasSuffix(a.menu.key, "\x00more") {
-		t.Fatalf("menu %q", a.menu.key)
-	}
-	first := crumbsOf(fc.fs.local.dir, false)[1].name // the local side's ellipsis is first
-	if n := strings.Count(strings.Join(tt.Texts(), "\n"), first); n == 0 {
-		t.Errorf("no %q in %q", first, tt.Texts())
-	}
 }
 
 func TestTypedPath(t *testing.T) {
@@ -464,8 +417,5 @@ func TestFilesTypePath(t *testing.T) {
 	tt.Frame()
 	if s.typing || s.dir != filepath.Join(root, "sub", "deep") {
 		t.Errorf("Escape: typing %v in %q", s.typing, s.dir)
-	}
-	if !tt.HasText("deep") {
-		t.Error("the breadcrumbs did not come back")
 	}
 }

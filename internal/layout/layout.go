@@ -1,7 +1,8 @@
 // Package layout keeps SSHYard's workspace: tabs, each a tree of split
 // panes, each pane showing one item. An item is of a kind: a terminal
-// session, a files (SFTP) browser, an editor of a remote file, or an AI
-// assistant. All are panes alike, so any of them can sit in any split
+// session, a files (SFTP) browser, an editor of a remote file, an AI
+// assistant, or a tool on several sessions (the broadcast, the session
+// logs). All are panes alike, so any of them can sit in any split
 // cell, be dragged onto another pane's edge, be focused and closed. An
 // item lives in exactly one pane; moving it (by drag and drop) takes it
 // out of its old pane. Item IDs are unique across kinds.
@@ -21,6 +22,10 @@ const (
 	Editor
 	// AI is an assistant bound to one host. It does not open a connection.
 	AI
+	// Broadcast sends a command to several terminals; Logs keeps their
+	// session logs. Neither is bound to a host.
+	Broadcast
+	Logs
 )
 
 func (k Kind) String() string {
@@ -31,6 +36,10 @@ func (k Kind) String() string {
 		return "editor"
 	case AI:
 		return "ai"
+	case Broadcast:
+		return "broadcast"
+	case Logs:
+		return "logs"
 	}
 	return "terminal"
 }

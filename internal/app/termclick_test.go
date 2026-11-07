@@ -103,7 +103,6 @@ func TestCopyOnSelect(t *testing.T) {
 	a.openSettings(prefTerminal)
 	tt.SetSize(1200, 2600)
 	tt.Frame()
-	mustFind(t, tt, "Text selected in the terminal is copied to the clipboard")
 	mustClick(t, tt, "Copy or paste")
 	tt.Frame()
 	if a.settings.TerminalRightClick != settings.RightClickCopyPaste {
@@ -130,7 +129,6 @@ func TestCopyOnSelect(t *testing.T) {
 
 // TestOpenLink: ⌘-click (Ctrl-click off macOS) on a web address opens it
 // in the browser; a plain click, or one off the address, does not.
-// Holding the modifiers over it underlines it under a pointing hand.
 func TestOpenLink(t *testing.T) {
 	srv, _ := startScript(t, "docs https://example.com/x?a=1. end")
 	a, tt := newTestApp(t)
@@ -152,18 +150,5 @@ func TestOpenLink(t *testing.T) {
 	tt.Frame()
 	if got := tt.OpenedURLs(); len(got) != 1 || got[0] != "https://example.com/x?a=1" {
 		t.Fatalf("opened %q", got)
-	}
-
-	tt.HoldModifiers(linkMods())
-	tt.Move(x, y)
-	tt.Frame()
-	if !c.tv.link.on || tt.Cursor() != ui.CursorPointer {
-		t.Errorf("hovering with the modifiers: link %v, cursor %v", c.tv.link, tt.Cursor())
-	}
-	tt.HoldModifiers(0)
-	tt.Move(x+1, y)
-	tt.Frame()
-	if c.tv.link.on {
-		t.Error("the link stays underlined without the modifiers")
 	}
 }

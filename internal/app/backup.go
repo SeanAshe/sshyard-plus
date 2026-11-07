@@ -298,8 +298,8 @@ func backupIDs(snap assets.Snapshot, provs []settings.AIProvider) []string {
 // device, cur: what belongs to this device stays (the window's layout and
 // materials, the layout of its files panes and editor windows, the fonts
 // installed here, the MCP endpoint, the places it backs up to and its
-// default backup password), AI providers are merged by ID and the hosts
-// that confirmed AI use are joined.
+// default backup password, the folder of its session logs), AI providers
+// are merged by ID and the hosts that confirmed AI use are joined.
 func mergeSettings(cur, in settings.Settings) settings.Settings {
 	out := in
 	out.Background = cur.Background
@@ -312,8 +312,10 @@ func mergeSettings(cur, in settings.Settings) settings.Settings {
 	// A backup never turns the MCP endpoint on, nor lets it use the keys
 	// of this computer: that is asked here.
 	out.MCPEnabled, out.MCPPort, out.LocalKeysMCP = cur.MCPEnabled, cur.MCPPort, cur.LocalKeysMCP
-	// Nor does it choose where this device backs up to.
+	// Nor does it choose where this device backs up to, nor where it
+	// keeps its session logs.
 	out.BackupTargets, out.DefaultBackupPassword = slices.Clone(cur.BackupTargets), cur.DefaultBackupPassword
+	out.SessionLog = cur.SessionLog
 	out.AIProviders = slices.Clone(cur.AIProviders)
 	for _, p := range in.AIProviders {
 		if i := slices.IndexFunc(out.AIProviders, func(o settings.AIProvider) bool { return o.ID == p.ID }); i >= 0 {

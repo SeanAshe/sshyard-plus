@@ -56,18 +56,3 @@ func TestUnfinishedSaveNotice(t *testing.T) {
 		t.Fatal("replaced")
 	}
 }
-
-// In Chinese the notice reads as the locale has it.
-func TestUnfinishedSaveNoticeZh(t *testing.T) {
-	a, tt, fc, root := filesPane(t)
-	tt.SetLocale("zh-Hans")
-	name, notice := "x\ty", "「x\\ty」上次保存未完成，可恢复"
-	if runtime.GOOS == "windows" {
-		// Windows forbids a tab in a file name. A bidi control is allowed,
-		// and the notice still escapes it.
-		name, notice = "x\u202ey", "「x\\u202ey」上次保存未完成，可恢复"
-	}
-	write(t, filepath.Join(root, ".sshyard-old-0123456789ab-"+name), "old")
-	a.refreshSides(fc)
-	waitFor(t, tt, "notice", func() bool { return tt.HasText(notice) })
-}

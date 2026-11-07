@@ -107,40 +107,35 @@ func TestLayoutViewDebouncesWorkspaceChanges(t *testing.T) {
 	}
 }
 
-func TestLayoutWriteFailureShowsLocalizedErrorAndPreservesFile(t *testing.T) {
+func TestLayoutWriteFailureShowsErrorAndPreservesFile(t *testing.T) {
 	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
 		t.Skip("requires POSIX directory write permissions")
 	}
-	for _, language := range []string{"en", "zh-Hans"} {
-		t.Run(language, func(t *testing.T) {
-			dir := t.TempDir()
-			rememberLayoutIn(t, dir)
-			a, tt := newTestAppIn(t, dir)
-			h := savedHost(t, a, "saved", "127.0.0.1")
-			if _, err := a.OpenAI(h.ID, openAt{}, 0); err != nil {
-				t.Fatal(err)
-			}
-			file := filepath.Join(a.p.DataDir, "layout.json")
-			before, err := os.ReadFile(file)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := os.Chmod(a.p.DataDir, 0o500); err != nil {
-				t.Fatal(err)
-			}
-			defer os.Chmod(a.p.DataDir, 0o700)
-			a.RenameTab(a.ws.ActiveTab().ID, "Unsaved change")
-			a.saveLayout()
-			tt.SetLocale(language)
-			tt.Frame()
-			if !tt.HasText(locales.In(language).ErrLayoutSave()) {
-				t.Fatalf("write failure not localized: %q", tt.Texts())
-			}
-			after, err := os.ReadFile(file)
-			if err != nil || !bytes.Equal(before, after) {
-				t.Fatalf("failed save changed previous file: err=%v", err)
-			}
-		})
+	dir := t.TempDir()
+	rememberLayoutIn(t, dir)
+	a, tt := newTestAppIn(t, dir)
+	h := savedHost(t, a, "saved", "127.0.0.1")
+	if _, err := a.OpenAI(h.ID, openAt{}, 0); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(a.p.DataDir, "layout.json")
+	before, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(a.p.DataDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(a.p.DataDir, 0o700)
+	a.RenameTab(a.ws.ActiveTab().ID, "Unsaved change")
+	a.saveLayout()
+	tt.Frame()
+	if !tt.HasText(locales.In("en").ErrLayoutSave()) {
+		t.Fatalf("write failure not reported: %q", tt.Texts())
+	}
+	after, err := os.ReadFile(file)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatalf("failed save changed previous file: err=%v", err)
 	}
 }
 

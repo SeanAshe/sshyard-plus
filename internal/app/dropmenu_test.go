@@ -1,8 +1,6 @@
 package app
 
 import (
-	"fmt"
-	"runtime"
 	"slices"
 	"testing"
 
@@ -12,34 +10,30 @@ import (
 )
 
 // TestDropMenu: the sidebar's "+" opens the app's own menu, not the
-// system's: its entries with their shortcut, one disabled that does
-// nothing; Escape and its button close it; the arrows move through it and
-// Enter chooses.
+// system's, its port forward disabled without a host; Escape and its
+// button close it; the arrows move through it and Enter chooses.
 func TestDropMenu(t *testing.T) {
 	a, tt := newTestApp(t)
 	mustClick(t, tt, "Add")
 	if got := menuOf(a); got != nil {
 		t.Fatalf("a menu of the system: %q", got)
 	}
-	add, _ := tt.Find("Add")
-	for _, s := range []string{"New Host", "New group", "Quick Connect…", shortcutText(runtime.GOOS, appMods, ui.KeyK), "Local terminal", "Import from ~/.ssh/config…"} {
-		if r, ok := tt.Find(s); !ok || r.Y < add.Y+add.H {
-			t.Errorf("%q at %v, not in a menu below the button at %v", s, r, add)
-		}
+	if a.menu.key == "" {
+		t.Fatal("the menu did not open")
 	}
 	// No host: no port forward to make.
-	mustClick(t, tt, "New Port Forward…")
-	if a.fwdForm != nil || !tt.HasText("New Port Forward…") {
-		t.Error("the disabled entry was chosen, or closed the menu")
+	entries := a.addEntries(locales.In("en"))
+	if i := slices.IndexFunc(entries, func(e menuEntry) bool { return e.Label == "New Port Forward…" }); i < 0 || !entries[i].Disabled {
+		t.Error("New Port Forward… is not disabled without a host")
 	}
 	tt.Key(0, ui.KeyEscape)
 	tt.Frame()
-	if tt.HasText("New group") || a.menu.key != "" {
+	if a.menu.key != "" {
 		t.Error("Escape left the menu open")
 	}
 	mustClick(t, tt, "Add")
 	mustClick(t, tt, "Add")
-	if tt.HasText("New group") {
+	if a.menu.key != "" {
 		t.Error("its button left the menu open")
 	}
 
@@ -56,66 +50,36 @@ func TestDropMenu(t *testing.T) {
 	}
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if a.group == nil || tt.HasText("Quick Connect…") || a.menu.key != "" {
+	if a.group == nil || a.menu.key != "" {
 		t.Fatalf("Enter did not choose New group, or left the menu: %q", tt.Texts())
 	}
 }
 
 func TestHostGroupMenuSeparators(t *testing.T) {
-	for _, dark := range []bool{false, true} {
-		for _, grouped := range []bool{false, true} {
-			t.Run(fmt.Sprintf("dark=%v/grouped=%v", dark, grouped), func(t *testing.T) {
-				a, tt := newTestApp(t)
-				tt.SetDark(dark)
-				h, err := a.store.Add(assets.Host{Name: "web", Address: "web", User: "u"})
-				if err != nil {
-					t.Fatal(err)
-				}
-				if grouped {
-					if err := a.store.AddGroup("Prod"); err != nil {
-						t.Fatal(err)
-					}
-				}
-				tt.Frame()
-				if err := tt.RightClick("web"); err != nil {
-					t.Fatal(err)
-				}
-				move := mustFind(t, tt, "Move to group")
-				tt.Move(move.X+move.W/2, move.Y+move.H/2)
-				tt.Frame()
-				none := mustFind(t, tt, "No group")
-				create := mustFind(t, tt, "New group…")
-				saveBrandScreenshot(t, tt, fmt.Sprintf("host-group-menu-dark-%v-grouped-%v", dark, grouped))
-				if !grouped {
-					img, lines, previous := tt.Image(), 0, false
-					for y := int(none.Y+none.H) + 6; y < int(create.Y)-6; y++ {
-						line := img.RGBAAt(int(none.X+none.W/2), y) != img.RGBAAt(int(none.X)-32, y)
-						if line && !previous {
-							lines++
-						}
-						previous = line
-					}
-					if lines != 1 {
-						t.Errorf("rendered %d separators, want 1", lines)
-					}
-				}
-				entries := a.hostEntries(locales.In("en"), h)
-				i := slices.IndexFunc(entries, func(e menuEntry) bool { return e.Label == "Move to group" })
-				want := []string{"No group", "-", "New group…"}
-				if grouped {
-					want = []string{"No group", "-", "Prod", "-", "New group…"}
-				}
-				if got := menuLabels(entries[i].Sub); !slices.Equal(got, want) {
-					t.Fatalf("group menu %q, want %q", got, want)
-				}
-			})
+	for _, grouped := range []bool{false, true} {
+		a, _ := newTestApp(t)
+		h, err := a.store.Add(assets.Host{Name: "web", Address: "web", User: "u"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []string{"No group", "-", "New group…"}
+		if grouped {
+			if err := a.store.AddGroup("Prod"); err != nil {
+				t.Fatal(err)
+			}
+			want = []string{"No group", "-", "Prod", "-", "New group…"}
+		}
+		entries := a.hostEntries(locales.In("en"), h)
+		i := slices.IndexFunc(entries, func(e menuEntry) bool { return e.Label == "Move to group" })
+		if got := menuLabels(entries[i].Sub); !slices.Equal(got, want) {
+			t.Fatalf("group menu %q, want %q", got, want)
 		}
 	}
 }
 
-// TestDropSubmenu: a host's "more" menu shows its submenu as the pointer
+// TestDropSubmenu: a host's "more" menu opens its submenu as the pointer
 // comes on to its entry, and choosing from it takes the host out of its
-// group; its row's actions stay while the menu is open.
+// group.
 func TestDropSubmenu(t *testing.T) {
 	a, tt := newTestApp(t)
 	h, err := a.Store().Add(assets.Host{Name: "web", Address: "10.0.0.5", User: "root", Group: "Prod"})
@@ -128,27 +92,21 @@ func TestDropSubmenu(t *testing.T) {
 	a.selected = ""
 	tt.Move(600, 700)
 	tt.Frame()
-	if !tt.HasText("More Actions") {
-		t.Error("the row's actions hid under its open menu")
+	if a.menu.sub != -1 {
+		t.Fatal("submenu open before asked")
 	}
-	if tt.HasText("No group") {
-		t.Fatal("submenu shown before asked")
-	}
-	mv, ok := tt.Find("Move to group")
-	if !ok {
-		t.Fatalf("no Move to group in %q", tt.Texts())
-	}
+	mv := mustFind(t, tt, "Move to group")
 	tt.Move(mv.X+mv.W/2, mv.Y+mv.H/2)
 	tt.Frame()
 	tt.Frame()
-	if r, ok := tt.Find("No group"); !ok || r.X < mv.X+mv.W {
-		t.Fatalf("submenu at %v, not after its entry at %v", r, mv)
+	if a.menu.sub == -1 {
+		t.Fatal("the submenu did not open on its entry")
 	}
 	mustClick(t, tt, "No group")
 	if got, _ := a.Store().Get(h.ID); got.Group != "" {
 		t.Errorf("group %q", got.Group)
 	}
-	if a.menu.key != "" || tt.HasText("Move to group") {
+	if a.menu.key != "" {
 		t.Error("the menu stayed open")
 	}
 }

@@ -110,7 +110,7 @@ jobs:
       - run: go test -count=1 ./...
 
   build:
-    name: build ${{ matrix.goos }}/${{ matrix.goarch }}
+    name: build ${{ matrix.goos }}/${{ join(matrix.goarch, '+') }}
     needs: plan
     if: needs.plan.outputs.build == 'true'
     runs-on: ${{ matrix.os }}
@@ -197,19 +197,24 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Build (unsigned updates; no MYGO_UPDATER_PRIVATE_KEY in CI)
-        run: go tool mygo build -platform "${{ matrix.goos }}/${{ matrix.goarch }}"
+        env:
+          ARCHES: ${{ join(matrix.goarch, ' ') }}
+        run: |
+          platforms=""
+          for arch in $ARCHES; do platforms="$platforms,${{ matrix.goos }}/$arch"; done
+          go tool mygo build -platform "${platforms#,}"
       - name: Package Windows portable ZIP
         if: runner.os == 'Windows'
         run: |
           python .github/windows-portable-test.py
           python .github/windows-portable.py "build/${{ matrix.goos }}-${{ matrix.goarch }}" "${{ matrix.goarch }}"
       - name: List outputs
-        run: ls -la "build/${{ matrix.goos }}-${{ matrix.goarch }}"
+        run: ls -la build/${{ matrix.goos }}-*
       # Builds of main are kept a week; tag and manual builds use the
       # repository's default retention (0).
       - uses: actions/upload-artifact@v7
         with:
-          name: sshyard-${{ steps.v.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: sshyard-${{ steps.v.outputs.version }}-${{ matrix.goos }}-${{ join(matrix.goarch, '-') }}
           retention-days: ${{ github.event_name == 'push' && github.ref_type == 'branch' && 7 || 0 }}
           if-no-files-found: error
           path: |

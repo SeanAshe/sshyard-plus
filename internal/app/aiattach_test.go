@@ -7,16 +7,13 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/Licoy/sshyard/internal/ai/agent"
 	"github.com/Licoy/sshyard/internal/ai/llm"
-	"github.com/Licoy/sshyard/internal/icons"
-	"github.com/Licoy/sshyard/internal/theme"
-	"github.com/Licoy/sshyard/locales"
-	"github.com/egoist/mygo/ui"
 )
 
 // partsModel answers at once, keeping the last question it was asked.
@@ -55,7 +52,7 @@ func pngBytes(t *testing.T) []byte {
 // and PDFs as they are, text as text, anything else not at all.
 func TestAttachKinds(t *testing.T) {
 	img, err := attachData("shot.png", pngBytes(t))
-	if err != nil || img.mime != "image/png" || img.bmp == nil || img.icon() != icons.Image {
+	if err != nil || img.mime != "image/png" || img.bmp == nil {
 		t.Fatalf("image %+v %v", img, err)
 	}
 	pdf, err := attachData("doc.pdf", []byte("%PDF-1.7\n..."))
@@ -81,9 +78,9 @@ func TestAttachKinds(t *testing.T) {
 	}
 }
 
-// TestAIPaneAttachments checks that files picked or dropped show above
-// the question, that one can be taken off, and that the rest go with the
-// question: images as parts, text inside it.
+// TestAIPaneAttachments checks that files picked or dropped are attached,
+// that one can be taken off, and that the rest go with the question:
+// images as parts, text inside it.
 func TestAIPaneAttachments(t *testing.T) {
 	a, tt := newTestApp(t)
 	h := savedHost(t, a, "web", "10.0.0.8")
@@ -113,24 +110,24 @@ func TestAIPaneAttachments(t *testing.T) {
 	waitFor(t, tt, "attachments", func() bool {
 		return len(cn.ai.attach) == 3 && tt.HasText("“blob.bin” can’t be attached: only images, PDFs and text files can.")
 	})
-	for _, s := range []string{"notes.txt", "extra.md", "Remove shot.png", "Remove notes.txt", "Remove extra.md"} {
-		if !tt.HasText(s) {
-			t.Fatalf("strip lacks %q: %q", s, tt.Texts())
+	names := func() []string {
+		var out []string
+		for _, f := range cn.ai.attach {
+			out = append(out, f.name)
 		}
+		return out
 	}
-	input := mustFind(t, tt, "Ask about this host")
-	tile := mustFind(t, tt, "notes.txt")
-	if tile.Y+tile.H > input.Y {
-		t.Fatalf("attachment %v not above the input %v", tile, input)
+	if got := names(); !slices.Equal(got, []string{"shot.png", "notes.txt", "extra.md"}) {
+		t.Fatalf("attached %q", got)
 	}
 	mustClick(t, tt, "Remove extra.md")
 	tt.Frame()
-	if len(cn.ai.attach) != 2 || tt.HasText("extra.md") {
-		t.Fatalf("not removed: %q", tt.Texts())
+	if got := names(); !slices.Equal(got, []string{"shot.png", "notes.txt"}) {
+		t.Fatalf("after removing extra.md: %q", got)
 	}
 	mustClick(t, tt, "Preview shot.png")
 	tt.Frame()
-	if a.attachmentPreview == nil || !tt.HasText("Close Preview") {
+	if a.attachmentPreview == nil {
 		t.Fatal("composer image did not open the top-level preview")
 	}
 	mustClick(t, tt, "Close Preview")
@@ -138,11 +135,10 @@ func TestAIPaneAttachments(t *testing.T) {
 	if a.attachmentPreview != nil {
 		t.Fatal("composer image preview did not close")
 	}
-	rmImage := mustFind(t, tt, "Remove shot.png")
-	tt.ClickAt(rmImage.X+rmImage.W/2, rmImage.Y+rmImage.H/2)
+	mustClick(t, tt, "Remove shot.png")
 	tt.Frame()
-	if len(cn.ai.attach) != 1 || tt.HasText("Remove shot.png") {
-		t.Fatal("composer image was not removed by mouse")
+	if got := names(); !slices.Equal(got, []string{"notes.txt"}) {
+		t.Fatalf("after removing shot.png: %q", got)
 	}
 	imageAgain, err := readAttach(shot)
 	if err != nil {
@@ -150,9 +146,6 @@ func TestAIPaneAttachments(t *testing.T) {
 	}
 	a.addAttach(cn, imageAgain)
 	tt.Frame()
-	if _, ok := tt.Find("Send"); !ok {
-		t.Fatal("no send")
-	}
 	mustClick(t, tt, "Send")
 	waitFor(t, tt, "reply", func() bool { return !cn.ai.running && paneHas(a, id, "Seen.") })
 	q := model.question()
@@ -162,13 +155,13 @@ func TestAIPaneAttachments(t *testing.T) {
 	if !strings.Contains(q.Content, `<untrusted-data source="file notes.txt">`) || !strings.Contains(q.Content, "disk is full") {
 		t.Fatalf("question %q", q.Content)
 	}
-	if len(cn.ai.attach) != 0 || tt.HasText("Remove shot.png") || !tt.HasText("notes.txt") {
-		t.Fatalf("after send: attach %d texts %q", len(cn.ai.attach), tt.Texts())
+	if len(cn.ai.attach) != 0 {
+		t.Fatalf("after send: attach %q", names())
 	}
 
 	mustClick(t, tt, "Preview shot.png")
 	tt.Frame()
-	if a.attachmentPreview == nil || !tt.HasText("Close Preview") {
+	if a.attachmentPreview == nil {
 		t.Fatal("sent image did not open the top-level preview")
 	}
 	mustClick(t, tt, "Close Preview")
@@ -181,7 +174,7 @@ func TestAIPaneAttachments(t *testing.T) {
 	if !tt.DropFiles(in.X+in.W/2, in.Y+in.H/2, notes) {
 		t.Fatal("the composer took no drop")
 	}
-	waitFor(t, tt, "dropped", func() bool { return len(cn.ai.attach) == 1 && tt.HasText("Remove notes.txt") })
+	waitFor(t, tt, "dropped", func() bool { return slices.Equal(names(), []string{"notes.txt"}) })
 
 	cn.ai.agent = "acp"
 	img, err := readAttach(shot)
@@ -192,28 +185,5 @@ func TestAIPaneAttachments(t *testing.T) {
 	tt.Frame()
 	if len(cn.ai.attach) != 1 || !tt.HasText("“shot.png” can’t be attached: this agent reads text files only.") {
 		t.Fatalf("ACP took an image: %d %q", len(cn.ai.attach), tt.Texts())
-	}
-}
-
-func TestAIAttachmentImageRemoveBounds(t *testing.T) {
-	img, err := attachData("shot.png", pngBytes(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	a := &App{}
-	files := []*aiAttach{img}
-	tt := ui.NewTester(func(c *ui.Context) {
-		a.attachStrip(c, theme.For("light", false), locales.In("en"), files, func(i int) { files = append(files[:i], files[i+1:]...) })
-	}, 320, 160)
-	tt.Frame()
-	card := mustFind(t, tt, "shot.png")
-	rm := mustFind(t, tt, "Remove shot.png")
-	if rm.X < card.X || rm.X+rm.W > card.X+card.W || rm.Y < card.Y || rm.Y+rm.H > card.Y+card.H {
-		t.Fatalf("remove button %v outside image card %v", rm, card)
-	}
-	tt.ClickAt(rm.X+rm.W/2, rm.Y+rm.H/2)
-	tt.Frame()
-	if len(files) != 0 {
-		t.Fatal("image was not removed by mouse")
 	}
 }

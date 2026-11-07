@@ -38,6 +38,12 @@ type termView struct {
 	target         ptyTarget
 	snippetSending bool // UI-thread state, cleared when the captured write returns
 	inputError     func(error)
+	// fanout, set while what is typed goes to several terminals, sends
+	// it to the others too, encoded by encode for each one's modes. Keys,
+	// text and pastes go; mouse and focus reports stay here. holdPaste,
+	// set then too, takes a paste to send once asked, when it reports so.
+	fanout    func(encode func(vt.Modes) []byte)
+	holdPaste func(text string) bool
 	// shortcuts are the shortcuts recorded (settings.Shortcuts), whose
 	// keys the terminal leaves to the app
 	shortcuts map[string]string
@@ -668,10 +674,24 @@ func (v *termView) focusChanged(focused bool) {
 
 // Paste sends text as pasted.
 func (v *termView) Paste(text string) {
-	if text == "" {
+	if text == "" || v.holdPaste != nil && v.holdPaste(text) {
 		return
 	}
+	v.pasteNow(text)
+}
+
+// pasteNow sends text as pasted, without holding it.
+func (v *termView) pasteNow(text string) {
 	v.send(pasteBytes(text, v.target.Terminal().Modes()))
+	v.fan(func(m vt.Modes) []byte { return pasteBytes(text, m) })
+}
+
+// fan sends to the other terminals what encode gives for each, while
+// what is typed goes to several.
+func (v *termView) fan(encode func(vt.Modes) []byte) {
+	if v.fanout != nil {
+		v.fanout(encode)
+	}
 }
 
 // onlyControl reports text made of control characters, which keys the
@@ -732,6 +752,11 @@ func (v *termView) input(ev ui.InputEvent, cb clipboard) bool {
 		}
 		if b, ok := EncodeKey(ev.Key, mods, t.Modes()); ok {
 			v.send(b)
+			key := ev.Key
+			v.fan(func(m vt.Modes) []byte {
+				b, _ := EncodeKey(key, mods, m)
+				return b
+			})
 			v.swallow = mods&(ui.Ctrl|ui.Alt) != 0 && typesText(ev.Key)
 			return true
 		}
@@ -751,7 +776,9 @@ func (v *termView) input(ev ui.InputEvent, cb clipboard) bool {
 		if ev.Text == "" || onlyControl(ev.Text) {
 			return true
 		}
-		v.send([]byte(strings.ReplaceAll(ev.Text, "\n", "\r")))
+		b := []byte(strings.ReplaceAll(ev.Text, "\n", "\r"))
+		v.send(b)
+		v.fan(func(vt.Modes) []byte { return b })
 		return true
 	case ui.InputCompose:
 		v.blink.at = time.Time{}

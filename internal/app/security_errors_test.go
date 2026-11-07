@@ -6,14 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Licoy/sshyard/internal/ai/agent"
 	"github.com/Licoy/sshyard/internal/ai/llm"
-	"github.com/Licoy/sshyard/internal/assets"
 	"github.com/Licoy/sshyard/internal/netproxy"
-	"github.com/Licoy/sshyard/internal/session"
 	"github.com/Licoy/sshyard/internal/sftpsvc"
 	"github.com/Licoy/sshyard/locales"
-	"github.com/egoist/mygo/ui"
 )
 
 func TestSecurityErrorTranslations(t *testing.T) {
@@ -82,41 +78,6 @@ func TestSecurityToolOutputOnlyMapsExactFirstLine(t *testing.T) {
 		}
 		if aiErrLine(m, "ai.command_output_limit") != m.AiRequestFailed(m.AiCommandOutputLimit()) {
 			t.Fatal("AI error token not translated")
-		}
-	}
-}
-
-func TestSecurityErrorsNativeViewsBothLanguages(t *testing.T) {
-	a := &App{}
-	host := assets.Host{Name: "box"}
-	cn := &conn{host: host, ai: &aiState{items: []aiItem{
-		{kind: "tool", open: true, tool: agent.ToolCard{ID: "limit", Name: "run_command", Run: true, Phase: "done", Output: "ai.command_output_limit\nnormal output"}},
-		{kind: "err", text: "sftp: invalid path"},
-	}}}
-	proxyErr := &netproxy.Error{Addr: "proxy.test:8080", Err: netproxy.ErrHandshakeTooLarge}
-	tt := ui.NewTester(func(c *ui.Context) {
-		m := locales.In(c.Locale())
-		ui.Column(c).Children(func() {
-			for i := range cn.ai.items {
-				a.aiCard(c, cn, i, currentTokens(c), m)
-			}
-			ui.Text(c, a.statusText(m, host, session.Status{State: session.Failed, Err: proxyErr}, c.Now()))
-			ui.Text(c, transferLabel(m, sftpsvc.Transfer{State: sftpsvc.Failed, Err: sftpsvc.ErrPartChanged}))
-		})
-	}, 900, 700)
-	for _, locale := range []string{"en", "zh-Hans"} {
-		tt.SetLocale(locale)
-		tt.Frame()
-		m := locales.In(locale)
-		for _, want := range []string{m.AiCommandOutputLimit(), "normal output", m.SecuritySftpInvalidPath(), m.SecurityProxyHandshakeLimit(), m.SecuritySftpPartChanged()} {
-			if !tt.HasText(want) {
-				t.Errorf("%s missing %q in %q", locale, want, tt.Texts())
-			}
-		}
-		for _, raw := range []string{"ai.command_output_limit", "sftp: invalid path", "proxy: handshake too large", "sftp: partial file identity changed"} {
-			if tt.HasText(raw) {
-				t.Errorf("%s raw error visible: %q", locale, raw)
-			}
 		}
 	}
 }

@@ -224,9 +224,9 @@ var stopAllMods = func() ui.Modifiers {
 	return ui.Ctrl | ui.Shift
 }()
 
-// aiMods opens an AI pane and the command palette: ⌘⇧A and ⌘⇧P on
-// macOS, Ctrl+Shift+A and Ctrl+Shift+P elsewhere. Not appMods: on macOS
-// that is ⌘A, which is Select All in a text field.
+// aiMods opens an AI pane, the command palette and the tool panes: ⌘⇧A,
+// ⌘⇧P, ⌘⇧M and ⌘⇧L on macOS, Ctrl+Shift and the key elsewhere. Not
+// appMods: on macOS that is ⌘A, which is Select All in a text field.
 var aiMods = func() ui.Modifiers {
 	if runtime.GOOS == "darwin" {
 		return ui.Super | ui.Shift

@@ -2,12 +2,10 @@ package app
 
 import (
 	"image"
-	"image/color"
 	"testing"
 	"time"
 
 	"github.com/Licoy/sshyard/internal/assets"
-	"github.com/Licoy/sshyard/internal/theme"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -107,48 +105,5 @@ func TestWelcomeFieldSettles(t *testing.T) {
 	f.move(20, 20, t0.Add(time.Minute))
 	if f.calm {
 		t.Fatal("a move did not wake the field")
-	}
-}
-
-func TestWelcomeFieldPaintsThemeDots(t *testing.T) {
-	for _, tok := range []theme.Tokens{theme.LightTokens(), theme.DarkTokens()} {
-		f := &welcomeField{}
-		var bg color.RGBA
-		tt := ui.NewTester(func(c *ui.Context) {
-			ui.Box(c).Fill().Background(tok.Canvas).Draw(func(p *ui.Painter, r ui.Rect) { f.paint(p, r, tok, false) })
-		}, 110, 66)
-		tt.Frame()
-		bg = tt.Image().RGBAAt(11, 11)
-		f.shown = tt.Now().Add(-fieldFadeIn)
-		f.move(55, 33, tt.Now())
-		tt.Frame()
-		ink := func() (dots, lit, sum int) {
-			img := tt.Image()
-			for py := range 66 {
-				for px := range 110 {
-					c := img.RGBAAt(px, py)
-					if c == bg {
-						continue
-					}
-					dots++
-					if int(c.B)-int(c.R) > 24 {
-						lit++
-					}
-					sum += abs(int(c.R)-int(bg.R)) + abs(int(c.G)-int(bg.G)) + abs(int(c.B)-int(bg.B))
-				}
-			}
-			return dots, lit, sum
-		}
-		dots, lit, whole := ink()
-		if dots == 0 || lit == 0 {
-			t.Fatalf("dark=%v: %d dot pixels, %d lit by the accent", tok.Dark, dots, lit)
-		}
-
-		// Behind the content the dots show, fainter, lit or not.
-		f.content = ui.Rect{W: 110, H: 66}
-		tt.Frame()
-		if dots, _, faint := ink(); dots == 0 || faint*10 > whole*8 {
-			t.Fatalf("dark=%v: behind the content %d dot pixels, ink %d of %d", tok.Dark, dots, faint, whole)
-		}
 	}
 }

@@ -34,6 +34,7 @@ func (a *App) View(c *ui.Context) {
 	a.wakeUndo(c)
 	a.followCwd(c)
 	a.watchTmux(c)
+	a.watchLogs(locales.In(c.Locale()))
 	for _, cn := range a.conns {
 		if cn.fs != nil {
 			a.pendingOpens(cn)
@@ -46,6 +47,8 @@ func (a *App) View(c *ui.Context) {
 	c.SetTheme(tok.Apply(base))
 	m := locales.In(c.Locale())
 	a.localName = m.LocalTerminal()
+	a.nameTools(m)
+	a.bc.synced = a.syncSet()
 	a.fontToasts(c, m)
 
 	a.shortcuts(c)

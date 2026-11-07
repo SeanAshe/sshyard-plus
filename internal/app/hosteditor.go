@@ -55,6 +55,9 @@ type hostForm struct {
 	// encoding is the output encoding of the host's new terminals
 	// (Host.Encoding)
 	encoding vt.OutputEncoding
+	// sessionLog logs the host's terminals as they connect
+	// (Host.SessionLog)
+	sessionLog bool
 	// osc52 is the override's label once Advanced is open; osc52Code is
 	// the saved policy ("", allow, ask, deny), so a save before that
 	// keeps it. advOpen shows Advanced.
@@ -142,6 +145,7 @@ func (a *App) openEditor(h *assets.Host) {
 		f.netOpen = f.proxy != "" || len(f.jumps) > 0
 		f.termDir, f.remoteDir, f.localDir = h.TerminalDir, h.RemoteDir, h.LocalDir
 		f.tmux = h.Tmux
+		f.sessionLog = h.SessionLog
 		if e := vt.OutputEncoding(h.Encoding); slices.Contains(vt.OutputEncodings(), e) {
 			f.encoding = e
 		}
@@ -281,6 +285,7 @@ func (a *App) SaveForm(m locales.Messages) bool {
 	h.TerminalDir, h.RemoteDir, h.LocalDir = f.termDir, f.remoteDir, f.localDir
 	h.Tmux = strings.TrimSpace(f.tmux)
 	h.Encoding = string(f.encoding)
+	h.SessionLog = f.sessionLog
 	if h.SSH() && h.Tmux != "" && !session.TmuxNameOK(h.Tmux) {
 		f.err = m.TmuxNameInvalid()
 		return false
@@ -488,6 +493,7 @@ func (a *App) editorView(c *ui.Context, m locales.Messages) {
 							a.streamTermFields(c, m, tok, f)
 						}
 						encodingField(c, m, tok, f)
+						sessionLogField(c, m, tok, f)
 						ui.Field(c, "", func() {
 							ui.Collapsible(c.Key("f:renewal"), m.RenewalSection(), &f.renewOpen, func() {
 								a.renewalFields(c, m, tok, f)
@@ -579,19 +585,22 @@ func (a *App) networkFields(c *ui.Context, m locales.Messages, tok theme.Tokens,
 			return
 		}
 		ui.Text(c, m.FieldJumpHosts()).FontSize(theme.Footnote).TextColor(tok.TextMuted)
-		if len(f.jumps) == 0 {
+		// Row actions replace f.jumps while List still uses this build's
+		// count, so all row callbacks must read the same stable slice.
+		jumps := f.jumps
+		if len(jumps) == 0 {
 			ui.Text(c, m.NoJumpHosts()).FontSize(theme.Footnote).TextColor(tok.TextMuted)
 		} else {
-			f.jumpList.Key = func(i int) any { return f.jumps[i] }
-			f.jumpList.Label = func(i int) string { return a.hostLabel(f.jumps[i]) }
-			f.jumpList.Reorder = func(rows []int, to int) { f.jumps = moveRows(f.jumps, rows, to) }
+			f.jumpList.Key = func(i int) any { return jumps[i] }
+			f.jumpList.Label = func(i int) string { return a.hostLabel(jumps[i]) }
+			f.jumpList.Reorder = func(rows []int, to int) { f.jumps = moveRows(jumps, rows, to) }
 			// More than five scroll, the remove buttons clear of the bar.
 			end := float32(4)
-			if len(f.jumps) > 5 {
+			if len(jumps) > 5 {
 				end += scrollGutter
 			}
-			ui.List(c.Key("f:jumps"), &f.jumpList, len(f.jumps), func(i int) {
-				id := f.jumps[i]
+			ui.List(c.Key("f:jumps"), &f.jumpList, len(jumps), func(i int) {
+				id := jumps[i]
 				ui.Row(c.Key("jump:"+id)).Height(34).Gap(8).Padding(0, end, 0, 8).AlignItems(ui.Center).FillWidth().Children(func() {
 					ui.Text(c, strconv.Itoa(i+1)).FontSize(theme.Caption).TextColor(tok.TextMuted).Width(14)
 					tile(c, icons.JumpHost, tok.Tint(id), 20)
@@ -600,7 +609,7 @@ func (a *App) networkFields(c *ui.Context, m locales.Messages, tok theme.Tokens,
 						f.jumps = slices.DeleteFunc(slices.Clone(f.jumps), func(s string) bool { return s == id })
 					}
 				})
-			}).Height(float32(34*min(len(f.jumps), 5))).FillWidth().Radius(theme.RadiusControl).Border(1, tok.Line).Background(tok.Fill)
+			}).Height(float32(34*min(len(jumps), 5))).FillWidth().Radius(theme.RadiusControl).Border(1, tok.Line).Background(tok.Fill)
 		}
 		var pick []string
 		var pickIDs []string
@@ -659,6 +668,17 @@ func encodingField(c *ui.Context, m locales.Messages, tok theme.Tokens, f *hostF
 				}
 			}
 			ui.Text(c, m.TerminalEncodingHint()).FontSize(theme.Caption).TextColor(tok.TextMuted)
+		})
+	})
+}
+
+// sessionLogField is whether the host's terminals are logged as they
+// connect.
+func sessionLogField(c *ui.Context, m locales.Messages, tok theme.Tokens, f *hostForm) {
+	ui.Field(c, m.SessionLogs(), func() {
+		ui.Column(c).Gap(4).FillWidth().Children(func() {
+			formCheckbox(c.Key("f:log"), &f.sessionLog, m.LogAuto())
+			ui.Text(c, m.LogAutoHint()).FontSize(theme.Caption).TextColor(tok.TextMuted)
 		})
 	})
 }

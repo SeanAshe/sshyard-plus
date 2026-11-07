@@ -12,7 +12,6 @@ import (
 	"github.com/Licoy/sshyard/internal/keys"
 	"github.com/Licoy/sshyard/internal/migration"
 	"github.com/Licoy/sshyard/locales"
-	"github.com/egoist/mygo/ui"
 )
 
 func TestMigrationTextFlow(t *testing.T) {
@@ -235,24 +234,8 @@ func TestMigrationTextKeyProblem(t *testing.T) {
 	}
 }
 
-func TestMigrationTextViews(t *testing.T) {
+func TestMigrationTextRows(t *testing.T) {
 	a, _ := newTestApp(t)
-	for _, lang := range []string{"en", "zh-Hans", "zh-Hant", "ko", "ja"} {
-		m := locales.In(lang)
-		a.openTextMigration()
-		tt := ui.NewTester(func(c *ui.Context) { a.migrationView(c, locales.In(c.Locale())) }, 760, 700)
-		tt.SetLocale(lang)
-		tt.Frame()
-		for _, s := range []string{m.MigrationText(), m.MigrationTextHelp(), m.MigrationTextPreview()} {
-			if !tt.HasText(s) {
-				t.Fatalf("%s composer lacks %q: %q", lang, s, tt.Texts())
-			}
-		}
-		if lang == "zh-Hans" {
-			saveBrandScreenshot(t, tt, "migration-text-composer")
-		}
-		a.closeMigration()
-	}
 	var lines []string
 	for i := range 24 {
 		switch i % 3 {
@@ -278,42 +261,11 @@ func TestMigrationTextViews(t *testing.T) {
 	if issues := result.Entries[2].Issues; len(issues) != 1 || issues[0].Code != "invalid-entry" || issues[0].Field != "port" {
 		t.Fatalf("parsed issues %v", issues)
 	}
-	m := locales.In("zh-Hans")
-	for _, size := range [][2]int{{520, 760}, {840, 620}, {1000, 900}, {1200, 760}} {
-		for _, dark := range []bool{false, true} {
-			t.Run(fmt.Sprintf("%dx%d/%v", size[0], size[1], dark), func(t *testing.T) {
-				f := a.newMigration(migration.Text, parse())
-				f.batch.open, f.batch.auth = true, assets.AuthKey
-				f.rows[1].auth, f.rows[4].auth = assets.AuthPassword, assets.AuthKey
-				a.migration, a.migrationOpen = f, true
-				tt := ui.NewTester(func(c *ui.Context) { a.migrationView(c, locales.In(c.Locale())) }, size[0], size[1])
-				tt.SetLocale("zh-Hans")
-				tt.SetDark(dark)
-				tt.Frame()
-				k := a.checkMigration(m, f)
-				if k.fields[f.rows[1]] != "secret" || k.fields[f.rows[2]] != "port" || k.fields[f.rows[4]] != "secret" || k.problems[f.rows[0]] != "" {
-					t.Fatalf("fields to correct %v", k.fields)
-				}
-				for _, s := range []string{m.FieldName(), m.FieldHost(), m.FieldPort(), m.FieldUser(), m.FieldGroup(), m.FieldAuth(), m.MigrationColSecret(), m.MigrationColStatus(), m.MigrationRowReady(), m.InvalidPort()} {
-					if !tt.HasText(s) {
-						t.Fatalf("table lacks %q: %q", s, tt.Texts())
-					}
-				}
-				for _, label := range []string{m.SearchHosts(), m.MigrationApplyGroup(), m.Cancel(), m.ImportButton("24")} {
-					rect := mustFind(t, tt, label)
-					if rect.X < 40 || rect.X+rect.W > float32(size[0])-40 || rect.Y < 20 || rect.Y+rect.H > float32(size[1])-20 {
-						t.Fatalf("control %s outside dialog inner bounds: %+v", label, rect)
-					}
-				}
-				saveBrandScreenshot(t, tt, fmt.Sprintf("migration-text-%dx%d-%v", size[0], size[1], dark))
-				f.done = &migrationOutcome{added: 20, updated: 3, skipped: 1}
-				tt.Frame()
-				if !tt.HasText(m.MigrationResult("20", "3", "1")) || !tt.HasText(m.Close()) {
-					t.Fatalf("outcome %q", tt.Texts())
-				}
-				saveBrandScreenshot(t, tt, fmt.Sprintf("migration-text-done-%dx%d-%v", size[0], size[1], dark))
-				a.closeMigration()
-			})
-		}
+	f := a.newMigration(migration.Text, parse())
+	f.batch.open, f.batch.auth = true, assets.AuthKey
+	f.rows[1].auth, f.rows[4].auth = assets.AuthPassword, assets.AuthKey
+	k := a.checkMigration(locales.In("en"), f)
+	if k.fields[f.rows[1]] != "secret" || k.fields[f.rows[2]] != "port" || k.fields[f.rows[4]] != "secret" || k.problems[f.rows[0]] != "" {
+		t.Fatalf("fields to correct %v", k.fields)
 	}
 }

@@ -139,6 +139,9 @@ type Session struct {
 	// processes.
 	tag    string
 	tagged bool
+	// tap, when set, is given what the shell writes to the terminal, as
+	// it comes, after the terminal took it (SetOutputTap).
+	tap atomic.Pointer[func([]byte)]
 	// outAt is when the shell last wrote to the terminal, in Unix
 	// nanoseconds, 0 before its first output.
 	outAt atomic.Int64
@@ -755,6 +758,17 @@ func (s *Session) keepAlive(ctx context.Context, ping func() error, lenient bool
 	}
 }
 
+// SetOutputTap gives fn the bytes the session prints, as the terminal
+// takes them, until it is set again; nil stops it. fn runs on the
+// session's goroutine, must not keep p, and must not wait.
+func (s *Session) SetOutputTap(fn func(p []byte)) {
+	if fn == nil {
+		s.tap.Store(nil)
+		return
+	}
+	s.tap.Store(&fn)
+}
+
 // termWriter writes output to the terminal, answering the login prompts
 // in it when it logs in.
 type termWriter struct {
@@ -765,6 +779,9 @@ type termWriter struct {
 
 func (w *termWriter) Write(p []byte) (int, error) {
 	n, err := w.s.Term.Write(p)
+	if tap := w.s.tap.Load(); tap != nil {
+		(*tap)(p)
+	}
 	w.s.outAt.Store(time.Now().UnixNano())
 	w.s.changed()
 	if w.login != nil {

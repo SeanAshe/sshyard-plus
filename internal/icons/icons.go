@@ -174,6 +174,7 @@ var (
 	Attach      = load("attachment-line")
 	FilePDF     = load("file-pdf-2-line")
 	FileText    = load("file-text-line")
+	FileTextOn  = load("file-text-fill")
 	FileCode    = load("file-code-line")
 	MCP         = load("plug-line")
 	API         = load("code-s-slash-line")
@@ -181,8 +182,15 @@ var (
 	Certificate = load("shield-keyhole-line")
 	HostKey     = load("shield-keyhole-line")
 	Record      = load("record-circle-line")
+	RecordOn    = load("record-circle-fill")
 	Reset       = load("arrow-go-back-line")
 	Command     = load("command-line")
+	// Broadcast sends a command to several terminals at once.
+	Broadcast   = load("broadcast-line")
+	BroadcastOn = load("broadcast-fill")
+	// Keyboard sends what is typed to several terminals at once.
+	Keyboard   = load("keyboard-box-line")
+	KeyboardOn = load("keyboard-box-fill")
 	// The AI permission modes: asks first, reviewed, full access.
 	ModeAsk    = InstallKey
 	ModeReview = load("eye-line")

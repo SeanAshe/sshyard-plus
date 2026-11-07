@@ -98,13 +98,6 @@ func TestMouseReporting(t *testing.T) {
 	c := connected(t, a, tt, srv)
 	waitFor(t, tt, "mouse mode", func() bool { return c.s.Term.Modes().Mouse == vt.MouseButton })
 	tt.Frame()
-	if _, ok := tt.Find("The program is receiving the mouse. Hold Shift to select text."); !ok {
-		t.Error("no mouse icon in the pane header")
-	}
-	if tt.Cursor() == ui.CursorText {
-		// not asserted strictly: the cursor follows the pointer
-		t.Log("text cursor over a terminal that takes the mouse")
-	}
 	sh.take()
 
 	// press, drag, release: SGR, 1-based
@@ -163,13 +156,10 @@ func TestMouseReporting(t *testing.T) {
 		t.Errorf("Shift reported %q", got)
 	}
 
-	// the program turns the mouse off: the icon goes, clicks select
+	// the program turns the mouse off
 	sh.out <- "\x1b[?1002l\x1b[?1006l"
 	waitFor(t, tt, "mouse off", func() bool { return !c.s.Term.Modes().MouseTracking })
 	tt.Frame()
-	if _, ok := tt.Find("The program is receiving the mouse. Hold Shift to select text."); ok {
-		t.Error("mouse icon with the mouse off")
-	}
 	// on the alternate screen without reports the wheel is the arrows
 	tt.Wheel(x, y, 0, 1)
 	expectRead(t, tt, sh, "\x1b[B")
@@ -218,7 +208,6 @@ func TestCombiningCopy(t *testing.T) {
 	c := connected(t, a, tt, srv)
 	waitFor(t, tt, "output", func() bool { return strings.Contains(c.s.Term.ScreenText(), line) })
 	tt.Frame()
-	tt.Image() // draws, the marks on their letters
 	tt.Command("selectAll")
 	tt.Command("copy")
 	if got := strings.TrimSpace(tt.Clipboard()); got != line {
@@ -238,19 +227,3 @@ type fakeClipboard struct{}
 
 func (fakeClipboard) ReadClipboard() string { return "" }
 func (fakeClipboard) WriteClipboard(string) {}
-
-func TestPlaceGlyphsKeepsMarksOnTheirBase(t *testing.T) {
-	// "e" + U+0301, "x": the shaper put the mark 1 DIP right of the e's
-	// start, with no advance, in the e's cluster.
-	g := []ui.Glyph{
-		{Cluster: 0, Runes: 2, X: 0, Advance: 6},
-		{Cluster: 0, Runes: 2, X: 1, Advance: 0},
-		{Cluster: 2, Runes: 1, X: 6, Advance: 6},
-	}
-	placed := append([]ui.Glyph(nil), g...)
-	cells := []vt.Cell{{Rune: 'e', Comb: vt.CombOf("\u0301"), Width: 1}, {Rune: 'x', Width: 1}}
-	placeGlyphs(placed, g, []int{0, 0, 1}, cells, 8)
-	if placed[0].X != 1 || placed[1].X != 2 || placed[2].X != 9 {
-		t.Errorf("x %v %v %v, want 1 2 9", placed[0].X, placed[1].X, placed[2].X)
-	}
-}

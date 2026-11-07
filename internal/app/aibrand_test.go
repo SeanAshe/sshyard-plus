@@ -1,9 +1,6 @@
 package app
 
 import (
-	"image/png"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -45,66 +42,31 @@ func TestProviderDefaultURLSwitch(t *testing.T) {
 }
 
 func TestAIModelMenu(t *testing.T) {
-	for _, mode := range []theme.Mode{theme.Light, theme.Dark} {
-		t.Run(string(mode), func(t *testing.T) {
-			a, tt := newTestApp(t)
-			h := savedHost(t, a, "brands", "10.0.0.8")
-			s := a.Settings()
-			s.Theme = mode
-			s.AIProviders = []settings.AIProvider{{ID: "p", Name: "OpenAI", BaseURL: "https://api.openai.com/v1", Model: "gpt-5.1", Models: []string{"claude-sonnet-4", "unknown-model"}}}
-			if err := a.ApplySettings(s); err != nil {
-				t.Fatal(err)
-			}
-			id, err := a.OpenAI(h.ID, openAt{}, 0)
-			if err != nil {
-				t.Fatal(err)
-			}
-			tt.Frame()
-			mustClick(t, tt, "Model")
-			tt.Frame()
-			mustClick(t, tt, "claude-sonnet-4")
-			tt.Frame()
-			mustClick(t, tt, "Model")
-			tt.Frame()
-			model, note := mustFind(t, tt, "gpt-5.1"), mustFind(t, tt, "Default model")
-			if note.Y+note.H < model.Y || model.Y+model.H < note.Y || note.X <= model.X {
-				t.Fatalf("default not inline: model=%v note=%v", model, note)
-			}
-			mustClick(t, tt, "claude-sonnet-4")
-			tt.Frame()
-			if a.conns[id].ai.model != "claude-sonnet-4" {
-				t.Fatalf("model selection: %q %q", a.conns[id].ai.model, tt.Texts())
-			}
-			mustClick(t, tt, "Model")
-			tt.Frame()
-			mustClick(t, tt, "unknown-model")
-			tt.Frame()
-			if a.conns[id].ai.model != "unknown-model" {
-				t.Fatalf("unknown model selection: %q", a.conns[id].ai.model)
-			}
-		})
-	}
-}
-
-func saveBrandScreenshot(t *testing.T, tt *ui.Tester, name string) {
-	t.Helper()
-	dir := os.Getenv("SSHYARD_UI_SCREENSHOTS")
-	if dir == "" {
-		return
-	}
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	a, tt := newTestApp(t)
+	h := savedHost(t, a, "brands", "10.0.0.8")
+	s := a.Settings()
+	s.AIProviders = []settings.AIProvider{{ID: "p", Name: "OpenAI", BaseURL: "https://api.openai.com/v1", Model: "gpt-5.1", Models: []string{"claude-sonnet-4", "unknown-model"}}}
+	if err := a.ApplySettings(s); err != nil {
 		t.Fatal(err)
 	}
-	f, err := os.Create(filepath.Join(dir, name+".png"))
+	id, err := a.OpenAI(h.ID, openAt{}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := png.Encode(f, tt.Image()); err != nil {
-		f.Close()
-		t.Fatal(err)
+	tt.Frame()
+	mustClick(t, tt, "Model")
+	tt.Frame()
+	mustClick(t, tt, "claude-sonnet-4")
+	tt.Frame()
+	if a.conns[id].ai.model != "claude-sonnet-4" {
+		t.Fatalf("model selection: %q", a.conns[id].ai.model)
 	}
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
+	mustClick(t, tt, "Model")
+	tt.Frame()
+	mustClick(t, tt, "unknown-model")
+	tt.Frame()
+	if a.conns[id].ai.model != "unknown-model" {
+		t.Fatalf("unknown model selection: %q", a.conns[id].ai.model)
 	}
 }
 

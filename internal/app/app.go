@@ -33,6 +33,7 @@ import (
 	"github.com/Licoy/sshyard/internal/netproxy"
 	"github.com/Licoy/sshyard/internal/session"
 	"github.com/Licoy/sshyard/internal/settings"
+	"github.com/Licoy/sshyard/internal/termlog"
 	"github.com/Licoy/sshyard/internal/theme"
 	"github.com/Licoy/sshyard/internal/updater"
 	"github.com/Licoy/sshyard/internal/vault"
@@ -211,12 +212,24 @@ type conn struct {
 	metShown bool
 	// ai is set for an AI pane. It has no session of its own.
 	ai *aiState
+	// log is a terminal's session log while it is kept (startLog);
+	// logConns is how many times the session had connected as watchLogs
+	// last looked, and autoLog that its host's log was started once.
+	log      *termlog.Recorder
+	logConns int
+	autoLog  bool
 }
 
 func (c *conn) item() layout.Item { return layout.Item{Kind: c.kind, ID: c.id} }
 
 // close ends the connection and what runs on it.
 func (c *conn) close() {
+	if r := c.log; r != nil {
+		c.log = nil
+		c.s.Term.SetLineHook(nil)
+		c.s.SetOutputTap(nil)
+		r.Close(c.s.Term.CursorLine(), time.Now())
+	}
 	if c.fs != nil {
 		c.fs.close()
 	}
@@ -298,6 +311,8 @@ type App struct {
 	panels   []inspectorKind
 	stackPct map[string]*float32
 	snippets snippetState
+	// bc is the broadcast panel's state.
+	bc broadcastState
 	// tabStart is the first tab the title bar shows when not all fit, the
 	// others in its menu of more tabs; tabRoom the width they had
 	tabStart int
@@ -512,6 +527,13 @@ type App struct {
 	// localName is what local terminals are called, in the language of
 	// the last frame.
 	localName string
+	// logs is the session logs pane's.
+	logs logsState
+	// toolNames are what the tool panes are called, in the language of
+	// the last frame; toolFocus is the pane each tab focused last, by tab
+	// ID, which a tool pane gives the focus back to.
+	toolNames map[layout.Kind]string
+	toolFocus map[int]int
 	// shells are this computer's shells, found as the app starts; see
 	// localID.
 	shells []session.Shell
@@ -1333,6 +1355,10 @@ func (a *App) finishCloseSession(c *conn) {
 	}
 	a.ws.Close(id)
 	delete(a.conns, id)
+	if c.kind == layout.Broadcast {
+		// Typing goes to several terminals only while the pane shows.
+		a.bc.live = false
+	}
 	a.releaseTermNo(c)
 	a.syncMetrics()
 	// Copies go here, not in the goroutine. RemoveAll unlinks the file
@@ -1364,8 +1390,17 @@ func (a *App) releaseTermNo(c *conn) {
 	delete(a.termSeq, c.host.ID)
 }
 
-// focused is what the active tab's focused pane shows.
+// focused is what the active tab's focused pane shows: a session, never
+// a tool pane, which works on the sessions.
 func (a *App) focused() *conn {
+	if c := a.focusedPane(); c != nil && !isTool(c.kind) {
+		return c
+	}
+	return nil
+}
+
+// focusedPane is the active tab's focused pane, a tool pane too.
+func (a *App) focusedPane() *conn {
 	if t := a.ws.ActiveTab(); t != nil {
 		return a.conns[t.Focused().ID]
 	}

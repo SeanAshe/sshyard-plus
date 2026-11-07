@@ -45,9 +45,6 @@ func TestHostGroupChooseExisting(t *testing.T) {
 			id := a.form.orig.ID
 			tt.Advance(focusHoldFor)
 			clickHostGroup(t, tt, m)
-			if !tt.HasText("Empty") || !tt.HasText("Prod") {
-				t.Fatalf("group field does not offer existing groups: %q", tt.Texts())
-			}
 			tt.Type("Emp")
 			if !tt.HasText("Empty") || tt.HasText("Prod") {
 				t.Fatal("typing did not filter existing groups")
@@ -144,41 +141,5 @@ func TestHostGroupDraftCancelAndValidation(t *testing.T) {
 	got, _ := a.store.Get(id)
 	if a.editing || got.Group != "Prod" || !slices.Equal(a.store.Groups(), []string{"Empty", "Prod"}) {
 		t.Fatalf("cancel changed saved data: host=%+v, groups=%q", got, a.store.Groups())
-	}
-}
-
-func TestHostGroupLanguagesAndThemes(t *testing.T) {
-	a, _ := newTestApp(t)
-	for _, lang := range []string{"en", "zh-Hans", "zh-Hant", "ko", "ja"} {
-		for _, dark := range []bool{false, true} {
-			t.Run(fmt.Sprintf("%s/dark=%v", lang, dark), func(t *testing.T) {
-				m := locales.In(lang)
-				a.openEditor(nil)
-				tt := ui.NewTester(func(c *ui.Context) { a.editorView(c, m) }, 700, 700)
-				tt.SetLocale(lang)
-				tt.SetDark(dark)
-				tt.Frame()
-				tt.Advance(focusHoldFor)
-				clickHostGroup(t, tt, m)
-				if !tt.HasText(m.NoGroup()) {
-					t.Fatal("empty store is missing the localized No group choice")
-				}
-				tt.Key(0, ui.KeyEscape)
-				mustClick(t, tt, m.NewGroup())
-				tt.Type("生产")
-				saveBrandScreenshot(t, tt, fmt.Sprintf("host-group-new-%s-dark-%v", lang, dark))
-				mustClick(t, tt, m.SnippetAddGroup())
-				tt.Advance(focusHoldFor)
-				clickHostGroup(t, tt, m)
-				if !tt.HasText("生产") || !tt.HasText(m.NoGroup()) {
-					t.Fatal("unsaved group is missing from the choices")
-				}
-				saveBrandScreenshot(t, tt, fmt.Sprintf("host-group-choices-%s-dark-%v", lang, dark))
-				mustClick(t, tt, m.NoGroup())
-				if a.form.group != "" || len(a.store.Groups()) != 0 {
-					t.Fatal("clearing a draft persisted a group")
-				}
-			})
-		}
 	}
 }

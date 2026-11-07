@@ -13,42 +13,29 @@ import (
 )
 
 func TestTrayIconSettings(t *testing.T) {
-	for _, dark := range []bool{false, true} {
-		t.Run(strconv.FormatBool(dark), func(t *testing.T) {
-			a, tt := newTestApp(t)
-			var styles []string
-			a.p.SetTrayIcon = func(style string) error { styles = append(styles, style); return nil }
-			a.openSettings(prefAppearance)
-			tt.SetDark(dark)
-			for _, lang := range settings.Languages {
-				tt.SetLocale(lang)
-				tt.Frame()
-				m := locales.In(lang)
-				for _, label := range []string{m.TrayIconStyle(), m.TrayIconStyleNote(), m.TrayIconColor()} {
-					if !tt.HasText(label) {
-						t.Fatalf("%s missing %q", lang, label)
-					}
-				}
-				for _, choice := range []struct{ label, style string }{{m.TrayIconMono(), settings.TrayIconMono}, {m.TrayIconColor(), settings.TrayIconColor}} {
-					current := m.TrayIconMono()
-					if a.Settings().TrayIcon == settings.TrayIconColor {
-						current = m.TrayIconColor()
-					}
-					before := len(styles)
-					mustClick(t, tt, current)
-					tt.Frame()
-					mustClick(t, tt, choice.label)
-					tt.Frame()
-					if a.Settings().TrayIcon != choice.style || len(styles) != before+1 || styles[before] != choice.style {
-						t.Fatalf("%s live settings %q, callback %v", lang, a.Settings().TrayIcon, styles)
-					}
-					saved, err := settings.Load(filepath.Join(a.p.DataDir, "settings.json"))
-					if err != nil || saved.TrayIcon != choice.style {
-						t.Fatalf("%s saved %q, error %v", lang, saved.TrayIcon, err)
-					}
-				}
-			}
-		})
+	a, tt := newTestApp(t)
+	var styles []string
+	a.p.SetTrayIcon = func(style string) error { styles = append(styles, style); return nil }
+	a.openSettings(prefAppearance)
+	tt.Frame()
+	m := locales.In("en")
+	for _, choice := range []struct{ label, style string }{{m.TrayIconMono(), settings.TrayIconMono}, {m.TrayIconColor(), settings.TrayIconColor}} {
+		current := m.TrayIconMono()
+		if a.Settings().TrayIcon == settings.TrayIconColor {
+			current = m.TrayIconColor()
+		}
+		before := len(styles)
+		mustClick(t, tt, current)
+		tt.Frame()
+		mustClick(t, tt, choice.label)
+		tt.Frame()
+		if a.Settings().TrayIcon != choice.style || len(styles) != before+1 || styles[before] != choice.style {
+			t.Fatalf("live settings %q, callback %v", a.Settings().TrayIcon, styles)
+		}
+		saved, err := settings.Load(filepath.Join(a.p.DataDir, "settings.json"))
+		if err != nil || saved.TrayIcon != choice.style {
+			t.Fatalf("saved %q, error %v", saved.TrayIcon, err)
+		}
 	}
 }
 

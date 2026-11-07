@@ -99,7 +99,7 @@ func (a *App) snapNode(n *layout.Node) *nodeSnap {
 		return &nodeSnap{Split: split, Ratio: n.Ratio, A: left, B: right}
 	}
 	c := a.conns[n.Item.ID]
-	if c == nil || isTemp(c.host.ID) || c.kind == layout.Editor {
+	if c == nil || isTemp(c.host.ID) || c.kind == layout.Editor || isTool(c.kind) {
 		return nil
 	}
 	host := c.host.ID

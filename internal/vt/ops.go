@@ -220,6 +220,7 @@ func (t *Terminal) tab(n int) {
 
 // index moves the cursor down a line, scrolling at the bottom margin.
 func (t *Terminal) index() {
+	t.leaveLine()
 	t.cur.wrapPending = false
 	if t.cur.y == t.bot {
 		t.scrollUp(1)

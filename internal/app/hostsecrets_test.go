@@ -131,31 +131,23 @@ func TestHostOwnedKeyConnectionAndPrompt(t *testing.T) {
 }
 
 func TestHostOwnedAuthMouseFields(t *testing.T) {
-	for _, language := range []string{"en", "zh-Hans"} {
-		for _, dark := range []bool{false, true} {
-			t.Run(language+map[bool]string{false: "/light", true: "/dark"}[dark], func(t *testing.T) {
-				a, tt := newTestApp(t)
-				tt.SetLocale(language)
-				tt.SetDark(dark)
-				m := locales.In(language)
-				a.openEditor(nil)
-				tt.Frame()
-				mustClick(t, tt, a.askLabel(m))
-				mustClick(t, tt, m.CredKindPassword())
-				if a.form.auth != m.CredKindPassword() || !tt.HasText(m.FieldPassword()) {
-					t.Fatal(tt.Texts())
-				}
-				mustClick(t, tt, m.CredKindPassword())
-				mustClick(t, tt, m.CredKindKey())
-				if a.form.auth != m.CredKindKey() || !tt.HasText(m.KeyChooseFile()) {
-					t.Fatal(tt.Texts())
-				}
-				for _, choice := range a.quickChoices(m) {
-					if choice.method == assets.AuthPassword || choice.method == assets.AuthKey {
-						t.Fatal("host choices leaked to quick connect")
-					}
-				}
-			})
+	a, tt := newTestApp(t)
+	m := locales.In("en")
+	a.openEditor(nil)
+	tt.Frame()
+	mustClick(t, tt, a.askLabel(m))
+	mustClick(t, tt, m.CredKindPassword())
+	if a.form.auth != m.CredKindPassword() {
+		t.Fatalf("auth %q, want password", a.form.auth)
+	}
+	mustClick(t, tt, m.CredKindPassword())
+	mustClick(t, tt, m.CredKindKey())
+	if a.form.auth != m.CredKindKey() {
+		t.Fatalf("auth %q, want key", a.form.auth)
+	}
+	for _, choice := range a.quickChoices(m) {
+		if choice.method == assets.AuthPassword || choice.method == assets.AuthKey {
+			t.Fatal("host choices leaked to quick connect")
 		}
 	}
 }

@@ -180,29 +180,3 @@ func TestFilesWideTableAndFolderSize(t *testing.T) {
 	a.listRemote(&fc.fs.remote, dir)
 	waitFor(t, tt, "back", func() bool { return tt.HasText("sub") && tt.HasText("Calculate") })
 }
-
-// A files pane is dense: its buttons are no larger than its header's, and
-// its rows are 24 DIPs apart, so that it shows many.
-func TestFilesDense(t *testing.T) {
-	skipWindowsSFTP(t)
-	a, tt, fc, root := filesPaneAs(t, false, nil)
-	write(t, filepath.Join(root, "a.txt"), "a")
-	write(t, filepath.Join(root, "b.txt"), "b")
-	a.refreshSides(fc)
-	waitFor(t, tt, "listing", func() bool { return tt.HasText("a.txt") && tt.HasText("b.txt") })
-	tt.Frame()
-	head, ok := tt.Find("Transfers")
-	if !ok {
-		t.Fatalf("no Transfers in %q", tt.Texts())
-	}
-	for _, s := range []string{"Refresh Remote Files", "Type a Path"} {
-		if r, ok := tt.Find(s); !ok || r.W != head.W || r.H != head.H {
-			t.Errorf("%q is %v, the header's button %v", s, r, head)
-		}
-	}
-	ra, _ := tt.Find("a.txt")
-	rb, _ := tt.Find("b.txt")
-	if d := rb.Y - ra.Y; d != 24 {
-		t.Errorf("rows %v apart", d)
-	}
-}

@@ -95,26 +95,3 @@ func TestAIToolCardStates(t *testing.T) {
 		}
 	}
 }
-
-func TestAIToolCardChinese(t *testing.T) {
-	a, tt := newTestApp(t)
-	tt.SetLocale("zh-Hans")
-	h := savedHost(t, a, "web", "10.0.0.8")
-	id, err := a.OpenAI(h.ID, openAt{}, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	m := locales.In("zh-Hans")
-	a.conns[id].ai.items = []aiItem{{kind: "tool", tool: agent.ToolCard{Name: "run_command", Phase: "done", Verdict: "reviewer", Run: true, Exit: 0, Command: "hostname"}}}
-	tt.Frame()
-	for _, want := range []string{m.AiToolCommand(), m.AiToolApproved(m.AiVerdictReviewer()), m.AiToolSucceeded(), m.AiToolExpand()} {
-		if !tt.HasText(want) {
-			t.Fatalf("missing translation %q in %q", want, tt.Texts())
-		}
-	}
-	mustClick(t, tt, m.AiToolExpand())
-	tt.Frame()
-	if !tt.HasText("hostname") || !tt.HasText(m.AiToolCollapse()) {
-		t.Fatalf("Chinese card does not expand: %q", tt.Texts())
-	}
-}

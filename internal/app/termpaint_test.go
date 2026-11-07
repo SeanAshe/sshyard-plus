@@ -1,15 +1,11 @@
 package app
 
 import (
-	"fmt"
 	"slices"
 	"testing"
 	"time"
 
-	"github.com/Licoy/sshyard/internal/highlight"
-	"github.com/Licoy/sshyard/internal/theme"
 	"github.com/Licoy/sshyard/internal/vt"
-	"github.com/egoist/mygo/ui"
 )
 
 // paintTarget is a terminal that takes no input.
@@ -66,33 +62,5 @@ func TestRowMarks(t *testing.T) {
 	}
 	if from, to := v.selectedCols(3); from <= to {
 		t.Errorf("line 3 selects %d–%d", from, to)
-	}
-}
-
-// BenchmarkTerminalPaint is a frame of a full, colored terminal with a
-// selection, a search and the keywords highlighted, as output streams
-// into it.
-func BenchmarkTerminalPaint(b *testing.B) {
-	term := vt.New(150, 50)
-	for i := range 200 {
-		fmt.Fprintf(term, "\x1b[3%dm2026-11-05 12:00:%02d\x1b[0m INFO request id=%d path=/api/v1/items 中文 status=200\r\n", i%8, i%60, i)
-	}
-	v := newTermView(paintTarget{term}, 13)
-	v.selA, v.selB, v.selected = vt.Pos{Line: 160, Col: 3}, vt.Pos{Line: 170, Col: 40}, true
-	v.hl = highlight.New(nil, highlight.PresetIDs())
-	tok := theme.DarkTokens()
-	pal := &tok.Terminal
-	tt := ui.NewTester(func(c *ui.Context) {
-		ui.Box(c.Key("t")).Grow(1).FillWidth().Draw(func(p *ui.Painter, r ui.Rect) { v.paint(p, r, pal, true) })
-	}, 1400, 900)
-	tt.SetScale(2)
-	tt.Frame()
-	b.ReportAllocs()
-	i := 0
-	for b.Loop() {
-		fmt.Fprintf(term, "x%d", i)
-		v.updateFind("request", true, time.Time{}.Add(time.Duration(i)*findEvery))
-		tt.Frame()
-		i++
 	}
 }

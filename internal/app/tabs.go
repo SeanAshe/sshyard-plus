@@ -203,7 +203,10 @@ func (a *App) tab(c *ui.Context, m locales.Messages, tok theme.Tokens, fill ui.C
 		}
 	})
 	chip.Children(func() {
-		if cn != nil {
+		switch {
+		case cn != nil && isTool(cn.kind):
+			softTile(c, kindIcon(cn.kind, false), tok.Accent, 20)
+		case cn != nil:
 			hostAvatar(c, tok, a.liveHost(cn.host), 20)
 		}
 		txt := ui.Text(c, a.tabLabel(t)).SingleLine().Grow(1).Shrink(1).MinWidth(0).FontSize(theme.Body)
@@ -220,6 +223,7 @@ func (a *App) tab(c *ui.Context, m locales.Messages, tok theme.Tokens, fill ui.C
 			dot(c, stateColor(tok, cn.s.Status().State))
 		}
 		a.tabAIMarks(c, t, tok, m)
+		a.tabSyncMark(c, t, tok, m)
 		x := (IconButton{Icon: icons.Close, Label: m.CloseTab(), Size: Small}).Show(c, "x")
 		if !on && !hovered[j] {
 			x.Invisible()
@@ -295,13 +299,9 @@ func (a *App) tabTip(c *ui.Context, m locales.Messages, tok theme.Tokens, chip u
 				}
 				h := a.liveHost(cn.host)
 				ui.Row(c.Key("tip:" + strconv.Itoa(cn.id))).Gap(8).AlignItems(ui.Center).Children(func() {
-					if cn.kind == layout.Terminal {
-						hostAvatar(c, tok, h, 22)
-					} else {
-						softTile(c, kindIcon(cn.kind, false), hostTint(tok, h), 22)
-					}
+					a.paneTile(c, tok, cn, 22)
 					ui.Column(c).Gap(1).Shrink(1).MinWidth(0).Children(func() {
-						title := a.pv(h.Label())
+						title := a.connLabel(cn)
 						switch cn.kind {
 						case layout.Files:
 							title = m.FilesPane(title)
@@ -380,11 +380,7 @@ func (a *App) moreTab(c *ui.Context, m locales.Messages, tok theme.Tokens, t *la
 		var sub []string
 		if cn != nil {
 			h := a.liveHost(cn.host)
-			if cn.kind == layout.Terminal {
-				hostAvatar(c, tok, h, 26)
-			} else {
-				softTile(c, kindIcon(cn.kind, false), hostTint(tok, h), 26)
-			}
+			a.paneTile(c, tok, cn, 26)
 			if target := h.Target(); target != "" {
 				sub = append(sub, a.pv(target))
 			}
@@ -416,6 +412,28 @@ func (a *App) moreTab(c *ui.Context, m locales.Messages, tok theme.Tokens, t *la
 		a.focusReq = t.Focused().ID
 		a.tabsOpen = false
 	}
+}
+
+// tabSyncMark marks tab t while what is typed goes to its terminals.
+func (a *App) tabSyncMark(c *ui.Context, t *layout.Tab, tok theme.Tokens, m locales.Messages) {
+	for _, p := range t.Panes() {
+		if a.bc.synced[p.Item.ID] {
+			ui.Icon(c, icons.KeyboardOn.SVG).Size(14, 14).Shrink(0).TextColor(tok.Accent).Label(m.BroadcastLiveOn()).Tooltip(m.BroadcastLiveOn())
+			return
+		}
+	}
+}
+
+// paneTile is pane cn's tile in a list of panes: a terminal's host, the
+// kind of another in its host's color, or in the accent for a tool pane.
+func (a *App) paneTile(c *ui.Context, tok theme.Tokens, cn *conn, size float32) ui.Element {
+	switch {
+	case cn.kind == layout.Terminal:
+		return hostAvatar(c, tok, a.liveHost(cn.host), size)
+	case isTool(cn.kind):
+		return softTile(c, kindIcon(cn.kind, false), tok.Accent, size)
+	}
+	return softTile(c, kindIcon(cn.kind, false), hostTint(tok, a.liveHost(cn.host)), size)
 }
 
 // tabHost is the host of a tab: its focused pane's.

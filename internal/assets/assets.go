@@ -123,6 +123,9 @@ type Host struct {
 	// Encoding is the output encoding the host's new terminals decode
 	// with, a vt.OutputEncoding; empty is UTF-8.
 	Encoding string `json:"encoding,omitempty"`
+	// SessionLog logs each of the host's terminals from when it
+	// connects.
+	SessionLog bool `json:"sessionLog,omitempty"`
 	// Provider is who the server is rented from, as the user names it.
 	Provider string `json:"provider,omitempty"`
 	// Renewal is the host's subscription; its zero value keeps none.

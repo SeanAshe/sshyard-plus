@@ -133,6 +133,8 @@ type Terminal struct {
 	OnClipboardDrop func()
 	// Bell, when set, is called on BEL.
 	Bell func()
+	// lineHook, set by SetLineHook, takes the lines the cursor leaves.
+	lineHook func(text string, wrapped bool)
 
 	// osc52Max is the largest decoded OSC 52, or 0 for the default.
 	osc52Max int
@@ -526,6 +528,48 @@ func (t *Terminal) Write(p []byte) (int, error) {
 
 // WriteString is Write for a string.
 func (t *Terminal) WriteString(s string) { t.Write([]byte(s)) }
+
+// SetLineHook has hook told each line of the primary screen the cursor
+// leaves, by a line feed or by wrapping, as the line reads then: a line
+// edited in place (a progress bar, a command line) as it ended up.
+// wrapped says the text goes on in the next line. A full-screen
+// program's alternate screen is left out. hook is called with the lock
+// held, so it must not call back into the terminal, nor block; nil
+// stops.
+func (t *Terminal) SetLineHook(hook func(text string, wrapped bool)) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.lineHook = hook
+}
+
+// CursorLine is the text of the line the cursor is on, the end of what
+// SetLineHook told; "" on the alternate screen.
+func (t *Terminal) CursorLine() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.altActive {
+		return ""
+	}
+	return t.primary.lines[t.cur.y].text(true)
+}
+
+// leaveLine tells the line hook of the cursor's line, as the cursor
+// leaves it.
+func (t *Terminal) leaveLine() {
+	if t.lineHook == nil || t.altActive {
+		return
+	}
+	l := t.primary.lines[t.cur.y]
+	if !l.Wrapped {
+		t.lineHook(l.text(true), false)
+		return
+	}
+	cells := l.Cells
+	if l.widePad && len(cells) > 0 {
+		cells = cells[:len(cells)-1] // the blank a wide character left
+	}
+	t.lineHook(Line{Cells: cells}.text(false), true)
+}
 
 type pstate int
 

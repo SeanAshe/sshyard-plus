@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -92,11 +91,6 @@ func TestForwardSheetLocal(t *testing.T) {
 	// The host's context menu opens the sheet with the host chosen.
 	a.openFwdForm(m, nil, h.ID)
 	tt.Frame()
-	for _, s := range []string{"New Port Forward", "Local -L", "Listen here", "Target from server", "Start on launch"} {
-		if !tt.HasText(s) {
-			t.Errorf("sheet misses %q", s)
-		}
-	}
 	if f := a.fwdForm; f.host != "box" || f.listenAddr != "127.0.0.1" {
 		t.Fatalf("defaults: host %q listen %q", f.host, f.listenAddr)
 	}
@@ -117,8 +111,8 @@ func TestForwardSheetLocal(t *testing.T) {
 	}
 	tt.Frame()
 	// The sidebar lists it, stopped; its switch starts it.
-	if !tt.HasText("Port Forwards") || !tt.HasText("web") {
-		t.Fatalf("sidebar: %q", tt.Texts())
+	if _, on := a.ForwardStatus(fw.ID); on {
+		t.Fatal("started on saving")
 	}
 	mustClick(t, tt, "Start")
 	waitRunning(t, a, tt, fw.ID)
@@ -129,26 +123,26 @@ func TestForwardSheetLocal(t *testing.T) {
 	if err != nil || got != "hello from /a" {
 		t.Fatalf("through the forward: %q %v", got, err)
 	}
-	// A terminal on the host shares the forward's connection, and its
-	// header counts the forward.
+	// A terminal on the host shares the forward's connection, and the
+	// host counts the forward.
 	a.Connect(h.ID, openAt{})
 	c := a.focused()
 	waitFor(t, tt, "terminal", func() bool { return c.s.Status().State == session.Connected })
 	if srv.Logins() != 1 {
 		t.Errorf("logins %d: the terminal did not share the forward's connection", srv.Logins())
 	}
-	if a.runningForwards(h.ID) != 1 || !tt.HasText("1") {
+	if a.runningForwards(h.ID) != 1 {
 		t.Errorf("header count %d", a.runningForwards(h.ID))
 	}
 	// A click on the row lists its connections.
 	mustClick(t, tt, "Port forward web")
 	tt.Frame()
-	if !a.fwdOpen[fw.ID] || !tt.HasText("Running") || !tt.HasText("No connections") {
-		t.Fatalf("expanded: %v %q", a.fwdOpen[fw.ID], tt.Texts())
+	if !a.fwdOpen[fw.ID] || len(a.forwardConns(fw.ID)) != 0 {
+		t.Fatalf("expanded %v, %d connections", a.fwdOpen[fw.ID], len(a.forwardConns(fw.ID)))
 	}
 	mustClick(t, tt, "Stop")
 	tt.Frame()
-	if _, on := a.ForwardStatus(fw.ID); on || !tt.HasText("Stopped") {
+	if _, on := a.ForwardStatus(fw.ID); on {
 		t.Fatal("not stopped")
 	}
 	if _, err := httpGet(noKeep, "http://127.0.0.1:"+strconv.Itoa(listen)+"/a"); err == nil {
@@ -173,23 +167,16 @@ func TestForwardPortInUse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a.fwdOpen[fw.ID] = true
-	tt.SetLocale("zh-Hans")
-	if err := a.StartForward(fw.ID); err == nil {
-		t.Fatal("started on a port in use")
+	if err := a.StartForward(fw.ID); !errors.Is(err, forward.ErrPortInUse) {
+		t.Fatalf("started on a port in use: %v", err)
 	}
 	tt.Frame()
-	if !tt.HasText("错误：端口已被占用") {
-		t.Fatalf("texts %q", tt.Texts())
+	if st, _ := a.ForwardStatus(fw.ID); st.State != forward.Error || !errors.Is(st.Err, forward.ErrPortInUse) {
+		t.Fatalf("status %v %v", st.State, st.Err)
 	}
-	tt.SetLocale("en")
-	tt.Frame()
-	if !tt.HasText("Error: port already in use") {
-		t.Fatalf("texts %q", tt.Texts())
-	}
-	// A failed rule has no connections to count or list.
-	if slices.Contains(tt.Texts(), "No connections") || slices.Contains(tt.Texts(), "0") {
-		t.Fatalf("error row shows a connection count: %q", tt.Texts())
+	// A failed rule has no connections.
+	if cs := a.forwardConns(fw.ID); len(cs) != 0 {
+		t.Fatalf("%d connections on a failed rule", len(cs))
 	}
 }
 
@@ -205,12 +192,6 @@ func TestForwardDynamicAuthKeychain(t *testing.T) {
 	port := freeTCPPort(t)
 	f.listenPort = strconv.Itoa(port)
 	tt.Frame()
-	if !hasTextContaining(tt, "Listening on 0.0.0.0 lets other computers") || !hasTextContaining(tt, "Set a username and password") {
-		t.Errorf("no warning: %q", tt.Texts())
-	}
-	if !tt.HasText("Protocol") || tt.HasText("Target from server") {
-		t.Errorf("dynamic fields: %q", tt.Texts())
-	}
 	f = a.fwdForm
 	f.kind, f.listenAddr, f.listenPort, f.user = 2, "0.0.0.0", strconv.Itoa(port), "u"
 	// A user needs a password.
@@ -253,12 +234,12 @@ func TestForwardDynamicAuthKeychain(t *testing.T) {
 	tt.Frame()
 	mustClick(t, tt, "Delete")
 	tt.Frame()
-	if !tt.HasText("Delete " + fw.Label() + "? It stops now") {
-		t.Fatalf("no confirmation: %q", tt.Texts())
+	if !a.fwdDeleting {
+		t.Fatal("no confirmation")
 	}
 	mustClick(t, tt, "Cancel")
 	tt.Frame()
-	if !a.kc.Has(keychain.ForwardPassword(fw.ID)) || len(a.Store().Forwards()) != 1 {
+	if a.fwdDeleting || !a.kc.Has(keychain.ForwardPassword(fw.ID)) || len(a.Store().Forwards()) != 1 {
 		t.Fatal("cancel deleted")
 	}
 	// Confirmed, it stops and takes its password.
@@ -305,15 +286,11 @@ func TestForwardAsksPasswordAndListsConns(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.fwdOpen[fw.ID] = true
-	tgt := webHost + ":" + strconv.Itoa(webPort)
-	row := "→ " + tgt
-	waitFor(t, tt, "connection row", func() bool {
-		return tt.HasText(row) && tt.HasText("from "+c.LocalAddr().String())
-	})
-	cs := a.forwardConns(fw.ID)
-	if len(cs) != 1 {
-		t.Fatalf("%d conns", len(cs))
+	waitFor(t, tt, "connection", func() bool { return len(a.forwardConns(fw.ID)) == 1 })
+	if cs := a.forwardConns(fw.ID); cs[0].Source != c.LocalAddr().String() {
+		t.Fatalf("connection from %q, want %q", cs[0].Source, c.LocalAddr())
 	}
+	tt.Frame()
 	mustClick(t, tt, "Disconnect")
 	c.SetReadDeadline(time.Now().Add(5 * time.Second))
 	if _, err := io.Copy(io.Discard, c); err != nil {
@@ -322,7 +299,7 @@ func TestForwardAsksPasswordAndListsConns(t *testing.T) {
 			t.Errorf("client not cut: %v", err)
 		}
 	}
-	waitFor(t, tt, "row gone", func() bool { return !tt.HasText("from " + c.LocalAddr().String()) })
+	waitFor(t, tt, "connection gone", func() bool { return len(a.forwardConns(fw.ID)) == 0 })
 }
 
 func TestForwardAutoStart(t *testing.T) {

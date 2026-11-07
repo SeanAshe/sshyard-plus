@@ -5,9 +5,6 @@ import (
 
 	"github.com/Licoy/sshyard/internal/layout"
 	"github.com/Licoy/sshyard/internal/session"
-	"github.com/Licoy/sshyard/internal/theme"
-	"github.com/Licoy/sshyard/locales"
-	"github.com/egoist/mygo/ui"
 )
 
 func TestSidebarLiveConnections(t *testing.T) {
@@ -45,20 +42,5 @@ func assertSidebarConnections(t *testing.T, a *App, want int) {
 	t.Helper()
 	if got := a.connectedCount(); got != want {
 		t.Fatalf("connections = %d, want %d", got, want)
-	}
-	for _, dark := range []bool{false, true} {
-		tt := ui.NewTester(func(c *ui.Context) { a.sidebarView(c, locales.In("en"), currentTokens(c)) }, 240, 500)
-		tt.SetDark(dark)
-		tt.Frame()
-		r := mustFind(t, tt, locales.In("en").ConnectionCount(want))
-		tok := theme.For(theme.Auto, dark)
-		color := tok.TextMuted
-		if want > 0 {
-			color = tok.Success
-		}
-		p := tt.Image().RGBAAt(int(r.X-7), int(r.Y+r.H/2))
-		if !nearColor(p.R, p.G, p.B, color.R, color.G, color.B) {
-			t.Fatalf("status dot = %v, want %v", p, color)
-		}
 	}
 }

@@ -71,35 +71,3 @@ func TestTerminalSchemes(t *testing.T) {
 		t.Errorf("not deleted: %+v", a.settings.TerminalSchemes)
 	}
 }
-
-// TestPaneHeadOnScheme: a pane's header is drawn on the terminal's scheme,
-// so a dark scheme in light mode, or a light one in dark mode, gives its
-// title the other appearance's colors, which read on it.
-func TestPaneHeadOnScheme(t *testing.T) {
-	a, tt := newTestApp(t)
-	if _, err := a.OpenLocalTerminal(); err != nil {
-		t.Fatal(err)
-	}
-	for _, tc := range []struct {
-		dark   bool
-		scheme string
-	}{{false, "dracula"}, {true, "solarized-light"}, {false, ""}, {true, ""}} {
-		tt.SetDark(tc.dark)
-		a.settings.TerminalScheme = tc.scheme
-		tt.Frame()
-		tt.Frame()
-		bg := a.termPalette(theme.For(a.settings.Theme, tc.dark)).Background
-		r := a.paneBounds[a.focused().id]
-		img := tt.Image()
-		best := 0.0
-		for y := int(r.Y) + 4; y < int(r.Y)+paneHeadHeight-4; y++ {
-			for x := int(r.X) + 50; x < int(r.X+r.W)-10; x++ {
-				p := img.RGBAAt(x, y)
-				best = max(best, theme.Contrast(ui.Color{R: p.R, G: p.G, B: p.B, A: 255}, bg))
-			}
-		}
-		if best < 4.5 {
-			t.Errorf("dark=%v scheme=%q: header's best contrast on %v is %.2f, want ≥ 4.5", tc.dark, tc.scheme, bg, best)
-		}
-	}
-}

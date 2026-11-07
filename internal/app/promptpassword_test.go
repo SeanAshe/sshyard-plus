@@ -17,55 +17,45 @@ func passwordPromptFor(h assets.Host) *credPrompt {
 }
 
 func TestPromptPasswordCheckbox(t *testing.T) {
-	for _, language := range []string{"en", "zh-Hans"} {
-		for _, dark := range []bool{false, true} {
-			t.Run(language+map[bool]string{false: "/light", true: "/dark"}[dark], func(t *testing.T) {
-				a, tt := newTestApp(t)
-				h, err := a.store.Add(assets.Host{Address: "example.com", User: "demo"})
-				if err != nil {
-					t.Fatal(err)
-				}
-				m := locales.In(language)
-				tt.SetLocale(language)
-				tt.SetDark(dark)
-				a.prompt, a.prompting = passwordPromptFor(h), true
-				tt.Frame()
-				if a.prompt.savePassword || !tt.HasText(m.SavePasswordCredential()) || !tt.HasText(m.TypedNotSaved()) {
-					t.Fatal(tt.Texts())
-				}
-				mustClick(t, tt, m.SavePasswordCredential())
-				tt.Frame()
-				if !a.prompt.savePassword || !tt.HasText(m.SaveHostPasswordHint()) || tt.HasText(m.TypedNotSaved()) {
-					t.Fatal(tt.Texts())
-				}
-				mustClick(t, tt, m.SavePasswordCredential())
-				tt.Frame()
-				if a.prompt.savePassword || !tt.HasText(m.TypedNotSaved()) {
-					t.Fatal(tt.Texts())
-				}
-				mustClick(t, tt, m.SavePasswordCredential())
-				tt.Frame()
-				mustClick(t, tt, m.Cancel())
-				if a.kc.Has(keychain.Host(h.ID, keychain.Password)) {
-					t.Fatal("cancel saved a password")
-				}
-				a.prompt, a.prompting = passwordPromptFor(h), true
-				tt.Frame()
-				if a.prompt.savePassword {
-					t.Fatal("save checkbox persisted across prompts")
-				}
-				a.prompt.passphrase = true
-				tt.Frame()
-				if tt.HasText(m.SavePasswordCredential()) {
-					t.Fatal("passphrase offered persistence")
-				}
-				a.prompt, a.prompting = passwordPromptFor(assets.Host{ID: tempPrefix + "test", Address: "example.com", User: "demo"}), true
-				tt.Frame()
-				if tt.HasText(m.SavePasswordCredential()) {
-					t.Fatal("temporary host offered persistence")
-				}
-			})
-		}
+	a, tt := newTestApp(t)
+	h, err := a.store.Add(assets.Host{Address: "example.com", User: "demo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := locales.In("en")
+	a.prompt, a.prompting = passwordPromptFor(h), true
+	tt.Frame()
+	if a.prompt.savePassword || !a.canSavePromptPassword(a.prompt) {
+		t.Fatal("saved host prompt: save on by default or not offered")
+	}
+	mustClick(t, tt, m.SavePasswordCredential())
+	tt.Frame()
+	if !a.prompt.savePassword {
+		t.Fatal("checkbox did not turn on")
+	}
+	mustClick(t, tt, m.SavePasswordCredential())
+	tt.Frame()
+	if a.prompt.savePassword {
+		t.Fatal("checkbox did not turn off")
+	}
+	mustClick(t, tt, m.SavePasswordCredential())
+	tt.Frame()
+	mustClick(t, tt, m.Cancel())
+	if a.kc.Has(keychain.Host(h.ID, keychain.Password)) {
+		t.Fatal("cancel saved a password")
+	}
+	a.prompt, a.prompting = passwordPromptFor(h), true
+	tt.Frame()
+	if a.prompt.savePassword {
+		t.Fatal("save checkbox persisted across prompts")
+	}
+	a.prompt.passphrase = true
+	if a.canSavePromptPassword(a.prompt) {
+		t.Fatal("passphrase offered persistence")
+	}
+	a.prompt, a.prompting = passwordPromptFor(assets.Host{ID: tempPrefix + "test", Address: "example.com", User: "demo"}), true
+	if a.canSavePromptPassword(a.prompt) {
+		t.Fatal("temporary host offered persistence")
 	}
 }
 

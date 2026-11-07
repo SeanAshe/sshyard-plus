@@ -144,6 +144,26 @@ func (a *App) railView(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 			}
 			a.openFwdForm(m, nil, id)
 		}
+		// The tool panes, on several sessions at once: lit while in this
+		// tab.
+		ui.Box(c.Key("sep2")).Width(14).Height(1).Shrink(0).MarginY(theme.Space(1)).Background(tok.Line)
+		synced := ""
+		if n := len(a.bc.synced); n > 0 {
+			synced = strconv.Itoa(n)
+		}
+		if (IconButton{Icon: icons.Broadcast, On: icons.BroadcastOn, Label: m.Broadcast(), Active: a.toolHere(layout.Broadcast), Toggle: true,
+			Prominent: synced != "", Badge: synced, Size: Small}).Clicked(c, "broadcast") {
+			a.ToggleTool(layout.Broadcast)
+		}
+		logging, failed := a.logCount()
+		badge := ""
+		if logging > 0 {
+			badge = strconv.Itoa(logging)
+		}
+		if (IconButton{Icon: icons.FileText, On: icons.FileTextOn, Label: m.SessionLogs(), Active: a.toolHere(layout.Logs), Toggle: true,
+			Prominent: logging > 0, Badge: badge, BadgeDanger: failed, Size: Small}).Clicked(c, "logs") {
+			a.ToggleTool(layout.Logs)
+		}
 		ui.Spacer(c)
 		if (IconButton{Icon: icons.Quick, Label: m.QuickConnect(), Size: Small}).Clicked(c, "quick") {
 			a.OpenQuickConnect()
@@ -191,7 +211,8 @@ func (a *App) panelStack(c *ui.Context, m locales.Messages, tok theme.Tokens, ks
 
 // panelView is panel k: its title bar, and its cards scrolling under it.
 func (a *App) panelView(c *ui.Context, m locales.Messages, tok theme.Tokens, k inspectorKind) {
-	if k == inspectSnippets {
+	switch k {
+	case inspectSnippets:
 		a.snippetsPanel(c, m, tok)
 		return
 	}
@@ -207,12 +228,7 @@ func (a *App) panelView(c *ui.Context, m locales.Messages, tok theme.Tokens, k i
 		title, tables = m.TmuxManager(), true
 	}
 	ui.Column(c.Key("panel:" + string(k))).Fill().Children(func() {
-		ui.Row(c).Height(40).Shrink(0).Padding(0, 8, 0, 16).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, title).FontSize(theme.Body).FontWeight(600).Grow(1).Shrink(1).SingleLine()
-			if (IconButton{Icon: icons.Close, Label: m.ClosePanel(), Size: Small}).Clicked(c, "close") {
-				a.closePanel(k)
-			}
-		})
+		a.panelHead(c, m, k, title)
 		if tables {
 			// Its tables (the tmux panel its list) scroll themselves: the
 			// panel gives them its height.
@@ -238,6 +254,16 @@ func (a *App) panelView(c *ui.Context, m locales.Messages, tok theme.Tokens, k i
 				}
 			})
 		})
+	})
+}
+
+// panelHead is the title bar of panel k, with the button closing it.
+func (a *App) panelHead(c *ui.Context, m locales.Messages, k inspectorKind, title string) {
+	ui.Row(c.Key("head")).Height(toolbarHeight).Shrink(0).Padding(0, 8, 0, 16).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, title).FontSize(theme.Body).FontWeight(600).Grow(1).Shrink(1).SingleLine()
+		if (IconButton{Icon: icons.Close, Label: m.ClosePanel(), Size: Small}).Clicked(c, "close") {
+			a.closePanel(k)
+		}
 	})
 }
 

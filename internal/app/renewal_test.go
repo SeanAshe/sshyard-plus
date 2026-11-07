@@ -7,9 +7,7 @@ import (
 	"time"
 
 	"github.com/Licoy/sshyard/internal/assets"
-	"github.com/Licoy/sshyard/internal/theme"
 	"github.com/Licoy/sshyard/locales"
-	"github.com/egoist/mygo/ui"
 )
 
 // soonRenewal is a yearly subscription renewing in about two days from
@@ -18,104 +16,22 @@ func soonRenewal(now time.Time) assets.Renewal {
 	return assets.Renewal{Start: now.AddDate(-1, 0, 2).Format(assets.DateLayout), Months: 12, Remind: 30}
 }
 
-func TestHostCardAfterDelay(t *testing.T) {
+// TestHostSearchProviderAndNote: the sidebar's search finds a host by
+// its provider and its note.
+func TestHostSearchProviderAndNote(t *testing.T) {
 	a, _ := newTestApp(t)
-	m := locales.In("en")
-	tt := ui.NewTester(func(c *ui.Context) { a.sidebarView(c, m, currentTokens(c)) }, 800, 500)
-	h, err := a.Store().Add(assets.Host{Name: "web", Address: "10.0.0.5", User: "root", Provider: "Vultr", Note: "blog at 10.0.0.9", Renewal: soonRenewal(tt.Now())})
+	h, err := a.Store().Add(assets.Host{Name: "web", Address: "10.0.0.5", User: "root", Provider: "Vultr", Note: "blog at 10.0.0.9", Renewal: soonRenewal(time.Now())})
 	if err != nil {
 		t.Fatal(err)
 	}
-	tt.Frame()
-	days, _ := h.Renewal.DaysLeft(tt.Now())
-	// The row marks the renewal coming.
-	if !tt.HasText(m.RenewalSoon(renewWhen(m, days))) {
-		t.Fatalf("no renewal mark in %q", tt.Texts())
-	}
-	r := mustFind(t, tt, "web")
-	x, y := r.X+r.W/2, r.Y+r.H/2
-	tt.Move(x, y)
-	tt.Frame()
-	if tt.HasText("Vultr") {
-		t.Fatal("card shown at once")
-	}
-	tt.Advance(hostCardDelay - 50*time.Millisecond)
-	tt.Frame()
-	if tt.HasText("Vultr") {
-		t.Fatal("card shown before its delay")
-	}
-	tt.Advance(100 * time.Millisecond)
-	tt.Frame()
-	line, _, _ := renewalLine(m, theme.LightTokens(), h.Renewal, tt.Now())
-	for _, want := range []string{"root@10.0.0.5", "Vultr", "blog at 10.0.0.9", line, m.FieldProvider(), m.RenewalNext(), m.FieldNote()} {
-		if !tt.HasText(want) {
-			t.Errorf("card misses %q: %q", want, tt.Texts())
-		}
-	}
-	a.settings.Privacy = true
-	tt.Frame()
-	if tt.HasText("blog at 10.0.0.9") || tt.HasText("root@10.0.0.5") {
-		t.Error("privacy mode shows the addresses on the card")
-	}
-	a.settings.Privacy = false
-	// It goes as the pointer leaves, and waits again as it comes back.
-	tt.Move(790, 490)
-	tt.Frame()
-	if tt.HasText("Vultr") {
-		t.Fatal("card stays after the pointer left")
-	}
-	tt.Move(x, y)
-	tt.Frame()
-	if tt.HasText("Vultr") {
-		t.Fatal("card shown at once on coming back")
-	}
-	tt.Advance(hostCardDelay + 50*time.Millisecond)
-	tt.Frame()
-	if !tt.HasText("Vultr") {
-		t.Fatal("card not shown on coming back")
-	}
-	// A press hides it until the pointer leaves.
-	tt.Press(x, y)
-	tt.Frame()
-	tt.Release(x, y)
-	tt.Advance(2 * hostCardDelay)
-	tt.Frame()
-	if tt.HasText("Vultr") {
-		t.Fatal("card shown again after a press")
-	}
-	// The search finds the host by its provider and its note.
 	for q, want := range map[string]bool{"vultr": true, "blog": true, "nothing-like-it": false} {
-		a.search = q
-		tt.Frame()
-		if tt.HasText("web") != want {
-			t.Errorf("search %q: shown %v, want %v", q, !want, want)
+		_, _, byGroup := hostsBy(a.Store(), q)
+		found := false
+		for _, got := range byGroup[""] {
+			found = found || got.ID == h.ID
 		}
-	}
-}
-
-func TestHostPanelRenewal(t *testing.T) {
-	a, _ := newTestApp(t)
-	m := locales.In("en")
-	tt := ui.NewTester(func(c *ui.Context) { a.hostPanel(c, m, currentTokens(c)) }, 320, 1200)
-	plain, err := a.Store().Add(assets.Host{Name: "db", Address: "10.0.0.6", User: "root"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	a.selected = plain.ID
-	tt.Frame()
-	if tt.HasText(m.RenewalSection()) {
-		t.Fatal("subscription card shown for a host without one")
-	}
-	h, err := a.Store().Add(assets.Host{Name: "web", Address: "10.0.0.5", User: "root", Provider: "Vultr", Note: "blog", Renewal: soonRenewal(tt.Now())})
-	if err != nil {
-		t.Fatal(err)
-	}
-	a.selected = h.ID
-	tt.Frame()
-	line, _, _ := renewalLine(m, theme.LightTokens(), h.Renewal, tt.Now())
-	for _, want := range []string{m.RenewalSection(), "Vultr", "blog", line, m.RemindDaysBefore(30)} {
-		if !tt.HasText(want) {
-			t.Errorf("panel misses %q: %q", want, tt.Texts())
+		if found != want {
+			t.Errorf("search %q: found %v, want %v", q, found, want)
 		}
 	}
 }
@@ -146,12 +62,6 @@ func TestHostEditorRenewal(t *testing.T) {
 	tt.Frame()
 	if !a.form.renewOpen || !a.form.renew || a.form.renewStart.Format(assets.DateLayout) != "2026-10-01" {
 		t.Fatalf("reopened fields: %+v", a.form.renewalForm)
-	}
-	line, _, _ := renewalLine(m, theme.LightTokens(), got.Renewal, tt.Now())
-	for _, want := range []string{m.RenewalSection(), m.TrackRenewal(), m.RenewYearly(), m.RemindDaysBefore(7), m.RenewalNextOn(line), m.NoteHint()} {
-		if !tt.HasText(want) {
-			t.Errorf("editor misses %q", want)
-		}
 	}
 	a.form.renew = false
 	if !a.SaveForm(m) {

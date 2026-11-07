@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,13 +27,6 @@ func TestMigrationNativeFileFlow(t *testing.T) {
 		t.Fatal("navigation did not open migration")
 	}
 	a.p.PickFolder = func(string, string) (string, error) { return "", nil }
-	for _, dark := range []bool{false, true} {
-		sourceView := ui.NewTester(a.View, 1200, 1400)
-		sourceView.SetLocale("zh-Hans")
-		sourceView.SetDark(dark)
-		sourceView.Frame()
-		saveBrandScreenshot(t, sourceView, fmt.Sprintf("migration-settings-%v", dark))
-	}
 	tt.Scroll(800, 600, 0, 500)
 	tt.Frame()
 	mustClick(t, tt, m.MigrationChooseSourceFiles("mRemoteNG"))

@@ -80,7 +80,7 @@ func (a *App) statusSession(c *ui.Context, m locales.Messages, tok theme.Tokens)
 func (a *App) statusCounts(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 	n := 0
 	for _, o := range a.conns {
-		if o.fw == nil {
+		if o.fw == nil && !isTool(o.kind) {
 			n++
 		}
 	}

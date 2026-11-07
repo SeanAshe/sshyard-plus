@@ -98,9 +98,9 @@ func (a *App) tabLabel(t *layout.Tab) string {
 		return ""
 	}
 	if n := len(t.Panes()); n > 1 {
-		return a.pv(cn.host.Label()) + " +" + strconv.Itoa(n-1)
+		return a.connLabel(cn) + " +" + strconv.Itoa(n-1)
 	}
-	return a.pv(cn.host.Label())
+	return a.connLabel(cn)
 }
 
 // kindIcon is the icon of a pane kind, the "-fill" one when on.
@@ -114,6 +114,14 @@ func kindIcon(k layout.Kind, on bool) *icons.Icon {
 		return icons.RobotOn
 	case k == layout.AI:
 		return icons.Robot
+	case k == layout.Broadcast && on:
+		return icons.BroadcastOn
+	case k == layout.Broadcast:
+		return icons.Broadcast
+	case k == layout.Logs && on:
+		return icons.FileTextOn
+	case k == layout.Logs:
+		return icons.FileText
 	case on:
 		return icons.TerminalOn
 	}
@@ -160,7 +168,7 @@ func (a *App) SplitFocused(edge layout.Edge) {
 
 // CloseFocused closes the focused pane.
 func (a *App) CloseFocused() {
-	if cn := a.focused(); cn != nil {
+	if cn := a.focusedPane(); cn != nil {
 		a.CloseSession(cn.id)
 	}
 }
@@ -265,6 +273,7 @@ func (a *App) terminalPage(c *ui.Context, m locales.Messages, tok theme.Tokens) 
 		return
 	}
 	a.field.leave()
+	a.settleFocus(t)
 	cn := a.focused()
 	if cn == nil || cn.kind != layout.Terminal {
 		a.finding = false
@@ -288,6 +297,7 @@ func (a *App) terminalPage(c *ui.Context, m locales.Messages, tok theme.Tokens) 
 	}
 	a.dropPreview = nil
 	ui.Box(c).Fill().Padding(paneGap / 2).Children(func() { a.nodeView(c, t, t.Root, tok, m) })
+	a.syncPasteDialog(c, m)
 }
 
 func (a *App) ratio(n *layout.Node) *float32 {
@@ -367,6 +377,9 @@ func (a *App) paneView(c *ui.Context, t *layout.Tab, n *layout.Node, tok theme.T
 		// color, wider than the focus hairline, until the question is gone.
 		if a.clipAsk != nil && a.clipAsk.open && a.clipAsk.pane == cn.id {
 			pane.Border(2, tok.Accent)
+		} else if a.bc.synced[cn.id] {
+			// What is typed goes to it too.
+			pane.Border(2, tok.Accent.Alpha(0.7))
 		} else if multi && focused {
 			pane.Border(1, tok.Accent.Alpha(0.7))
 		} else {
@@ -379,6 +392,10 @@ func (a *App) paneView(c *ui.Context, t *layout.Tab, n *layout.Node, tok theme.T
 		pane.Children(func() {
 			if cn.kind == layout.AI {
 				a.aiPane(c, t, n, cn, tok, m)
+				return
+			}
+			if isTool(cn.kind) {
+				a.toolPaneView(c, cn, tok, m)
 				return
 			}
 			// The header is drawn on the pane's color: on a terminal scheme
@@ -413,6 +430,11 @@ func (a *App) paneView(c *ui.Context, t *layout.Tab, n *layout.Node, tok theme.T
 						// The program takes the mouse: say so, and how to select.
 						ui.Row(c.Key("mouse")).Shrink(0).AlignItems(ui.Center).Label(m.MouseReporting()).Tooltip(m.MouseReporting()).Children(func() {
 							ui.Icon(c, icons.Mouse.SVG).Size(Tiny, Tiny).TextColor(tok.Accent)
+						})
+					}
+					if a.bc.synced[cn.id] {
+						ui.Row(c.Key("synced")).Shrink(0).AlignItems(ui.Center).Label(m.BroadcastLiveOn()).Tooltip(m.BroadcastLiveOn()).Children(func() {
+							ui.Icon(c, icons.KeyboardOn.SVG).Size(Tiny, Tiny).TextColor(tok.Accent)
 						})
 					}
 					if isTemp(cn.host.ID) {
@@ -581,6 +603,8 @@ func (a *App) termElement(c *ui.Context, t *layout.Tab, n *layout.Node, cn *conn
 			}
 		}
 		tv.shortcuts = a.settings.Shortcuts
+		tv.fanout = a.fanoutFrom(cn)
+		tv.holdPaste = func(text string) bool { return a.holdPaste(cn, text) }
 		tv.rightClick, tv.copyOnSelect = a.settings.TerminalRightClick, a.settings.CopyOnSelect
 		tv.openLink = svc.OpenURL
 		// A program reading the mouse takes the right click too.

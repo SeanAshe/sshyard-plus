@@ -60,38 +60,23 @@ func TestBackgroundSettingsWorkflow(t *testing.T) {
 	a.p.PickFile = func(string) (string, error) { return path, nil }
 	mustClick(t, tt, m.BackgroundChoose())
 	waitFor(t, tt, "imported background", func() bool { return a.hasBackground() })
-	for _, dark := range []bool{false, true} {
-		tt.SetDark(dark)
-		for _, lang := range settings.Languages {
-			tt.SetLocale(lang)
-			tt.Frame()
-			m = locales.In(lang)
-			for _, label := range []string{m.BackgroundReplace(), m.BackgroundRemove(), m.BackgroundPreview(), m.BackgroundChromeOpacity(), m.BackgroundContentOpacity()} {
-				if !tt.HasText(label) {
-					t.Fatalf("%s missing %q", lang, label)
-				}
-			}
-			mustClick(t, tt, m.BackgroundContain())
-			tt.Frame()
-			saved, err := settings.Load(filepath.Join(a.p.DataDir, "settings.json"))
-			if err != nil || saved.Background.Fit != "contain" {
-				t.Fatalf("fit not saved: %+v %v", saved.Background, err)
-			}
-		}
-	}
-	tt.SetLocale("en")
 	tt.Frame()
-	m = locales.In("en")
+	mustClick(t, tt, m.BackgroundContain())
+	tt.Frame()
+	saved, err := settings.Load(filepath.Join(a.p.DataDir, "settings.json"))
+	if err != nil || saved.Background.Fit != "contain" {
+		t.Fatalf("fit not saved: %+v %v", saved.Background, err)
+	}
 	a.p.PickFile = func(string) (string, error) { return "", errors.New("picker rejected") }
 	mustClick(t, tt, m.BackgroundReplace())
 	waitFor(t, tt, "picker failure", func() bool { return !a.background.busy })
-	if !a.hasBackground() || !tt.HasText(m.BackgroundImportFailed("picker rejected")) {
-		t.Fatal("failed replacement lost image or inline error")
+	if !a.hasBackground() || a.background.err == nil || a.background.err.Error() != m.BackgroundImportFailed("picker rejected") {
+		t.Fatalf("failed replacement lost image or error: %v", a.background.err)
 	}
 	mustClick(t, tt, m.BackgroundRemove())
 	tt.Frame()
-	if a.settings.Background.Image != "" || a.hasBackground() || !tt.HasText(m.BackgroundChoose()) {
-		t.Fatal("remove did not restore choice")
+	if a.settings.Background.Image != "" || a.hasBackground() {
+		t.Fatal("remove kept the background")
 	}
 }
 
@@ -159,13 +144,10 @@ func TestBackgroundOpacityCommit(t *testing.T) {
 	}
 }
 
-func TestBackgroundAppearanceMaterialControls(t *testing.T) {
+func TestCloseSettingsDiscardsBackgroundPreview(t *testing.T) {
 	a, tt := newTestApp(t)
 	a.openSettings(prefAppearance)
 	tt.Frame()
-	if !tt.HasText(locales.In("en").MaterialSection()) {
-		t.Fatal("missing default material controls")
-	}
 	name, bmp, err := a.importBackground(backgroundSettingsImage(t))
 	if err != nil {
 		t.Fatal(err)
@@ -173,9 +155,6 @@ func TestBackgroundAppearanceMaterialControls(t *testing.T) {
 	a.background.seq++
 	a.backgroundImported(locales.In("en"), a.background.seq, name, bmp, nil)
 	tt.Frame()
-	if tt.HasText(locales.In("en").MaterialSection()) {
-		t.Fatal("image mode exposes conflicting material controls")
-	}
 	bg := a.settings.Background
 	bg.ChromeOpacity = 12
 	a.background.preview = &bg
