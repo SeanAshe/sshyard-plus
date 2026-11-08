@@ -647,20 +647,22 @@ func TestSearchClear(t *testing.T) {
 	if a.search != "web" || tt.HasText("db") {
 		t.Fatalf("search %q, texts %q", a.search, tt.Texts())
 	}
-	mustClick(t, tt, "Clear search")
+	mustClick(t, tt, "Close search")
 	tt.Frame()
-	if a.search != "" || !tt.HasText("db") {
-		t.Fatalf("not cleared: %q", a.search)
+	if a.search != "" || a.searchOpen || !tt.HasText("db") {
+		t.Fatalf("not closed: %q", a.search)
 	}
-	// The field has the keyboard again.
+	// Opened again, the field has the keyboard.
+	mustClick(t, tt, "Search hosts")
+	tt.Frame()
 	tt.Type("db")
 	tt.Frame()
 	if a.search != "db" {
-		t.Errorf("typing after clearing gave %q", a.search)
+		t.Errorf("typing after reopening gave %q", a.search)
 	}
 	tt.Key(0, ui.KeyEscape)
 	tt.Frame()
-	if a.search != "" {
+	if a.search != "" || a.searchOpen {
 		t.Errorf("Escape left %q", a.search)
 	}
 }

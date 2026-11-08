@@ -7,24 +7,21 @@ import (
 	"github.com/Licoy/sshyard/internal/theme"
 )
 
-// GroupSep parts a subgroup from its group: "Prod/Web". Groups go two
-// deep: all after the first separator names the subgroup.
+// GroupSep parts a subgroup from its group: "Prod/Web", "Prod/Web/Blue".
+// Groups nest to any depth.
 const GroupSep = "/"
 
 // GroupParent returns the group a subgroup is in, "" for a top-level group.
 func GroupParent(g string) string {
-	if parent, _, ok := strings.Cut(g, GroupSep); ok {
-		return parent
+	if i := strings.LastIndex(g, GroupSep); i >= 0 {
+		return g[:i]
 	}
 	return ""
 }
 
-// GroupLeaf returns a group's own name, without its parent's.
+// GroupLeaf returns a group's own name, without its parents'.
 func GroupLeaf(g string) string {
-	if _, leaf, ok := strings.Cut(g, GroupSep); ok {
-		return leaf
-	}
-	return g
+	return g[strings.LastIndex(g, GroupSep)+1:]
 }
 
 // SubGroup returns the path of the subgroup name in parent, name alone
@@ -36,34 +33,35 @@ func SubGroup(parent, name string) string {
 	return parent + GroupSep + name
 }
 
-// InGroupTree reports whether g is group or one of its subgroups.
+// InGroupTree reports whether g is group or one of its subgroups, at any
+// depth.
 func InGroupTree(g, group string) bool {
-	return g == group || (GroupParent(group) == "" && GroupParent(g) == group)
+	return g == group || strings.HasPrefix(g, group+GroupSep)
 }
 
 // CleanGroup trims a group's path and the names in it.
 func CleanGroup(g string) string {
-	g = strings.TrimSpace(g)
-	if parent, leaf, ok := strings.Cut(g, GroupSep); ok {
-		return strings.TrimSpace(parent) + GroupSep + strings.TrimSpace(leaf)
+	parts := strings.Split(strings.TrimSpace(g), GroupSep)
+	for i, p := range parts {
+		parts[i] = strings.TrimSpace(p)
 	}
-	return g
+	return strings.Join(parts, GroupSep)
 }
 
-// treeOrder puts each subgroup right after its group, among the others
-// of that group in their order.
+// treeOrder puts each subgroup right after its group, under the subgroups
+// before it, among the others of that group in their order.
 func treeOrder(groups []string) []string {
 	out := make([]string, 0, len(groups))
-	for _, g := range groups {
-		if GroupParent(g) == "" {
-			out = append(out, g)
-			for _, sub := range groups {
-				if GroupParent(sub) == g {
-					out = append(out, sub)
-				}
+	var walk func(parent string)
+	walk = func(parent string) {
+		for _, g := range groups {
+			if GroupParent(g) == parent {
+				out = append(out, g)
+				walk(g)
 			}
 		}
 	}
+	walk("")
 	return out
 }
 

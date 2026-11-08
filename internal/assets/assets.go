@@ -754,11 +754,9 @@ func (s *Store) groupNames() []string {
 	seen := map[string]bool{}
 	var out []string
 	add := func(g string) {
-		for _, g := range []string{GroupParent(g), g} {
-			if g != "" && !seen[g] {
-				seen[g] = true
-				out = append(out, g)
-			}
+		for ; g != "" && !seen[g]; g = GroupParent(g) {
+			seen[g] = true
+			out = append(out, g)
 		}
 	}
 	for _, g := range s.groups {
@@ -807,34 +805,34 @@ func (s *Store) AddGroupLook(name string, look GroupLook) error {
 	})
 }
 
-// groupPath trims a group's path, and spells the group of a subgroup as
-// it already is.
+// groupPath trims a group's path, and spells the groups it is in as they
+// already are.
 func (s *Store) groupPath(name string) string {
 	name = CleanGroup(name)
-	if p := GroupParent(name); p != "" {
-		for _, g := range s.groupNames() {
-			if GroupParent(g) == "" && strings.EqualFold(g, p) {
-				return SubGroup(g, GroupLeaf(name))
+	parts := strings.Split(name, GroupSep)
+	groups := s.groupNames()
+	for k := len(parts) - 1; k > 0; k-- {
+		prefix := strings.Join(parts[:k], GroupSep)
+		for _, g := range groups {
+			if strings.EqualFold(g, prefix) {
+				return g + GroupSep + strings.Join(parts[k:], GroupSep)
 			}
 		}
 	}
 	return name
 }
 
-// checkGroup checks a new group name, other than old. A subgroup holds
-// hosts only: a name deeper than that, or a group with subgroups moved
-// into another, is a "depth" FieldError.
+// checkGroup checks a new group name, other than old: a name of the path
+// left empty is a "required" FieldError, old moved into itself or one of
+// its subgroups an "inside" one.
 func (s *Store) checkGroup(name, old string) error {
-	parent, leaf := GroupParent(name), GroupLeaf(name)
-	if leaf == "" || (parent == "" && leaf != name) {
+	if slices.Contains(strings.Split(name, GroupSep), "") {
 		return &FieldError{Field: "group", Reason: "required"}
 	}
-	groups := s.groupNames()
-	if strings.Contains(leaf, GroupSep) || (parent != "" && old != "" && GroupParent(old) == "" &&
-		slices.ContainsFunc(groups, func(g string) bool { return GroupParent(g) == old })) {
-		return &FieldError{Field: "group", Reason: "depth"}
+	if old != "" && name != old && InGroupTree(name, old) {
+		return &FieldError{Field: "group", Reason: "inside"}
 	}
-	for _, g := range groups {
+	for _, g := range s.groupNames() {
 		if strings.EqualFold(g, name) && g != old {
 			return &FieldError{Field: "group", Reason: "taken"}
 		}
@@ -863,40 +861,58 @@ func (s *Store) editGroup(old, name string, look *GroupLook) error {
 	if err := s.checkGroup(name, old); err != nil {
 		return err
 	}
-	moved := func(g string) string {
-		switch {
-		case g == old:
-			return name
-		case GroupParent(old) == "" && GroupParent(g) == old:
-			return SubGroup(name, GroupLeaf(g))
-		}
-		return g
-	}
-	order := s.groupNames()
+	order := renamed(s.groupNames(), old, name)
 	return s.commit(func() {
-		for i, g := range order {
-			order[i] = moved(g)
-		}
+		s.renameGroup(old, name)
 		s.groupOrder = order
-		var groups []string
-		for _, g := range s.groups {
-			if g != old {
-				groups = append(groups, moved(g))
-			}
-		}
-		s.groups = append(groups, name)
-		for i := range s.hosts {
-			s.hosts[i].Group = moved(s.hosts[i].Group)
-		}
-		looks := make(map[string]GroupLook, len(s.groupLooks))
-		for g, l := range s.groupLooks {
-			looks[moved(g)] = l
-		}
-		s.groupLooks = looks
 		if look != nil {
 			s.setGroupLook(name, *look)
 		}
 	})
+}
+
+// renamed returns groups with old, its subgroups' paths too, renamed to
+// name.
+func renamed(groups []string, old, name string) []string {
+	out := make([]string, len(groups))
+	for i, g := range groups {
+		out[i] = movedGroup(g, old, name)
+	}
+	return out
+}
+
+// movedGroup is g once group old is renamed to name: name for old, the
+// path in name for one of its subgroups, g for any other.
+func movedGroup(g, old, name string) string {
+	if InGroupTree(g, old) {
+		return name + g[len(old):]
+	}
+	return g
+}
+
+// renameGroup renames old to name with its subgroups, hosts and looks,
+// keeping it from then on, and the group it left, should that be left
+// empty. The order is the caller's.
+func (s *Store) renameGroup(old, name string) {
+	var groups []string
+	for _, g := range s.groups {
+		if g != old {
+			groups = append(groups, movedGroup(g, old, name))
+		}
+	}
+	groups = append(groups, name)
+	if p := GroupParent(old); p != "" && p != GroupParent(name) && !slices.Contains(groups, p) {
+		groups = append(groups, p)
+	}
+	s.groups = groups
+	for i := range s.hosts {
+		s.hosts[i].Group = movedGroup(s.hosts[i].Group, old, name)
+	}
+	looks := make(map[string]GroupLook, len(s.groupLooks))
+	for g, l := range s.groupLooks {
+		looks[movedGroup(g, old, name)] = l
+	}
+	s.groupLooks = looks
 }
 
 // DeleteGroup removes a group and its subgroups. Their hosts stay, in no

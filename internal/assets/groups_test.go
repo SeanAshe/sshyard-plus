@@ -10,7 +10,7 @@ import (
 
 // TestSubgroups: a subgroup is a path in its group, which shows while only
 // its subgroups hold hosts; renaming or deleting a group takes its
-// subgroups along, and groups nest one level only.
+// subgroups along, at any depth.
 func TestSubgroups(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hosts.json")
 	s, _ := Open(path)
@@ -30,17 +30,19 @@ func TestSubgroups(t *testing.T) {
 
 	var fe *FieldError
 	for name, reason := range map[string]string{
-		"prod/web":   "taken",
-		"Prod/":      "required",
-		"/Web":       "required",
-		"Prod/Web/x": "depth",
+		"prod/web":    "taken",
+		"Prod/":       "required",
+		"/Web":        "required",
+		"Prod//Web":   "required",
+		"prod/web/ ":  "required",
+		"Prod/Web/x/": "required",
 	} {
 		if err := s.AddGroup(name); !errors.As(err, &fe) || fe.Reason != reason {
 			t.Fatalf("AddGroup(%q): %v, want %s", name, err, reason)
 		}
 	}
-	if err := s.RenameGroup("Prod", "Dev/Prod"); !errors.As(err, &fe) || fe.Reason != "depth" {
-		t.Fatalf("a group with subgroups made a subgroup: %v", err)
+	if err := s.RenameGroup("Prod", "prod/Web/Prod"); !errors.As(err, &fe) || fe.Reason != "inside" {
+		t.Fatalf("a group moved into its own subgroup: %v", err)
 	}
 
 	if err := s.RenameGroup("Prod", "Live"); err != nil {
@@ -56,11 +58,8 @@ func TestSubgroups(t *testing.T) {
 	}
 	checkGroupOrder(t, s, "Dev", "Dev/Web", "Live", "Live/Cache")
 
-	// Siblings reorder; a group never moves among another level's.
+	// Siblings reorder, their subgroups with them.
 	if err := s.MoveGroup("Live", "Dev", false); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.MoveGroup("Live/Cache", "Dev", false); err != nil {
 		t.Fatal(err)
 	}
 	checkGroupOrder(t, s, "Live", "Live/Cache", "Dev", "Dev/Web")
@@ -77,24 +76,98 @@ func TestSubgroups(t *testing.T) {
 	checkGroupOrder(t, s, "Live", "Live/Cache")
 }
 
-// TestSubgroupLegacyPath: a deeper path, as imported, is a subgroup named
-// by all after its group, and renaming it does not touch others.
-func TestSubgroupLegacyPath(t *testing.T) {
+// TestSubgroupDeepPath: a deeper path, as imported, nests a group per
+// name, each spelled as it already is; renaming one takes its subtree
+// along and no group whose name merely starts the same.
+func TestSubgroupDeepPath(t *testing.T) {
 	s, _ := Open("")
 	a, _ := s.Add(Host{Name: "a", Address: "a", User: "u", Group: "Org/Team/App"})
-	b, _ := s.Add(Host{Name: "b", Address: "b", User: "u", Group: "Org/Team"})
-	if p, l := GroupParent(a.Group), GroupLeaf(a.Group); p != "Org" || l != "Team/App" {
+	b, _ := s.Add(Host{Name: "b", Address: "b", User: "u", Group: "Org/Teams"})
+	if p, l := GroupParent(a.Group), GroupLeaf(a.Group); p != "Org/Team" || l != "App" {
 		t.Fatalf("parent %q leaf %q", p, l)
+	}
+	checkGroupOrder(t, s, "Org", "Org/Team", "Org/Team/App", "Org/Teams")
+	if err := s.AddGroup("org/team/app/ Blue "); err != nil {
+		t.Fatal(err)
 	}
 	if err := s.RenameGroup("Org/Team", "Org/Ops"); err != nil {
 		t.Fatal(err)
 	}
-	if h, _ := s.Get(a.ID); h.Group != "Org/Team/App" {
-		t.Fatalf("sibling subgroup renamed: %q", h.Group)
+	checkGroupOrder(t, s, "Org", "Org/Ops", "Org/Ops/App", "Org/Ops/App/Blue", "Org/Teams")
+	if h, _ := s.Get(a.ID); h.Group != "Org/Ops/App" {
+		t.Fatalf("host of a renamed group's subgroup: %q", h.Group)
 	}
-	if h, _ := s.Get(b.ID); h.Group != "Org/Ops" {
-		t.Fatalf("renamed subgroup: %q", h.Group)
+	if h, _ := s.Get(b.ID); h.Group != "Org/Teams" {
+		t.Fatalf("group of a similar name renamed: %q", h.Group)
 	}
+	if err := s.DeleteGroup("Org/Ops"); err != nil {
+		t.Fatal(err)
+	}
+	checkGroupOrder(t, s, "Org", "Org/Teams")
+}
+
+// TestMoveGroupAcrossLevels: a group dropped beside another of another
+// level, or into a group, goes there with its subtree, hosts and looks,
+// is saved there and keeps the group it left; it never goes into itself
+// nor onto a name taken there.
+func TestMoveGroupAcrossLevels(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hosts.json")
+	s, _ := Open(path)
+	web, _ := s.Add(Host{Name: "web", Address: "a", User: "u", Group: "Prod/Web"})
+	blue, _ := s.Add(Host{Name: "blue", Address: "b", User: "u", Group: "Prod/Web/Blue"})
+	s.Add(Host{Name: "db", Address: "c", User: "u", Group: "Dev/DB"})
+	if err := s.EditGroup("Prod/Web/Blue", "Prod/Web/Blue", GroupLook{Color: "blue"}); err != nil {
+		t.Fatal(err)
+	}
+	checkGroupOrder(t, s, "Dev", "Dev/DB", "Prod", "Prod/Web", "Prod/Web/Blue")
+
+	// A subgroup beside a subgroup of another group.
+	if err := s.MoveGroup("Prod/Web", "Dev/DB", false); err != nil {
+		t.Fatal(err)
+	}
+	s, _ = Open(path)
+	checkGroupOrder(t, s, "Dev", "Dev/Web", "Dev/Web/Blue", "Dev/DB", "Prod")
+	if h, _ := s.Get(blue.ID); h.Group != "Dev/Web/Blue" {
+		t.Fatalf("host of the moved subtree: %q", h.Group)
+	}
+	if got := s.GroupLook("Dev/Web/Blue"); got.Color != "blue" {
+		t.Fatalf("look after the move: %+v", got)
+	}
+
+	// A top-level group, its subgroups with it, into another's subgroup.
+	if err := s.NestGroup("Dev", "Prod"); err != nil {
+		t.Fatal(err)
+	}
+	checkGroupOrder(t, s, "Prod", "Prod/Dev", "Prod/Dev/Web", "Prod/Dev/Web/Blue", "Prod/Dev/DB")
+	if err := s.NestGroup("Prod/Dev/Web", "Prod"); err != nil {
+		t.Fatal(err)
+	}
+	checkGroupOrder(t, s, "Prod", "Prod/Dev", "Prod/Dev/DB", "Prod/Web", "Prod/Web/Blue")
+	if h, _ := s.Get(web.ID); h.Group != "Prod/Web" {
+		t.Fatalf("host moved back: %q", h.Group)
+	}
+
+	// Back to the top level, beside a top-level group.
+	if err := s.MoveGroup("Prod/Web", "Prod", false); err != nil {
+		t.Fatal(err)
+	}
+	checkGroupOrder(t, s, "Web", "Web/Blue", "Prod", "Prod/Dev", "Prod/Dev/DB")
+
+	// Into itself, or onto a name taken there: nothing moves.
+	if err := s.NestGroup("Prod", "Prod/Dev"); err == nil {
+		t.Fatal("a group moved into its own subgroup")
+	}
+	if err := s.MoveGroup("Prod", "Prod/Dev/DB", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddGroup("Prod/Blue"); err != nil {
+		t.Fatal(err)
+	}
+	var fe *FieldError
+	if err := s.NestGroup("Web/Blue", "Prod"); !errors.As(err, &fe) || fe.Reason != "taken" {
+		t.Fatalf("moved onto a taken name: %v", err)
+	}
+	checkGroupOrder(t, s, "Web", "Web/Blue", "Prod", "Prod/Dev", "Prod/Dev/DB", "Prod/Blue")
 }
 
 // TestGroupLooks: a group's look is saved with it, normalized, follows

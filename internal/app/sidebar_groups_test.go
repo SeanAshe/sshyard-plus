@@ -32,14 +32,25 @@ func dragSidebarTo(t *testing.T, tt *ui.Tester, from string, x, y float32) {
 	}
 }
 
+// groupHeadAt is a point on the header of group name, by the name's
+// text: dy from the header's top, or from its bottom when negative.
+func groupHeadAt(t *testing.T, tt *ui.Tester, name string, dy float32) (float32, float32) {
+	t.Helper()
+	r := mustFind(t, tt, name)
+	top := r.Y + r.H/2 - groupRowHeight/2
+	if dy < 0 {
+		dy += groupRowHeight
+	}
+	return r.X + 8, top + dy
+}
+
 func TestSidebarGroupDragDrop(t *testing.T) {
 	a, tt := newTestApp(t)
 	addGroupedHost(t, a, "alpha", "A")
 	addGroupedHost(t, a, "bravo", "B")
 	addGroupedHost(t, a, "charlie", "C")
 	tt.Frame()
-	dst := mustFind(t, tt, "A")
-	x, y := dst.X+8, dst.Y+1
+	x, y := groupHeadAt(t, tt, "A", 2)
 	dragSidebarTo(t, tt, "C", x, y)
 	tt.Release(x, y)
 	tt.Frame()
@@ -56,8 +67,7 @@ func TestSidebarGroupDragDrop(t *testing.T) {
 		t.Fatal("header click did not collapse")
 	}
 	mustClick(t, tt, "B")
-	dst = mustFind(t, tt, "B")
-	x, y = dst.X+8, dst.Y+dst.H-1
+	x, y = groupHeadAt(t, tt, "B", -2)
 	dragSidebarTo(t, tt, "C", x, y)
 	tt.Release(x, y)
 	tt.Frame()
@@ -68,8 +78,7 @@ func TestSidebarGroupDragDrop(t *testing.T) {
 		t.Fatal("move lost collapsed state")
 	}
 
-	dst = mustFind(t, tt, "A")
-	x, y = dst.X+8, dst.Y+1
+	x, y = groupHeadAt(t, tt, "A", 2)
 	dragSidebarTo(t, tt, "C", x, y)
 	tt.Key(0, ui.KeyEscape)
 	tt.Release(x, y)
@@ -79,7 +88,7 @@ func TestSidebarGroupDragDrop(t *testing.T) {
 	}
 
 	// Hosts retain their own drag value inside a draggable group.
-	dst = mustFind(t, tt, "B")
+	dst := mustFind(t, tt, "B")
 	x, y = dst.X+8, dst.Y+dst.H/2
 	dragSidebarTo(t, tt, "alpha", x, y)
 	tt.Release(x, y)
@@ -89,6 +98,55 @@ func TestSidebarGroupDragDrop(t *testing.T) {
 	}
 	if !slices.Equal(a.store.Groups(), []string{"B", "C"}) {
 		t.Fatal("host drag reordered groups or preserved implicit A")
+	}
+}
+
+// TestSidebarGroupDropAcrossLevels: a group dropped on the middle of
+// another's header goes into it, which opens; on its edge, beside it at
+// its level; on the ungrouped hosts, to the top level. The sections
+// moved keep their state, and a group never goes into itself.
+func TestSidebarGroupDropAcrossLevels(t *testing.T) {
+	a, tt := newTestApp(t)
+	addGroupedHost(t, a, "web", "Prod/Web")
+	addGroupedHost(t, a, "db", "Dev/DB")
+	addGroupedHost(t, a, "loose", "")
+	*a.section("g:Prod/Web") = false
+	tt.Frame()
+
+	// A subgroup into another group, its closed state along.
+	mustClick(t, tt, "Dev")
+	x, y := groupHeadAt(t, tt, "Dev", groupRowHeight/2)
+	dragSidebarTo(t, tt, "Web", x, y)
+	tt.Release(x, y)
+	tt.Frame()
+	if got := a.store.Groups(); !slices.Equal(got, []string{"Dev", "Dev/DB", "Dev/Web", "Prod"}) {
+		t.Fatalf("subgroup into another group: %q", got)
+	}
+	if !*a.section("g:Dev") || *a.section("g:Dev/Web") {
+		t.Fatal("drop target not opened, or moved section reopened")
+	}
+
+	// A top-level group, its subgroups with it, beside a subgroup.
+	x, y = groupHeadAt(t, tt, "DB", 2)
+	dragSidebarTo(t, tt, "Prod", x, y)
+	tt.Release(x, y)
+	tt.Frame()
+	if got := a.store.Groups(); !slices.Equal(got, []string{"Dev", "Dev/Prod", "Dev/DB", "Dev/Web"}) {
+		t.Fatalf("group beside a subgroup: %q", got)
+	}
+
+	// Into itself: nothing moves.
+	if groupDropOK("Dev", "Dev/Prod", dropInto) || groupDropOK("Dev", "Dev/Prod", dropBefore) || groupDropOK("Dev/DB", "Dev", dropInto) {
+		t.Fatal("drop into itself, or where it is, allowed")
+	}
+
+	// Onto the ungrouped hosts: back to the top level.
+	x, y = groupHeadAt(t, tt, "loose", groupRowHeight/2)
+	dragSidebarTo(t, tt, "Prod", x, y)
+	tt.Release(x, y)
+	tt.Frame()
+	if got := a.store.Groups(); !slices.Equal(got, []string{"Dev", "Dev/DB", "Dev/Web", "Prod"}) {
+		t.Fatalf("group onto the ungrouped hosts: %q", got)
 	}
 }
 
@@ -111,8 +169,7 @@ func TestSidebarGroupSearchOrder(t *testing.T) {
 	if _, groups, _ := hostsBy(a.store, a.search); a.search != "match" || slices.Contains(groups, "B") || slices.Contains(groups, "Empty") {
 		t.Fatalf("search %q included unmatched groups: %q", a.search, groups)
 	}
-	dst := mustFind(t, tt, "C")
-	x, y := dst.X+8, dst.Y+1
+	x, y := groupHeadAt(t, tt, "C", 2)
 	dragSidebarTo(t, tt, "A", x, y)
 	tt.Release(x, y)
 	tt.Frame()
@@ -146,14 +203,9 @@ func TestSidebarSectionsToggle(t *testing.T) {
 		}
 	}
 	mustClick(t, tt, "A") // A mixed state must still offer collapse.
-	// Search hides B and none; the action must still update their states.
-	mustClick(t, tt, "Search hosts")
-	tt.Type("alpha")
-	tt.Frame()
 	mustClick(t, tt, "Collapse all groups")
-	mustClick(t, tt, "Clear search")
 	if *a.section("g:B") || *a.section("none") {
-		t.Fatal("hidden sections were left open")
+		t.Fatal("sections were left open")
 	}
 	mustClick(t, tt, "Expand all groups")
 	for _, key := range a.sidebarSectionKeys() {
@@ -180,7 +232,7 @@ func TestSidebarSubgroups(t *testing.T) {
 	}
 	a.openSubgroupForm("Prod")
 	a.group.name = "a/b"
-	if a.SaveGroup(m) || a.group.err != m.GroupTooDeep() {
+	if a.SaveGroup(m) || a.group.err != m.GroupNameSlash() {
 		t.Fatalf("nested subgroup: err %q", a.group.err)
 	}
 	a.grouping, a.group = false, nil

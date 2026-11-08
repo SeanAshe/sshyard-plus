@@ -46,7 +46,10 @@ func TestSidebarSectionsKeyboardAndEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
+	// Tab from the search button reaches the toggle, past measuring the
+	// hosts, which have none.
 	mustClick(t, tt, "Search hosts")
+	mustClick(t, tt, "Close search")
 	tt.Key(0, ui.KeyTab)
 	if !tt.Focused("Collapse all groups") {
 		t.Fatal("toggle is not keyboard accessible")

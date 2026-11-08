@@ -96,6 +96,9 @@ func (a *App) hostCard(c *ui.Context, m locales.Messages, tok theme.Tokens, anch
 			if st, ok := a.hostState(h.ID); ok {
 				fact(m.FieldStatus(), a.pv(a.statusText(m, h, session.Status{State: st}, now)), stateColor(tok, st), 1)
 			}
+			if r, ok := a.pingOf(h); ok && r.ok {
+				fact(m.SysLatency(), latencyValue(m, r.d, true), latencyColor(tok, r.d, true), 1)
+			}
 			if !h.LastUsed.IsZero() {
 				fact(m.LastConnected(), h.LastUsed.Local().Format("2006-01-02 15:04"), none, 1)
 			}

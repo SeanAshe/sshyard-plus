@@ -55,6 +55,10 @@ func (a *App) SaveGroup(m locales.Messages) bool {
 	if f == nil {
 		return false
 	}
+	if strings.Contains(f.name, assets.GroupSep) {
+		f.err = m.GroupNameSlash()
+		return false
+	}
 	path := f.name
 	if f.parent != "" {
 		path = assets.SubGroup(f.parent, strings.TrimSpace(f.name))
@@ -70,8 +74,8 @@ func (a *App) SaveGroup(m locales.Messages) bool {
 		switch {
 		case errors.As(err, &fe) && fe.Reason == "taken":
 			f.err = m.GroupTaken()
-		case errors.As(err, &fe) && fe.Reason == "depth":
-			f.err = m.GroupTooDeep()
+		case errors.As(err, &fe) && fe.Reason == "inside":
+			f.err = m.GroupIntoItself()
 		case errors.As(err, &fe):
 			f.err = m.RequiredField(m.FieldGroup())
 		default:
@@ -89,18 +93,22 @@ func (a *App) SaveGroup(m locales.Messages) bool {
 		a.store.SetGroup(f.host, name)
 	}
 	if f.old != "" {
-		// The sections, its subgroups' too, stay as open or closed as
-		// they were.
-		moved := map[string]*bool{}
-		for key, open := range a.sections {
-			if g, ok := strings.CutPrefix(key, "g:"); ok && assets.InGroupTree(g, f.old) {
-				moved["g:"+name+strings.TrimPrefix(g, f.old)] = open
-			}
-		}
-		maps.Copy(a.sections, moved)
+		a.moveSections(f.old, name)
 	}
 	a.group, a.grouping = nil, false
 	return true
+}
+
+// moveSections keeps the sections of group old, its subgroups' too, as
+// open or closed as they were once it is name.
+func (a *App) moveSections(old, name string) {
+	moved := map[string]*bool{}
+	for key, open := range a.sections {
+		if g, ok := strings.CutPrefix(key, "g:"); ok && assets.InGroupTree(g, old) {
+			moved["g:"+name+strings.TrimPrefix(g, old)] = open
+		}
+	}
+	maps.Copy(a.sections, moved)
 }
 
 func (a *App) groupView(c *ui.Context, m locales.Messages) {

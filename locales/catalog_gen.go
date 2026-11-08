@@ -1895,6 +1895,98 @@ func (msgs Messages) ClearSearch() string {
 	return Catalog.Format(msgs.locale, "clearSearch", nil)
 }
 
+// TestLatency says "Test latency"
+// in the language the app shows.
+func TestLatency() string { return In(i18n.Locale()).TestLatency() }
+
+// TestLatency says "Test latency"
+// in the language of msgs.
+func (msgs Messages) TestLatency() string {
+	return Catalog.Format(msgs.locale, "testLatency", nil)
+}
+
+// CloseSearch says "Close search"
+// in the language the app shows.
+func CloseSearch() string { return In(i18n.Locale()).CloseSearch() }
+
+// CloseSearch says "Close search"
+// in the language of msgs.
+func (msgs Messages) CloseSearch() string {
+	return Catalog.Format(msgs.locale, "closeSearch", nil)
+}
+
+// HostUnreachable says "No reply"
+// in the language the app shows.
+func HostUnreachable() string { return In(i18n.Locale()).HostUnreachable() }
+
+// HostUnreachable says "No reply"
+// in the language of msgs.
+func (msgs Messages) HostUnreachable() string {
+	return Catalog.Format(msgs.locale, "hostUnreachable", nil)
+}
+
+// MultiSelect says "Select multiple"
+// in the language the app shows.
+func MultiSelect() string { return In(i18n.Locale()).MultiSelect() }
+
+// MultiSelect says "Select multiple"
+// in the language of msgs.
+func (msgs Messages) MultiSelect() string {
+	return Catalog.Format(msgs.locale, "multiSelect", nil)
+}
+
+// CloseMultiSelect says "Exit selection"
+// in the language the app shows.
+func CloseMultiSelect() string { return In(i18n.Locale()).CloseMultiSelect() }
+
+// CloseMultiSelect says "Exit selection"
+// in the language of msgs.
+func (msgs Messages) CloseMultiSelect() string {
+	return Catalog.Format(msgs.locale, "closeMultiSelect", nil)
+}
+
+// SelectedCount says "{count} selected"
+// in the language the app shows.
+func SelectedCount(count string) string { return In(i18n.Locale()).SelectedCount(count) }
+
+// SelectedCount says "{count} selected"
+// in the language of msgs.
+func (msgs Messages) SelectedCount(count string) string {
+	return Catalog.Format(msgs.locale, "selectedCount", map[string]any{"count": count})
+}
+
+// DeleteSelected says "Delete selected"
+// in the language the app shows.
+func DeleteSelected() string { return In(i18n.Locale()).DeleteSelected() }
+
+// DeleteSelected says "Delete selected"
+// in the language of msgs.
+func (msgs Messages) DeleteSelected() string {
+	return Catalog.Format(msgs.locale, "deleteSelected", nil)
+}
+
+// DeleteSelectedConfirm says "Delete the {count} selected items?"
+// in the language the app shows.
+func DeleteSelectedConfirm(count string) string {
+	return In(i18n.Locale()).DeleteSelectedConfirm(count)
+}
+
+// DeleteSelectedConfirm says "Delete the {count} selected items?"
+// in the language of msgs.
+func (msgs Messages) DeleteSelectedConfirm(count string) string {
+	return Catalog.Format(msgs.locale, "deleteSelectedConfirm", map[string]any{"count": count})
+}
+
+// TestingLatency says "Testing latency"
+// in the language the app shows.
+func TestingLatency() string { return In(i18n.Locale()).TestingLatency() }
+
+// TestingLatency says "Testing latency"
+// in the language of msgs.
+func (msgs Messages) TestingLatency() string {
+	return Catalog.Format(msgs.locale, "testingLatency", nil)
+}
+
 // InterfaceFont says "Interface font"
 // in the language the app shows.
 func InterfaceFont() string { return In(i18n.Locale()).InterfaceFont() }
@@ -8243,14 +8335,24 @@ func (msgs Messages) SubgroupOf(group string) string {
 	return Catalog.Format(msgs.locale, "subgroupOf", map[string]any{"group": group})
 }
 
-// GroupTooDeep says "Groups nest only one level deep: a subgroup cannot hold groups."
+// GroupNameSlash says "A group name cannot contain /."
 // in the language the app shows.
-func GroupTooDeep() string { return In(i18n.Locale()).GroupTooDeep() }
+func GroupNameSlash() string { return In(i18n.Locale()).GroupNameSlash() }
 
-// GroupTooDeep says "Groups nest only one level deep: a subgroup cannot hold groups."
+// GroupNameSlash says "A group name cannot contain /."
 // in the language of msgs.
-func (msgs Messages) GroupTooDeep() string {
-	return Catalog.Format(msgs.locale, "groupTooDeep", nil)
+func (msgs Messages) GroupNameSlash() string {
+	return Catalog.Format(msgs.locale, "groupNameSlash", nil)
+}
+
+// GroupIntoItself says "A group cannot move into itself or one of its subgroups."
+// in the language the app shows.
+func GroupIntoItself() string { return In(i18n.Locale()).GroupIntoItself() }
+
+// GroupIntoItself says "A group cannot move into itself or one of its subgroups."
+// in the language of msgs.
+func (msgs Messages) GroupIntoItself() string {
+	return Catalog.Format(msgs.locale, "groupIntoItself", nil)
 }
 
 // DeleteGroupTreeConfirm says "Delete the group {group} and its subgroups? Their hosts are kept, without a group."

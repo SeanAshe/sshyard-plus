@@ -339,7 +339,12 @@ type App struct {
 	hist        *historyState
 	selected    string // host chosen in the sidebar
 	search      string
-	searchFocus bool // the search field takes the focus next frame
+	searchFocus bool // the search, its field or button, takes the focus next frame
+	searchOpen  bool // the search shows its field across the toolbar
+	// ping is the hosts' latency the sidebar shows
+	ping pingState
+	// multi is the sidebar choosing several hosts and groups
+	multi       multiSelect
 	sections    map[string]*bool
 	form        *hostForm
 	editing     bool
@@ -1436,7 +1441,9 @@ func hostsBy(st *assets.Store, query string) (favorites []assets.Host, groups []
 	// where a group shows for the hosts of its subgroups too.
 	found := map[string]bool{}
 	for g := range byGroup {
-		found[g], found[assets.GroupParent(g)] = true, true
+		for ; g != "" && !found[g]; g = assets.GroupParent(g) {
+			found[g] = true
+		}
 	}
 	for _, g := range st.Groups() {
 		if found[g] || query == "" {

@@ -65,6 +65,7 @@ var (
 	Edit         = load("edit-line")
 	Delete       = load("delete-bin-line")
 	Search       = load("search-line")
+	TestLatency  = load("speed-up-line")
 	ZoomIn       = load("zoom-in-line")
 	ZoomOut      = load("zoom-out-line")
 	Highlight    = load("mark-pen-line")
@@ -171,6 +172,9 @@ var (
 	Extract     = load("inbox-unarchive-line")
 	Image       = load("image-line")
 	SelectAll   = load("checkbox-multiple-line")
+	MultiSelect = SelectAll
+	CollapseAll = load("collapse-diagonal-line")
+	ExpandAll   = load("expand-diagonal-line")
 	Send        = load("send-plane-2-line")
 	Model       = load("brain-line")
 	Thinking    = load("lightbulb-line")

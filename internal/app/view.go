@@ -134,6 +134,7 @@ func (a *App) View(c *ui.Context) {
 	})
 	a.editorView(c, m)
 	a.groupView(c, m)
+	a.multiSelectView(c, m)
 	a.tabRenameView(c, m)
 	a.snippetSheets(c, m)
 	a.credView(c, m)

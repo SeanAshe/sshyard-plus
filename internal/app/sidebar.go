@@ -40,10 +40,36 @@ func (a *App) section(key string) *bool {
 
 func (a *App) sidebarView(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 	ui.Column(c).Fill().Children(func() {
-		// The search, and beside it adding: a new host or group, a host
-		// typed on the spot, or the hosts of ~/.ssh/config.
-		ui.Row(c.Key("sbtools")).Padding(8, 8, 6, 12).Gap(4).AlignItems(ui.Center).Children(func() {
-			a.searchBox(c, m, tok)
+		// Choosing several and the search, each opening into its own bar
+		// across the row, then measuring the hosts, folding the groups and
+		// adding: a new host or group, a host typed on the spot, or the
+		// hosts of ~/.ssh/config.
+		ui.Row(c.Key("sbtools")).Padding(8, 8, 6, 8).Gap(4).AlignItems(ui.Center).Children(func() {
+			// as high as the field, so that the row keeps its size
+			ui.Box(c).Size(0, 30).Shrink(0)
+			switch {
+			case a.multi.on:
+				a.multiSelectBar(c, m, tok)
+				return
+			case a.searchOpen || a.search != "":
+				a.searchBox(c, m, tok)
+				return
+			}
+			if (IconButton{Icon: icons.MultiSelect, Label: m.MultiSelect(), Disabled: a.store.Len()+len(a.store.Groups()) == 0}).Clicked(c, "multi") {
+				a.OpenMultiSelect()
+			}
+			search := IconButton{Icon: icons.Search, Label: m.SearchHosts()}.Show(c, "search")
+			if a.searchFocus {
+				search.Focus()
+				a.searchFocus = false
+			}
+			if search.Clicked() {
+				a.OpenSearch()
+			}
+			ui.Spacer(c)
+			if (IconButton{Icon: icons.TestLatency, Label: m.TestLatency(), Disabled: a.store.Len() == 0 || a.pinging()}).Clicked(c, "ping") {
+				a.PingAll()
+			}
 			a.sidebarSectionsButton(c, m)
 			a.menuButton(c, "newhost", IconButton{Icon: icons.Add, Label: m.AddMenu()}, func() []menuEntry {
 				return a.addEntries(m)
@@ -82,7 +108,7 @@ func (a *App) sidebarView(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 							a.hostItem(c, m, h, "")
 						}
 					})
-					a.hostDrops(sec, tok, "")
+					a.ungroupedDrops(c, m, sec, tok)
 				}
 				a.forwardsSection(c, m, tok)
 			}).Grow(1).FillWidth()
@@ -127,51 +153,72 @@ func (a *App) connectedCount() int {
 	return len(clients)
 }
 
-// hostDrops moves a host dropped from the sidebar on a section into the
-// section's group, "" for none.
-func (a *App) hostDrops(sec ui.Element, tok theme.Tokens, g string) {
-	if d, ok := ui.Drop[dragHost](sec); ok {
-		if h, ok := a.store.Get(d.ID); ok && h.Group != g {
-			a.store.SetGroup(d.ID, g)
+// ungroupedDrops takes the hosts and groups dropped on the ungrouped
+// section: a host leaves its group, a group goes to the top level.
+func (a *App) ungroupedDrops(c *ui.Context, m locales.Messages, sec ui.Element, tok theme.Tokens) {
+	movable := func(v sidebarDrop) bool {
+		switch d := v.(type) {
+		case dragHost:
+			h, ok := a.store.Get(d.ID)
+			return ok && h.Group != ""
+		case dragGroup:
+			return a.search == "" && assets.GroupParent(d.Name) != ""
+		}
+		return false
+	}
+	if v, ok := ui.Drop[sidebarDrop](sec); ok && movable(v) {
+		var err error
+		switch d := v.(type) {
+		case dragHost:
+			err = a.store.SetGroup(d.ID, "")
+		case dragGroup:
+			err = a.store.NestGroup(d.Name, "")
+			if err == nil {
+				a.moveSections(d.Name, assets.GroupLeaf(d.Name))
+			}
+		}
+		if err != nil {
+			c.AddToast(ui.Toast{Title: groupMoveError(m, err), Type: "error"})
 		}
 	}
-	if d, ok := ui.DragOver[dragHost](sec); ok {
-		if h, ok := a.store.Get(d.ID); ok && h.Group != g {
-			sec.Background(tok.Accent.Alpha(0.08))
-		}
+	if v, ok := ui.DragOver[sidebarDrop](sec); ok && movable(v) {
+		sec.Background(tok.Accent.Alpha(0.08))
 	}
 }
 
-// searchBox is the hosts' search field: a magnifier, the text, and while
-// it holds any, an IconButton clearing it (as Escape does) that gives the
-// field the keyboard back. MyGo's SearchField draws its clear button's
-// cross in the theme's background, which the sidebar's clear material
-// makes invisible: hence a field of the app's own.
+// searchBox is the hosts' search, open across the toolbar: the text, then
+// an IconButton giving the field the keyboard and one closing the search
+// (as Escape does), which empties it. MyGo's
+// SearchField draws its clear button's cross in the theme's background,
+// which the sidebar's clear material makes invisible: hence a field of
+// the app's own.
 func (a *App) searchBox(c *ui.Context, m locales.Messages, tok theme.Tokens) {
-	row := ui.Row(c.Key("hostsearch")).Grow(1).Shrink(1).MinWidth(0).Height(30).Padding(0, 4, 0, 10).Gap(6).AlignItems(ui.Center).
+	row := ui.Row(c.Key("hostsearch")).Grow(1).Shrink(1).MinWidth(0).Height(30).Padding(0, 3, 0, 10).Gap(6).AlignItems(ui.Center).
 		Radius(theme.RadiusControl).Background(tok.Fill)
 	row.Children(func() {
-		ui.Icon(c, icons.Search.SVG).Size(14, 14).Shrink(0).TextColor(tok.TextMuted)
 		in := ui.TextInputBase(c.Key("q"), &a.search).Placeholder(m.SearchHosts()).Label(m.SearchHosts()).Grow(1).Shrink(1).MinWidth(0)
 		if a.searchFocus {
 			in.Focus()
 			a.searchFocus = false
 		}
-		if a.search != "" {
-			if (IconButton{Icon: icons.ClearText, Label: m.ClearSearch(), Size: Small}).Clicked(c, "clear") || in.Shortcut(0, ui.KeyEscape) {
-				a.ClearSearch()
-			}
-		} else {
-			// as high as with the button, so that the field keeps its size
-			ui.Box(c).Size(24, 24).Shrink(0)
+		if (IconButton{Icon: icons.Search, Label: m.SearchHosts(), Size: Small}).Clicked(c, "find") {
+			a.searchFocus = true
+		}
+		if (IconButton{Icon: icons.Close, Label: m.CloseSearch(), Size: Small}).Clicked(c, "close") || in.Shortcut(0, ui.KeyEscape) {
+			a.CloseSearch()
 		}
 	})
 }
 
-// ClearSearch empties the hosts' search and focuses its field.
-func (a *App) ClearSearch() {
-	a.search = ""
-	a.searchFocus = true
+// OpenSearch opens the hosts' search and focuses its field.
+func (a *App) OpenSearch() {
+	a.searchOpen, a.searchFocus = true, true
+}
+
+// CloseSearch empties the hosts' search and closes it, giving its button
+// the keyboard.
+func (a *App) CloseSearch() {
+	a.search, a.searchOpen, a.searchFocus = "", false, true
 }
 
 // selectedHost is the ID of the host chosen in the sidebar, if it still is.
@@ -191,35 +238,46 @@ func (a *App) selectedHost() string {
 const hostActionsWidth = 2*24 + 2 + 4
 
 // renewalMarkWidth is the room the mark of a renewal soon takes at the
-// end of a sidebar host's row, in place of its actions.
-var renewalMarkWidth = 14 + 2*theme.Space(2)
+// end of a sidebar host's row, beside its latency, in place of its
+// actions.
+var renewalMarkWidth = 14 + theme.Space(1)
 
 // hostItem is a host of the sidebar: its tile, then its name, and while
 // the pointer is over it or it is chosen, what to do with it at the end
 // (files, and the rest in its menu, as on a right click; a double click
 // connects). A dot on the tile's corner tells how its sessions are, a
 // mark at the end that its subscription renews soon. Resting the pointer
-// on it shows its card. The item lays its children out reversed, so that
+// on it shows its card; its latency shows at the end while its actions
+// do not. The item lays its children out reversed, so that
 // the tile it is given (after its label, as a badge) comes first.
 func (a *App) hostItem(c *ui.Context, m locales.Messages, h assets.Host, prefix string) {
 	tok := currentTokens(c)
 	it := ui.SidebarItem(c.Key(prefix+h.ID), prefix+h.ID, nil, a.pv(h.Label())).Reverse().Description(a.pv(a.hostTip(m, h))).Drag(dragHost{h.ID})
-	chosen := a.selected == prefix+h.ID
+	chosen := !a.multi.on && a.selected == prefix+h.ID
 	if chosen {
 		// Gray even while the sidebar has the focus, as the actions on
 		// it are drawn for the sidebar's ground, not the accent.
 		it.Background(tok.Press).TextColor(tok.Text)
 	}
 	more := "more:" + prefix + h.ID
-	shown := chosen || it.Hovered() || a.menu.key == more
+	shown := chosen || !a.multi.on && it.Hovered() || a.menu.key == more
 	days, soon := h.Renewal.Reminding(c.Now())
+	lat, measured := a.pingOf(h)
+	var marks float32
+	if soon {
+		marks += renewalMarkWidth
+	}
+	if measured {
+		marks += pingWidth
+	}
 	switch {
 	case shown:
 		it.Padding(theme.Space(1.5), hostActionsWidth, theme.Space(1.5), theme.Space(2))
-	case soon:
-		it.Padding(theme.Space(1.5), renewalMarkWidth, theme.Space(1.5), theme.Space(2))
+	case marks > 0:
+		it.Padding(theme.Space(1.5), marks+theme.Space(3), theme.Space(1.5), theme.Space(2))
 	}
 	it.Children(func() {
+		// Laid out reversed: the check box comes before the tile.
 		ui.Box(c.Key("avatar")).Shrink(0).Children(func() {
 			hostAvatar(c, tok, h, 20)
 			if st, ok := a.hostState(h.ID); ok {
@@ -227,10 +285,23 @@ func (a *App) hostItem(c *ui.Context, m locales.Messages, h assets.Host, prefix 
 					Label(a.statusText(m, h, session.Status{State: st}, c.Now()))
 			}
 		})
-		if soon && !shown {
-			ui.Row(c.Key("renewal")).Absolute().Top(0).Bottom(0).Right(theme.Space(2)).AlignItems(ui.Center).
-				Label(m.RenewalSoon(renewWhen(m, days))).Children(func() {
-				ui.Icon(c, icons.Renewal.SVG).Size(14, 14).TextColor(renewalColor(tok, h.Renewal, c.Now()))
+		if a.multi.on {
+			state := pickNone
+			if a.multi.hosts[h.ID] {
+				state = pickFull
+			}
+			pickBox(c, "pick", a.pv(h.Label()), state, func(on bool) { a.pickHost(h.ID, on) })
+		}
+		if marks > 0 && !shown {
+			ui.Row(c.Key("marks")).Absolute().Top(0).Bottom(0).Right(theme.Space(2)).Gap(theme.Space(1)).AlignItems(ui.Center).Children(func() {
+				if soon {
+					ui.Box(c.Key("renewal")).Shrink(0).Label(m.RenewalSoon(renewWhen(m, days))).Children(func() {
+						ui.Icon(c, icons.Renewal.SVG).Size(14, 14).TextColor(renewalColor(tok, h.Renewal, c.Now()))
+					})
+				}
+				if measured {
+					pingText(c, m, tok, lat)
+				}
 			})
 		}
 		// Shown while its menu is open, which outlives the hover.
@@ -248,7 +319,11 @@ func (a *App) hostItem(c *ui.Context, m locales.Messages, h assets.Host, prefix 
 		})
 	})
 	a.hostCardOn(c, m, tok, it, prefix+h.ID, h)
-	if it.DoubleClicked() {
+	switch {
+	case a.multi.on && it.Clicked():
+		a.pickHost(h.ID, !a.multi.hosts[h.ID])
+		c.Invalidate() // the groups above and the toolbar, built already
+	case !a.multi.on && it.DoubleClicked():
 		a.Connect(h.ID, openAt{})
 	}
 	a.contextMenu(it, func() []menuEntry { return a.hostEntries(m, h) })
