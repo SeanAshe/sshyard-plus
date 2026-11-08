@@ -360,3 +360,98 @@ func TestAIProviderTestSendsNoTokenLimit(t *testing.T) {
 		t.Fatalf("test %q body %s", f.test, body)
 	}
 }
+
+// TestMaxToolCallsValue: the limit field reads empty as the default and
+// only an explicit 0 as no limit, takes a whole number in range, and
+// rejects anything else so that the setting keeps what it had.
+func TestMaxToolCallsValue(t *testing.T) {
+	for _, c := range []struct {
+		in    string
+		unset bool
+		want  int
+		ok    bool
+	}{
+		{"", true, 0, true},
+		{"   ", true, 0, true},
+		{"0", false, 0, true},
+		{"25", false, 25, true},
+		{" 30 ", false, 30, true},
+		{"-1", false, 0, false},
+		{"abc", false, 0, false},
+		{"1.5", false, 0, false},
+		{"10001", false, 0, false},
+	} {
+		got, ok := maxToolCallsValue(c.in)
+		if ok != c.ok || ok && (got == nil) != c.unset || ok && got != nil && *got != c.want {
+			t.Fatalf("%q read as %v (ok %v), want unset %v %d (ok %v)", c.in, got, ok, c.unset, c.want, c.ok)
+		}
+	}
+	zero, sixty := 0, 60
+	for n, want := range map[*int]string{nil: "", &zero: "0", &sixty: "60"} {
+		if got := maxToolCallsText(n); got != want {
+			t.Fatalf("%v shows as %q, want %q", n, got, want)
+		}
+	}
+}
+
+// TestMaxToolCallsSettingKeepsRunningTurns: the limit reaches a built-in
+// pane at its next turn without stopping the one it is running, and an
+// external agent, which counts its own calls, is left alone.
+func TestMaxToolCallsSettingKeepsRunningTurns(t *testing.T) {
+	a, _ := newTestApp(t)
+	stopped := map[int]bool{}
+	for id, agentID := range map[int]string{1: "builtin", 2: "acp"} {
+		a.conns[id] = &conn{id: id, ai: &aiState{agent: agentID, running: true, cancel: func() { stopped[id] = true }}}
+	}
+	one := 1
+	s := a.Settings()
+	s.AIMaxToolCalls = &one
+	if err := a.ApplySettings(s); err != nil {
+		t.Fatal(err)
+	}
+	if stopped[1] || stopped[2] {
+		t.Fatalf("changing the limit stopped turns: %v", stopped)
+	}
+	if !a.conns[1].ai.dirty || a.conns[2].ai.dirty {
+		t.Fatalf("built-in dirty %v, external dirty %v", a.conns[1].ai.dirty, a.conns[2].ai.dirty)
+	}
+}
+
+// TestMaxToolCallsSettingPausesOpenPane: lowering the cap in settings
+// reaches a pane that is already open, so its next turn stops there and
+// waits instead of running every call the model asks for.
+func TestMaxToolCallsSettingPausesOpenPane(t *testing.T) {
+	a, tt := newTestApp(t)
+	h := savedHost(t, a, "web", "10.0.0.8")
+	consentHost(t, a, h.ID)
+	s := a.Settings()
+	s.AIDefaultMode = "full" // no confirmation dialog in the way
+	if err := a.ApplySettings(s); err != nil {
+		t.Fatal(err)
+	}
+	a.newModel = func(*conn) agent.Streamer {
+		return &replyModel{replies: []llm.Message{{Role: "assistant", ToolCalls: []llm.ToolCall{
+			{ID: "c1", Name: "run_command", Arguments: `{"command":"uptime"}`},
+			{ID: "c2", Name: "run_command", Arguments: `{"command":"uptime"}`},
+		}}}}
+	}
+	a.newTools = func(*conn) agent.Tools { return diskTools{} }
+	id, err := a.OpenAI(h.ID, openAt{}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	one := 1
+	s = a.Settings()
+	s.AIMaxToolCalls = &one
+	if err := a.ApplySettings(s); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	a.SendAI(id, "check twice")
+	waitFor(t, tt, "a pause at the limit", func() bool { return a.conns[id].ai.paused })
+	if n := a.conns[id].ai.pauseCalls; n != 1 {
+		t.Fatalf("the pause notes %d calls, want 1", n)
+	}
+	a.StopAI(id)
+}

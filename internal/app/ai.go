@@ -60,6 +60,8 @@ type aiState struct {
 	// acpOpts are the ACP agent's model and thinking selectors as its
 	// session last reported them; nil until it reports.
 	acpOpts []acp.Option
+	// pauseCalls is the tool calls the paused turn ran, for its notice.
+	pauseCalls int
 
 	// conv is the conversation's ID in the host's history, from its first
 	// question, with its title and when it began; msgs are the built-in
@@ -355,7 +357,7 @@ func (a *App) ensureAI(c *conn) error {
 			c.ai.box.set(cl, paneModel(c, p), paneEffort(c, p))
 		}
 		if c.ai.dirty {
-			c.ai.sess.Configure(a.aiGate(c), a.settings.AIRedact)
+			c.ai.sess.Configure(a.aiGate(c), a.settings.AIRedact, a.settings.AIMaxToolCalls)
 			c.ai.dirty = false
 		}
 		return nil
@@ -388,7 +390,7 @@ func (a *App) ensureAI(c *conn) error {
 		tools = newTermTools(a, c)
 	}
 	c.ai.tools, c.ai.target = tools, target
-	c.ai.sess = agent.Restore(agent.Config{Model: streamer, Gate: a.aiGate(c), Tools: tools, Redact: a.settings.AIRedact, Target: target}, c.ai.msgs)
+	c.ai.sess = agent.Restore(agent.Config{Model: streamer, Gate: a.aiGate(c), Tools: tools, Redact: a.settings.AIRedact, Target: target, MaxToolCalls: a.settings.AIMaxToolCalls}, c.ai.msgs)
 	c.ai.dirty = false
 	return nil
 }
@@ -535,7 +537,7 @@ func cloneAIAttach(files []*aiAttach) []*aiAttach {
 	return out
 }
 
-// ContinueAI resumes a turn that paused after 25 tool calls.
+// ContinueAI resumes a turn that paused at its tool-call limit.
 func (a *App) ContinueAI(id int) {
 	c := a.conns[id]
 	if c == nil || c.ai == nil || c.ai.sess == nil || !c.ai.paused || c.ai.running {
@@ -611,6 +613,7 @@ func (a *App) onAIEvent(id int, ev agent.Event) {
 		c.ai.items = append(c.ai.items, aiItem{kind: "tool", tool: *ev.Tool})
 	case agent.EventPause:
 		c.ai.paused = true
+		c.ai.pauseCalls = ev.Calls
 	case agent.EventDone:
 		if ev.Text != "" && trailingText(c.ai.items) != ev.Text {
 			c.ai.items = append(c.ai.items, aiItem{kind: "text", text: ev.Text})

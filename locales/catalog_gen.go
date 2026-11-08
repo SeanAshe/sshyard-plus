@@ -6383,6 +6383,26 @@ func (msgs Messages) AiContextLines() string {
 	return Catalog.Format(msgs.locale, "aiContextLines", nil)
 }
 
+// AiMaxToolCalls says "Tool calls per turn"
+// in the language the app shows.
+func AiMaxToolCalls() string { return In(i18n.Locale()).AiMaxToolCalls() }
+
+// AiMaxToolCalls says "Tool calls per turn"
+// in the language of msgs.
+func (msgs Messages) AiMaxToolCalls() string {
+	return Catalog.Format(msgs.locale, "aiMaxToolCalls", nil)
+}
+
+// AiMaxToolCallsNote says "Pauses for your go-ahead at the limit. Enter 0 for no limit; leave empty for the default"
+// in the language the app shows.
+func AiMaxToolCallsNote() string { return In(i18n.Locale()).AiMaxToolCallsNote() }
+
+// AiMaxToolCallsNote says "Pauses for your go-ahead at the limit. Enter 0 for no limit; leave empty for the default"
+// in the language of msgs.
+func (msgs Messages) AiMaxToolCallsNote() string {
+	return Catalog.Format(msgs.locale, "aiMaxToolCallsNote", nil)
+}
+
 // AiAuditDays says "Audit retention (days)"
 // in the language the app shows.
 func AiAuditDays() string { return In(i18n.Locale()).AiAuditDays() }
@@ -6613,14 +6633,14 @@ func (msgs Messages) AiWorking() string {
 	return Catalog.Format(msgs.locale, "aiWorking", nil)
 }
 
-// AiPaused says "Paused after 25 tool calls."
+// AiPaused says "{count, plural, one {Paused after # tool call.} other {Paused after # tool calls.}}"
 // in the language the app shows.
-func AiPaused() string { return In(i18n.Locale()).AiPaused() }
+func AiPaused(count int) string { return In(i18n.Locale()).AiPaused(count) }
 
-// AiPaused says "Paused after 25 tool calls."
+// AiPaused says "{count, plural, one {Paused after # tool call.} other {Paused after # tool calls.}}"
 // in the language of msgs.
-func (msgs Messages) AiPaused() string {
-	return Catalog.Format(msgs.locale, "aiPaused", nil)
+func (msgs Messages) AiPaused(count int) string {
+	return Catalog.Format(msgs.locale, "aiPaused", map[string]any{"count": count})
 }
 
 // AiContinue says "Continue"

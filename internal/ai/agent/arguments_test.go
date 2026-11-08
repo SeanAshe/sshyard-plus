@@ -32,7 +32,7 @@ func TestConfigureRedactsExistingHistory(t *testing.T) {
 	if err := session.Turn(t.Context(), secret, HostMeta{}, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	session.Configure(&recordGate{allow: true}, true)
+	session.Configure(&recordGate{allow: true}, true, nil)
 	if err := session.Turn(t.Context(), "next "+secret, HostMeta{}, "", nil); err != nil {
 		t.Fatal(err)
 	}

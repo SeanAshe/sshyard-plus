@@ -486,9 +486,11 @@ type App struct {
 	// audit is one log for every pane, so concurrent writes share its lock.
 	audit *audit.Log
 	// aiRecent is the AI pane last used on a host, by host ID.
-	aiRecent  map[string]int
-	aiLines   float64
-	aiDays    float64
+	aiRecent map[string]int
+	aiLines  float64
+	aiDays   float64
+	// aiCalls is the tool-call limit field, empty for the default.
+	aiCalls   string
 	aiModeIdx int
 	// review is the review model's settings controls.
 	review   reviewControls
@@ -659,6 +661,7 @@ func (a *App) syncChoices() {
 	a.metMount = a.settings.MetricsMount
 	a.aiLines = float64(a.settings.AIContextLines)
 	a.aiDays = float64(a.settings.AIAuditRetentionDays)
+	a.aiCalls = maxToolCallsText(a.settings.AIMaxToolCalls)
 	a.mcpPort = float64(a.settings.MCPPort)
 }
 
@@ -709,6 +712,11 @@ func (a *App) ApplySettings(s settings.Settings) error {
 			old.AIRedact != s.AIRedact || old.AIDefaultMode != s.AIDefaultMode
 		if all || c.ai.agent == "builtin" && !reflect.DeepEqual(providerIn(old, c.ai.provider), providerIn(s, c.ai.provider)) || !reflect.DeepEqual(providerIn(old, old.AIReviewProvider), providerIn(s, s.AIReviewProvider)) {
 			a.invalidateAI(c)
+		} else if c.ai.agent == "builtin" && old.MaxToolCalls() != s.MaxToolCalls() {
+			// The built-in agent reads the limit as a turn starts or
+			// continues, so the turn running is left to finish; an
+			// external agent counts its own calls.
+			c.ai.dirty = true
 		}
 	}
 	if s.Theme != old.Theme && a.p.SetTheme != nil {

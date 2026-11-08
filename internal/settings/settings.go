@@ -174,6 +174,10 @@ type Settings struct {
 	AIContextLines int `json:"aiContextLines,omitempty"`
 	// AIAuditRetentionDays is how long audit files are kept.
 	AIAuditRetentionDays int `json:"aiAuditRetentionDays,omitempty"`
+	// AIMaxToolCalls caps the tool calls one AI turn runs before it pauses
+	// for the user. Unset takes DefaultMaxToolCalls; a pointer to 0 runs
+	// without a limit.
+	AIMaxToolCalls *int `json:"aiMaxToolCalls,omitempty"`
 	// AIRedact masks suspected private keys and tokens before they are
 	// sent to a model. The default is on; false is stored so it survives.
 	AIRedact bool `json:"aiRedact"`
@@ -528,6 +532,22 @@ const (
 	AIModelsMax    = 1000
 )
 
+// DefaultMaxToolCalls is how many tool calls one AI turn runs before it
+// pauses when AIMaxToolCalls is unset; AIMaxToolCallsMax bounds the setting.
+const (
+	DefaultMaxToolCalls = 25
+	AIMaxToolCallsMax   = 10_000
+)
+
+// MaxToolCalls is the cap on the tool calls one AI turn runs before it
+// pauses: the setting, DefaultMaxToolCalls when unset, and 0 for no limit.
+func (s Settings) MaxToolCalls() int {
+	if s.AIMaxToolCalls == nil {
+		return DefaultMaxToolCalls
+	}
+	return min(max(*s.AIMaxToolCalls, 0), AIMaxToolCallsMax)
+}
+
 const (
 	// OSC52Allow lets a remote program copy to the clipboard.
 	OSC52Allow = "allow"
@@ -816,6 +836,17 @@ func (s *Settings) normalizeAI(d Settings) {
 		s.AIAuditRetentionDays = d.AIAuditRetentionDays
 	case s.AIAuditRetentionDays > 3650:
 		s.AIAuditRetentionDays = 3650
+	}
+	// Unset keeps the built-in default; 0 is a choice (no limit) and stays.
+	if s.AIMaxToolCalls != nil {
+		switch n := *s.AIMaxToolCalls; {
+		case n < 0:
+			zero := 0
+			s.AIMaxToolCalls = &zero
+		case n > AIMaxToolCallsMax:
+			v := AIMaxToolCallsMax
+			s.AIMaxToolCalls = &v
+		}
 	}
 	known := map[string]bool{}
 	for i := range s.AIProviders {

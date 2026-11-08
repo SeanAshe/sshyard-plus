@@ -495,7 +495,7 @@ func (a *App) aiTimeline(c *ui.Context, cn *conn, tok theme.Tokens, m locales.Me
 			}
 			if cn.ai.paused && !cn.ai.running {
 				ui.Row(c.Key("aipaused")).Gap(theme.Space(2)).AlignItems(ui.Center).FillWidth().Children(func() {
-					ui.Text(c, m.AiPaused()).FontSize(theme.Footnote).TextColor(tok.TextMuted).Shrink(1)
+					ui.Text(c, m.AiPaused(cn.ai.pauseCalls)).FontSize(theme.Footnote).TextColor(tok.TextMuted).Shrink(1)
 					if pill(c, m.AiContinue(), true, false, false) {
 						a.ContinueAI(cn.id)
 					}

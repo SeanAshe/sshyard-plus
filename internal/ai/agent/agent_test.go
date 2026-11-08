@@ -656,3 +656,96 @@ func TestTurnWithParts(t *testing.T) {
 		t.Fatalf("parts %q messages %+v", parts, model.reqs[1].Messages)
 	}
 }
+
+// TestCustomToolCallLimit: a configured cap replaces the built-in one, and
+// each Continue grants another stretch of it rather than starting over.
+func TestCustomToolCallLimit(t *testing.T) {
+	calls := make([]llm.ToolCall, 5)
+	for i := range calls {
+		calls[i] = llm.ToolCall{ID: fmt.Sprintf("c%d", i), Name: "run_command", Arguments: fmt.Sprintf(`{"command":"c%d"}`, i)}
+	}
+	model := &scriptModel{replies: []llm.Message{
+		{Role: "assistant", ToolCalls: calls},
+		{Role: "assistant", Content: "done"},
+	}}
+	tools := &fakeTools{output: "ok"}
+	limit := 2
+	s := New(Config{Model: model, Gate: &recordGate{allow: true}, Tools: tools, MaxToolCalls: &limit})
+	err := s.Turn(t.Context(), "go", HostMeta{Name: "web"}, "", nil)
+	if !errors.Is(err, ErrPaused) || !s.Paused() || len(tools.calls) != 2 {
+		t.Fatalf("err %v paused %v calls %d", err, s.Paused(), len(tools.calls))
+	}
+	// The stretch is spent again mid-turn, so the pause comes back, and
+	// says how many calls the turn has run in all.
+	pausedAt := -1
+	emit := func(ev Event) {
+		if ev.Kind == EventPause {
+			pausedAt = ev.Calls
+		}
+	}
+	if err := s.Continue(t.Context(), emit); !errors.Is(err, ErrPaused) {
+		t.Fatalf("first continue %v", err)
+	}
+	if !s.Paused() || len(tools.calls) != 4 || pausedAt != 4 {
+		t.Fatalf("first continue paused %v calls %d pause event %d", s.Paused(), len(tools.calls), pausedAt)
+	}
+	if err := s.Continue(t.Context(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if s.Paused() || len(tools.calls) != 5 {
+		t.Fatalf("second continue paused %v calls %d", s.Paused(), len(tools.calls))
+	}
+}
+
+// TestNoToolCallLimit: a cap of 0 runs every call the model asks for, past
+// the built-in 25, and never pauses.
+func TestNoToolCallLimit(t *testing.T) {
+	calls := make([]llm.ToolCall, 30)
+	for i := range calls {
+		calls[i] = llm.ToolCall{ID: fmt.Sprintf("c%d", i), Name: "run_command", Arguments: fmt.Sprintf(`{"command":"c%d"}`, i)}
+	}
+	model := &scriptModel{replies: []llm.Message{
+		{Role: "assistant", ToolCalls: calls},
+		{Role: "assistant", Content: "done"},
+	}}
+	tools := &fakeTools{output: "ok"}
+	zero := 0
+	s := New(Config{Model: model, Gate: &recordGate{allow: true}, Tools: tools, MaxToolCalls: &zero})
+	if err := s.Turn(t.Context(), "go", HostMeta{Name: "web"}, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if s.Paused() || len(tools.calls) != 30 {
+		t.Fatalf("paused %v calls %d", s.Paused(), len(tools.calls))
+	}
+}
+
+// TestConfigureUpdatesToolCallLimit: a cap changed while the session is
+// idle applies to its next turn and to the stretch Continue grants, so a
+// pane already open follows the setting.
+func TestConfigureUpdatesToolCallLimit(t *testing.T) {
+	calls := make([]llm.ToolCall, 3)
+	for i := range calls {
+		calls[i] = llm.ToolCall{ID: fmt.Sprintf("c%d", i), Name: "run_command", Arguments: fmt.Sprintf(`{"command":"c%d"}`, i)}
+	}
+	model := &scriptModel{replies: []llm.Message{
+		{Role: "assistant", ToolCalls: calls},
+		{Role: "assistant", Content: "done"},
+	}}
+	tools := &fakeTools{output: "ok"}
+	gate := &recordGate{allow: true}
+	s := New(Config{Model: model, Gate: gate, Tools: tools})
+	one := 1
+	s.Configure(gate, false, &one)
+	if err := s.Turn(t.Context(), "go", HostMeta{Name: "web"}, "", nil); !errors.Is(err, ErrPaused) || len(tools.calls) != 1 {
+		t.Fatalf("err %v calls %d", err, len(tools.calls))
+	}
+	// Clearing the field while it waits lifts the limit it paused under.
+	zero := 0
+	s.Configure(gate, false, &zero)
+	if err := s.Continue(t.Context(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if s.Paused() || len(tools.calls) != 3 {
+		t.Fatalf("after lifting the limit paused %v calls %d", s.Paused(), len(tools.calls))
+	}
+}

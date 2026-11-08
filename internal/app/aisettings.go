@@ -136,6 +136,16 @@ func (a *App) aiSettings(c *ui.Context, m locales.Messages, tok theme.Tokens, s 
 				*changed = true
 			}
 		})
+		g.row(m.AiMaxToolCalls(), m.AiMaxToolCallsNote(), func() {
+			in := formTextInput(c.Key("aicalls"), &a.aiCalls).Label(m.AiMaxToolCalls()).
+				Placeholder(strconv.Itoa(settings.DefaultMaxToolCalls)).Width(88)
+			if in.Changed() {
+				if v, ok := maxToolCallsValue(a.aiCalls); ok {
+					s.AIMaxToolCalls = v
+					*changed = true
+				}
+			}
+		})
 		g.row(m.AiAuditDays(), "", func() {
 			if ui.NumberInput(c.Key("aidays"), &a.aiDays, 1, 3650, 1).Changed() {
 				s.AIAuditRetentionDays = int(a.aiDays)
@@ -764,4 +774,29 @@ func (a *App) aiHostFields(c *ui.Context, m locales.Messages, tok theme.Tokens, 
 			formTextArea(c.Key("f:sens"), &f.sens).FillWidth().Height(64)
 		})
 	})
+}
+
+// maxToolCallsValue reads the tool-call limit field: empty is the default
+// (nil), 0 is no limit, and any other value must be a whole number the
+// setting accepts. A text that is none of these leaves the setting as it was.
+// No limit takes the explicit 0 so that clearing the field never lifts it.
+func maxToolCallsValue(text string) (*int, bool) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil, true
+	}
+	n, err := strconv.Atoi(text)
+	if err != nil || n < 0 || n > settings.AIMaxToolCallsMax {
+		return nil, false
+	}
+	return &n, true
+}
+
+// maxToolCallsText is the setting as the field shows it, empty when unset
+// so that the placeholder shows the default.
+func maxToolCallsText(n *int) string {
+	if n == nil {
+		return ""
+	}
+	return strconv.Itoa(*n)
 }

@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -221,5 +222,75 @@ func TestAIReviewSettings(t *testing.T) {
 	}
 	if ReviewThreshold(AIReviewLoose) >= ReviewThreshold(AIReviewStandard) || ReviewThreshold(AIReviewStandard) >= ReviewThreshold(AIReviewStrict) {
 		t.Fatal("thresholds out of order")
+	}
+}
+
+// TestMaxToolCallsSetting: unset takes the built-in 25, 0 is a choice of no
+// limit that survives both normalization and a JSON round trip, and out of
+// range values are brought back in.
+func TestMaxToolCallsSetting(t *testing.T) {
+	s := Default()
+	if s.AIMaxToolCalls != nil || s.MaxToolCalls() != DefaultMaxToolCalls {
+		t.Fatalf("unset %v %d", s.AIMaxToolCalls, s.MaxToolCalls())
+	}
+	zero := 0
+	s.AIMaxToolCalls = &zero
+	if s.MaxToolCalls() != 0 {
+		t.Fatalf("zero %d", s.MaxToolCalls())
+	}
+	sixty := 60
+	s.AIMaxToolCalls = &sixty
+	if s.MaxToolCalls() != 60 {
+		t.Fatalf("set %d", s.MaxToolCalls())
+	}
+	neg := -5
+	s.AIMaxToolCalls = &neg
+	if s.MaxToolCalls() != 0 {
+		t.Fatalf("negative %d", s.MaxToolCalls())
+	}
+	huge := AIMaxToolCallsMax + 1
+	s.AIMaxToolCalls = &huge
+	if s.MaxToolCalls() != AIMaxToolCallsMax {
+		t.Fatalf("above the bound %d", s.MaxToolCalls())
+	}
+
+	// 0 stays 0 through normalization: it is a saved choice, not a missing one.
+	s = Default()
+	zero = 0
+	s.AIMaxToolCalls = &zero
+	s.Normalize()
+	if s.AIMaxToolCalls == nil || *s.AIMaxToolCalls != 0 {
+		t.Fatalf("normalized 0 into %v", s.AIMaxToolCalls)
+	}
+	neg = -3
+	s.AIMaxToolCalls = &neg
+	s.Normalize()
+	if s.AIMaxToolCalls == nil || *s.AIMaxToolCalls != 0 {
+		t.Fatalf("normalized a negative into %v", s.AIMaxToolCalls)
+	}
+	huge = AIMaxToolCallsMax + 1
+	s.AIMaxToolCalls = &huge
+	s.Normalize()
+	if s.AIMaxToolCalls == nil || *s.AIMaxToolCalls != AIMaxToolCallsMax {
+		t.Fatalf("normalized a large limit into %v", s.AIMaxToolCalls)
+	}
+
+	// The file writes an explicit 0, so no limit survives a reload.
+	s = Default()
+	zero = 0
+	s.AIMaxToolCalls = &zero
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"aiMaxToolCalls":0`) {
+		t.Fatalf("no limit was not written: %s", data)
+	}
+	var back Settings
+	if err := json.Unmarshal(data, &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.AIMaxToolCalls == nil || back.MaxToolCalls() != 0 {
+		t.Fatalf("reloaded %v", back.AIMaxToolCalls)
 	}
 }
