@@ -4,6 +4,8 @@ import "slices"
 
 // MoveGroup places name immediately before or after target, saving the full
 // display order without making implicit groups into permanent empty groups.
+// Groups move among those of their own level: a subgroup among the
+// subgroups of its group.
 func (s *Store) MoveGroup(name, target string, after bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -12,7 +14,7 @@ func (s *Store) MoveGroup(name, target string, after bool) error {
 	if from < 0 || to < 0 {
 		return ErrNotFound
 	}
-	if from == to {
+	if from == to || GroupParent(name) != GroupParent(target) {
 		return nil
 	}
 	order := slices.Delete(slices.Clone(groups), from, from+1)

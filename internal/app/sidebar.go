@@ -65,16 +65,12 @@ func (a *App) sidebarView(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 						}
 					})
 				}
+				gap := len(favs) > 0
 				for _, g := range groups {
-					sec := ui.SidebarSection(c.Key("s:g:"+g), g, a.section("g:"+g), func() {
-						for _, h := range byGroup[g] {
-							a.hostItem(c, m, h, "")
-						}
-						if len(byGroup[g]) == 0 {
-							ui.Text(c, m.EmptyGroup()).FontSize(theme.Caption).TextColor(tok.TextMuted).Padding(2, 8, 6, 8)
-						}
-					})
-					a.groupSection(c, m, tok, sec, g)
+					if assets.GroupParent(g) == "" {
+						a.groupTree(c, m, tok, g, groups, byGroup, gap)
+						gap = false
+					}
 				}
 				if hs := byGroup[""]; len(hs) > 0 {
 					title := m.Ungrouped()
@@ -129,23 +125,6 @@ func (a *App) connectedCount() int {
 		}
 	}
 	return len(clients)
-}
-
-// groupSection gives a group's section its menu, and takes the hosts
-// dropped on it.
-func (a *App) groupSection(c *ui.Context, m locales.Messages, tok theme.Tokens, sec ui.Element, g string) {
-	a.contextMenu(sec, func() []menuEntry {
-		return []menuEntry{
-			{Icon: icons.Add, Label: m.NewHostInGroup(), Do: func() {
-				a.openEditor(nil)
-				a.form.group = g
-			}},
-			{Icon: icons.Rename, Label: m.RenameGroup(), Do: func() { a.openGroupForm(g, "") }},
-			menuSep,
-			{Icon: icons.Delete, Label: m.DeleteGroup(), Danger: true, Do: func() { a.groupDelete, a.groupDeleting = g, true }},
-		}
-	})
-	a.groupDragDrop(c, m, tok, sec, g)
 }
 
 // hostDrops moves a host dropped from the sidebar on a section into the
@@ -315,7 +294,7 @@ func (a *App) hostEntries(m locales.Messages, h assets.Host) []menuEntry {
 	return append(connect, []menuEntry{
 		{Icon: icons.SplitRight, Label: m.SplitRight(), Disabled: noTab, Do: beside(func(at openAt) { a.Connect(h.ID, at) })},
 		{Icon: icons.Folder, Label: m.OpenFiles(), Disabled: noSSH, Do: func() { a.OpenFiles(h.ID, openAt{}, nil) }},
-		{Icon: icons.Robot, Label: m.OpenAI(), Disabled: noSSH, Do: func() { a.OpenAI(h.ID, openAt{}, 0) }},
+		{Icon: icons.Robot, Label: m.OpenAI(), Do: func() { a.OpenAIFor(h.ID) }},
 		{Icon: icons.OpenFile, Label: openFilesLabel(m, a.filesEdge()), Disabled: noTab || noSSH, Do: beside(func(at openAt) {
 			at.edge = a.filesEdge()
 			a.OpenFiles(h.ID, at, nil)

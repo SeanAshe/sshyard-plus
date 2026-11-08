@@ -283,6 +283,6 @@ func (a *App) runAction(id string) {
 	case actSessionLogs:
 		a.ToggleTool(layout.Logs)
 	case actHistory:
-		a.togglePanel(inspectHistory)
+		a.ToggleTool(layout.History)
 	}
 }

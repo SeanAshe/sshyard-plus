@@ -79,9 +79,11 @@ func (engine) Classify(a Action, scope Scope) Grade {
 // model can wave through what the rules call catastrophic. Without a
 // reviewer, ReadOnly and Low auto-run and all other grades ask the user.
 //
-// ModeFull auto-runs every grade except Unknown. Unknown asks with the
-// red confirmation (Red, not Similar). Critical still auto-runs and sets
-// Red. High auto-runs.
+// ModeFull auto-runs every grade, Unknown included: the user picked the
+// mode that promises to stop asking, and a grade SSHYard could not settle
+// is not evidence against the action. Critical and Unknown still set Red
+// and never offer Similar; what ran unjudged stays visible through its
+// grade, "unknown" on the tool card and in the audit. High auto-runs.
 // Similar is offered only for Low and Medium on Ask or Review outcomes; the
 // gate narrows it to a single command when a reviewer is configured.
 func (engine) Decide(mode Mode, g Grade, reviewerConfigured bool) Decision {
@@ -98,12 +100,12 @@ func (engine) Decide(mode Mode, g Grade, reviewerConfigured bool) Decision {
 	}
 	switch mode {
 	case ModeFull:
+		d.Outcome = Allow
+		d.By = ByFull
+		// An action the rules could not grade still runs, flagged Red as
+		// a Critical one is.
 		if g.Risk == RiskUnknown {
-			d.Outcome = Ask
 			d.Red = true
-		} else {
-			d.Outcome = Allow
-			d.By = ByFull
 		}
 	case ModeReview:
 		if g.Risk == RiskReadOnly || !reviewerConfigured && g.Risk == RiskLow {
@@ -138,6 +140,15 @@ func gradeRemote(a Action, scope Scope) partial {
 		return gradeReadPath(env, a.Path)
 	case "write_file":
 		return gradeFileWrite(env, a.Path, writeFileTool)
+	case "terminal_key":
+		return gradeKey(a.Command)
+	case "terminal_send":
+		// A line typed into a local shell is graded as the command it is;
+		// a device's command line has NewDeviceEngine.
+		if strings.TrimSpace(a.Command) == "" {
+			return unk("empty action")
+		}
+		return env.script(a.Command)
 	case "run_command", "":
 		if strings.TrimSpace(a.Command) == "" {
 			if a.Path != "" {

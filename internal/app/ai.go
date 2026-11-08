@@ -55,6 +55,7 @@ type aiState struct {
 	pending  *aiPend
 	onlyDiff bool
 	tools    agent.Tools
+	target   agent.Target // what sess's tools reach
 	acp      *acpRuntime
 	// acpOpts are the ACP agent's model and thinking selectors as its
 	// session last reported them; nil until it reports.
@@ -168,6 +169,24 @@ func (a *App) OpenAI(hostID string, at openAt, link int) (int, error) {
 	a.place(c, at)
 	a.aiRecent[hostID] = c.id
 	return c.id, nil
+}
+
+// OpenAIFor opens hostID's assistant in a new tab. One that types into a
+// terminal opens beside a new terminal of the host, to type into.
+func (a *App) OpenAIFor(hostID string) {
+	if h, ok := a.host(hostID); ok && aiTarget(h) != agent.TargetSSH {
+		id, err := a.Connect(hostID, openAt{})
+		if err != nil {
+			return
+		}
+		pane := 0
+		if _, n := a.ws.Locate(id); n != nil {
+			pane = n.ID
+		}
+		a.OpenAI(hostID, openAt{pane: pane, edge: layout.Right}, id)
+		return
+	}
+	a.OpenAI(hostID, openAt{}, 0)
 }
 
 // OpenAIBeside splits an assistant next to the focused pane, on its host.
@@ -320,6 +339,11 @@ func (a *App) ensureAI(c *conn) error {
 		c.ai.provider = a.defaultProvider()
 	}
 	a.refreshMode(c)
+	if c.ai.sess != nil && c.ai.target != aiTarget(c.host) {
+		// The host was changed to another protocol: the conversation goes
+		// on with the tools that now reach it.
+		c.ai.sess, c.ai.tools = nil, nil
+	}
 	if c.ai.sess != nil {
 		if c.ai.box != nil && a.newModel == nil {
 			cl, err := a.aiClient(c)
@@ -353,15 +377,18 @@ func (a *App) ensureAI(c *conn) error {
 		c.ai.box = box
 		streamer = box
 	}
+	target := aiTarget(c.host)
 	var tools agent.Tools
 	if a.newTools != nil {
 		tools = a.newTools(c)
 	}
-	if tools == nil {
+	if tools == nil && target == agent.TargetSSH {
 		tools = newHostTools(a, c)
+	} else if tools == nil {
+		tools = newTermTools(a, c)
 	}
-	c.ai.tools = tools
-	c.ai.sess = agent.Restore(agent.Config{Model: streamer, Gate: a.aiGate(c), Tools: tools, Redact: a.settings.AIRedact}, c.ai.msgs)
+	c.ai.tools, c.ai.target = tools, target
+	c.ai.sess = agent.Restore(agent.Config{Model: streamer, Gate: a.aiGate(c), Tools: tools, Redact: a.settings.AIRedact, Target: target}, c.ai.msgs)
 	c.ai.dirty = false
 	return nil
 }
@@ -386,6 +413,7 @@ func (a *App) aiGate(c *conn) policy.Gate {
 			aud = a.audit
 		}
 		gate = policy.NewGate(policy.GateConfig{
+			Engine:    aiEngine(c),
 			Mode:      mode,
 			Scope:     a.aiScope(c),
 			Prompter:  ask,
@@ -442,6 +470,11 @@ func (a *App) SendAI(id int, text string) {
 		return
 	}
 	files := c.ai.attach
+	if settings.IsACP(c.ai.agent) && !hasSSH(c.host) {
+		// An external agent's tools are SSH's; the built-in one types.
+		c.ai.items = append(c.ai.items, aiItem{kind: "err", text: "acp-ssh"})
+		return
+	}
 	if settings.IsACP(c.ai.agent) {
 		a.noteQuestion(c, text, files)
 		a.sendACP(c, text, files)
@@ -828,7 +861,7 @@ func (a *App) aiMeta(c *conn) agent.HostMeta {
 		cwd = t.cwd
 	}
 	return agent.HostMeta{Name: c.host.Label(), Address: c.host.Addr(), User: c.host.User, Cwd: cwd,
-		Provider: c.host.Provider, Renewal: aiRenewal(c.host.Renewal, time.Now()), Note: c.host.Note}
+		Protocol: a.aiConnection(c.host), Provider: c.host.Provider, Renewal: aiRenewal(c.host.Renewal, time.Now()), Note: c.host.Note}
 }
 
 func (a *App) aiTerminal(c *conn) string {

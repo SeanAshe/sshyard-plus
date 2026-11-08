@@ -163,3 +163,17 @@ func (t *Terminal) writeEncoded(p []byte) (int, error) {
 	}
 	return len(p), nil
 }
+
+// Decode is p, output in encoding e, as UTF-8 text; what does not decode
+// becomes U+FFFD. An encoding not supported is taken as UTF-8.
+func (e OutputEncoding) Decode(p []byte) string {
+	for _, entry := range outputEncodings {
+		if entry.id == e && entry.codec != nil {
+			out, _, err := transform.Bytes(entry.codec.NewDecoder(), p)
+			if err == nil {
+				return string(out)
+			}
+		}
+	}
+	return string(p)
+}

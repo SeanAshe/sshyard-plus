@@ -124,10 +124,10 @@ func TestSnippetUISearchGroupAndMissing(t *testing.T) {
 	tt.Key(0, ui.KeyBackspace)
 	tt.Frame()
 	// Close and reopen search input so a fresh query can be set through its handler.
-	a.panels = nil
+	a.ToggleTool(layout.Snippets)
 	tt.Frame()
 	a.snippets.query = ""
-	a.panels = []inspectorKind{inspectSnippets}
+	a.ToggleTool(layout.Snippets)
 	tt.Frame()
 	mustClick(t, tt, "Other")
 	tt.Frame()
@@ -192,7 +192,7 @@ func TestSnippetUIFocusedTargetAndSend(t *testing.T) {
 	mustClick(t, tt, m.SnippetInsertAction(n.Name))
 	got := ""
 	waitFor(t, tt, "UI snippet bytes", func() bool { got += shell.take(); return strings.Contains(got, "echo UI marker") })
-	if got != "\x1b[200~echo UI marker\x1b[201~" || !a.panelOpen(inspectSnippets) {
+	if got != "\x1b[200~echo UI marker\x1b[201~" || a.toolPane(layout.Snippets) == nil {
 		t.Fatalf("send %q panels %q", got, a.panels)
 	}
 
@@ -250,7 +250,7 @@ func TestSnippetUIFilterFollowsSavedAndDeletedGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a.panels = []inspectorKind{inspectSnippets}
+	a.ToggleTool(layout.Snippets)
 	a.snippets.grouped, a.snippets.group = true, "old"
 	a.openSnippet(m, n, false)
 	tt.Frame()
@@ -273,7 +273,7 @@ func TestSnippetUIFilterFollowsSavedAndDeletedGroup(t *testing.T) {
 func TestSnippetUIWelcomeActionsWithPanel(t *testing.T) {
 	a, tt := newTestApp(t)
 	m := locales.In("en")
-	a.panels = []inspectorKind{inspectSnippets}
+	a.panels = []inspectorKind{inspectTmux}
 	tt.SetSize(820, 520)
 	tt.Frame()
 	for _, label := range []string{m.QuickMigration(), m.QuickConnect(), m.NewHost()} {
@@ -437,7 +437,7 @@ func TestSnippetUIAddGroupInForm(t *testing.T) {
 func TestSnippetUITabsAndSearch(t *testing.T) {
 	a, tt := newTestApp(t)
 	m := locales.In("en")
-	a.panels = []inspectorKind{inspectSnippets}
+	a.ToggleTool(layout.Snippets)
 	tt.Frame()
 	a.snippets.form, a.snippets.showing = nil, false
 	if _, err := a.saveSnippet(assets.Snippet{Name: "plain"}, "echo plain"); err != nil {
@@ -461,10 +461,10 @@ func TestSnippetUITabsAndSearch(t *testing.T) {
 	}
 
 	// The search narrows the list; its button clears it.
-	a.panels = nil
+	a.ToggleTool(layout.Snippets)
 	tt.Frame()
 	a.snippets.query = "restart"
-	a.panels = []inspectorKind{inspectSnippets}
+	a.ToggleTool(layout.Snippets)
 	tt.Frame()
 	if tt.HasText("plain") || tt.HasText("logs") || !tt.HasText("restart") {
 		t.Fatal("search", tt.Texts())
@@ -484,5 +484,25 @@ func TestSnippetGroupNameLanguages(t *testing.T) {
 	}
 	if got := snippetGroupName(" Ops "); got != "Ops" {
 		t.Errorf("named group = %q", got)
+	}
+}
+
+// In a narrow pane an entry's other actions are in its More menu.
+func TestSnippetUINarrowMoreMenu(t *testing.T) {
+	a, _ := newTestApp(t)
+	m := locales.In("en")
+	n, err := a.saveSnippet(assets.Snippet{Name: "narrow", SendEnter: true}, "echo narrow")
+	if err != nil {
+		t.Fatal(err)
+	}
+	panel := ui.NewTester(func(c *ui.Context) { a.snippetsPanel(c, m, currentTokens(c)) }, 320, 560)
+	panel.Frame()
+	panel.Frame()
+	mustClick(t, panel, m.SnippetMore(n.Name))
+	panel.Frame()
+	mustClick(t, panel, m.Edit())
+	panel.Frame()
+	if a.snippets.form == nil || a.snippets.form.meta.ID != n.ID || a.snippets.form.content != "echo narrow" {
+		t.Fatal("More menu did not edit the entry")
 	}
 }

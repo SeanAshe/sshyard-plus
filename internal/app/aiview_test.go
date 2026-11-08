@@ -61,11 +61,6 @@ func TestAIPaneLayout(t *testing.T) {
 
 	mustClick(t, tt, "Model")
 	tt.Frame()
-	for _, s := range []string{"Alpha", "alpha-1", "Beta", "beta-1", "beta-2", "beta-mini", "Manage Providers…"} {
-		if !tt.HasText(s) {
-			t.Fatalf("model menu lacks %q: %q", s, tt.Texts())
-		}
-	}
 	if a.conns[id].ai.provider != "p1" {
 		t.Fatalf("with several providers the pane starts on %q, not the first", a.conns[id].ai.provider)
 	}
@@ -84,6 +79,7 @@ func TestAIPaneLayout(t *testing.T) {
 
 	mustClick(t, tt, "Model")
 	tt.Frame()
+	openModelSubmenu(t, a, tt, "Beta")
 	mustClick(t, tt, "beta-2")
 	tt.Frame()
 	if cn.ai.provider != "p2" || cn.ai.model != "" {
@@ -313,5 +309,38 @@ func TestAIPaneNarrow(t *testing.T) {
 	tt.Frame()
 	if n := a.ws.ActiveTab().Count(layout.Terminal); n != 1 {
 		t.Fatalf("split from the menu opened %d terminals", n)
+	}
+}
+
+// TestModelMenuGroupsProviders: with several providers a model is chosen
+// from its provider's submenu, which switches the pane to that provider.
+func TestModelMenuGroupsProviders(t *testing.T) {
+	a, tt := newTestApp(t)
+	tt.SetSize(1200, 2400)
+	s := a.Settings()
+	s.AIProviders = []settings.AIProvider{
+		{ID: "p1", Name: "Alpha", Model: "alpha-1", Models: []string{"alpha-1", "alpha-2"}, BaseURL: "https://alpha.test/v1"},
+		{ID: "p2", Name: "Beta", Model: "beta-1", Models: []string{"beta-1", "beta-2"}, BaseURL: "https://beta.test/v1"},
+	}
+	s.AIDefaultProvider = "p1"
+	if err := a.ApplySettings(s); err != nil {
+		t.Fatal(err)
+	}
+	h := savedHost(t, a, "web", "10.0.0.8")
+	id, err := a.OpenAI(h.ID, openAt{}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	mustClick(t, tt, "alpha-1")
+	tt.Frame()
+	if a.menu.key == "" {
+		t.Fatal("the model menu did not open")
+	}
+	openModelSubmenu(t, a, tt, "Beta")
+	mustClick(t, tt, "beta-2")
+	tt.Frame()
+	if cn := a.conns[id]; cn.ai.provider != "p2" || cn.ai.model != "beta-2" {
+		t.Fatalf("chose %q %q", cn.ai.provider, cn.ai.model)
 	}
 }

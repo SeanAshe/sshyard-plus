@@ -739,8 +739,9 @@ func hostModeIndex(mode string) int {
 	}
 }
 
-// aiHostFields is the host editor's AI section.
-func (a *App) aiHostFields(c *ui.Context, m locales.Messages, tok theme.Tokens, f *hostForm) {
+// aiHostFields is the host editor's AI section. A Telnet or serial
+// host, whose assistant has no files, has the mode only.
+func (a *App) aiHostFields(c *ui.Context, m locales.Messages, tok theme.Tokens, f *hostForm, files bool) {
 	ui.Collapsible(c.Key("f:ai"), m.AiSettings(), &f.aiOpen, func() {
 		ui.Column(c).Gap(8).FillWidth().Margin(8, 0, 0, 0).Children(func() {
 			ui.Text(c, m.AiHostMode()).FontSize(theme.Footnote).TextColor(tok.TextMuted)
@@ -751,6 +752,9 @@ func (a *App) aiHostFields(c *ui.Context, m locales.Messages, tok theme.Tokens, 
 				} else {
 					f.aiPrev = f.aiIdx
 				}
+			}
+			if !files {
+				return
 			}
 			ui.Text(c, m.AiWritableRoots()).FontSize(theme.Footnote).TextColor(tok.TextMuted)
 			ui.Text(c, m.AiWritableRootsNote()).FontSize(theme.Caption).TextColor(tok.TextMuted)

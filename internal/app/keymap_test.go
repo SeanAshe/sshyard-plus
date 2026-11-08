@@ -203,7 +203,7 @@ func TestToolPaneShortcuts(t *testing.T) {
 	for _, tc := range []struct {
 		id   string
 		kind layout.Kind
-	}{{actBroadcast, layout.Broadcast}, {actSessionLogs, layout.Logs}} {
+	}{{actBroadcast, layout.Broadcast}, {actSessionLogs, layout.Logs}, {actHistory, layout.History}} {
 		a.runAction(tc.id)
 		c := a.toolPane(tc.kind)
 		if c == nil || !a.toolHere(tc.kind) {

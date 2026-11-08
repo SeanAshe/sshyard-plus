@@ -69,11 +69,12 @@ type Category string
 type Action struct {
 	Where Where
 	// Tool is the remote tool (host_info, pane_output, list_dir, read_file,
-	// search_files, write_file, run_command) or, for Local, the ACP
+	// search_files, write_file, run_command, and terminal_send and
+	// terminal_key, which type into a terminal) or, for Local, the ACP
 	// tool_call kind (read, edit, delete, move, search, execute, fetch, think,
 	// other).
 	Tool    string
-	Command string // run_command / execute
+	Command string // run_command / execute; the line or key typed
 	Path    string // file tools; for Local, the local path
 	Dir     string // working directory of a command
 	Reason  string // the agent's stated reason, shown and audited, never trusted

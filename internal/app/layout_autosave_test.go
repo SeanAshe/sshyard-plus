@@ -80,9 +80,9 @@ func TestLayoutViewDebouncesWorkspaceChanges(t *testing.T) {
 	*a.ratio(first.Root) = 33
 	*a.section("none") = false
 	a.openPanel(inspectHost)
-	a.openPanel(inspectSnippets)
+	a.openPanel(inspectTmux)
 	pct := float32(42)
-	a.stackPct["host/snippets/"] = &pct
+	a.stackPct["host/tmux/"] = &pct
 	tt.Frame()
 	tt.Advance(100 * time.Millisecond)
 	after, err := os.ReadFile(file)
@@ -102,7 +102,7 @@ func TestLayoutViewDebouncesWorkspaceChanges(t *testing.T) {
 		t.Fatalf("live title, focus, active or ratio not saved: %s", after)
 	}
 	closed, exists := saved.Sections["none"]
-	if !exists || closed || !reflect.DeepEqual(saved.Panels, []inspectorKind{inspectHost, inspectSnippets}) || saved.StackPct["host/snippets/"] != 42 {
+	if !exists || closed || !reflect.DeepEqual(saved.Panels, []inspectorKind{inspectHost, inspectTmux}) || saved.StackPct["host/tmux/"] != 42 {
 		t.Fatalf("live sidebar or inspector not saved: %s", after)
 	}
 }

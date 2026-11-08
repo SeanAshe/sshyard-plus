@@ -142,6 +142,10 @@ type Session struct {
 	// tap, when set, is given what the shell writes to the terminal, as
 	// it comes, after the terminal took it (SetOutputTap).
 	tap atomic.Pointer[func([]byte)]
+	// watchers are given the same bytes as tap (Watch), copied on write
+	// so the session's goroutine reads them without a lock.
+	watchMu  sync.Mutex
+	watchers atomic.Pointer[[]*func([]byte)]
 	// outAt is when the shell last wrote to the terminal, in Unix
 	// nanoseconds, 0 before its first output.
 	outAt atomic.Int64
@@ -769,6 +773,37 @@ func (s *Session) SetOutputTap(fn func(p []byte)) {
 	s.tap.Store(&fn)
 }
 
+// Watch gives fn the bytes the session prints, as SetOutputTap does,
+// until stop is called; any number may watch at once. fn runs on the
+// session's goroutine, must not keep p, and must not wait.
+func (s *Session) Watch(fn func(p []byte)) (stop func()) {
+	f := &fn
+	s.watchMu.Lock()
+	var ws []*func([]byte)
+	if old := s.watchers.Load(); old != nil {
+		ws = append(ws, *old...)
+	}
+	ws = append(ws, f)
+	s.watchers.Store(&ws)
+	s.watchMu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			s.watchMu.Lock()
+			defer s.watchMu.Unlock()
+			var rest []*func([]byte)
+			if old := s.watchers.Load(); old != nil {
+				for _, g := range *old {
+					if g != f {
+						rest = append(rest, g)
+					}
+				}
+			}
+			s.watchers.Store(&rest)
+		})
+	}
+}
+
 // termWriter writes output to the terminal, answering the login prompts
 // in it when it logs in.
 type termWriter struct {
@@ -781,6 +816,11 @@ func (w *termWriter) Write(p []byte) (int, error) {
 	n, err := w.s.Term.Write(p)
 	if tap := w.s.tap.Load(); tap != nil {
 		(*tap)(p)
+	}
+	if ws := w.s.watchers.Load(); ws != nil {
+		for _, fn := range *ws {
+			(*fn)(p)
+		}
 	}
 	w.s.outAt.Store(time.Now().UnixNano())
 	w.s.changed()

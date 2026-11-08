@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -46,8 +47,8 @@ func TestLayoutWorkspaceRoundTrip(t *testing.T) {
 	a.ws.Open(other.item()).Title = "Workspace Beta"
 	a.ws.Active = 0
 	closed, pct := false, float32(37)
-	a.sections["none"], a.stackPct["host/snippets/"] = &closed, &pct
-	a.panels = []inspectorKind{inspectHost, inspectSnippets}
+	a.sections["none"], a.stackPct["host/tmux/"] = &closed, &pct
+	a.panels = []inspectorKind{inspectHost, inspectTmux}
 	term.cwd = "PRIVATE_CWD"
 	setStartOnce(term, "PRIVATE_START_COMMAND")
 	files.fs.remote.dir = "PRIVATE_REMOTE_DIRECTORY"
@@ -84,7 +85,7 @@ func TestLayoutWorkspaceRoundTrip(t *testing.T) {
 	if assistant.ai.mode != "review" || assistant.ai.provider != "provider" || assistant.ai.model != "model" || assistant.ai.effort != "high" {
 		t.Fatal("AI choices changed")
 	}
-	if again.sections["none"] == nil || *again.sections["none"] || !reflect.DeepEqual(again.panels, []inspectorKind{inspectHost, inspectSnippets}) || again.stackPct["host/snippets/"] == nil || *again.stackPct["host/snippets/"] != 37 {
+	if again.sections["none"] == nil || *again.sections["none"] || !reflect.DeepEqual(again.panels, []inspectorKind{inspectHost, inspectTmux}) || again.stackPct["host/tmux/"] == nil || *again.stackPct["host/tmux/"] != 37 {
 		t.Fatal("sidebar or inspector layout changed")
 	}
 	if again.prompting {
@@ -170,5 +171,23 @@ func TestLayoutSilentUnlockStartsSavedConnection(t *testing.T) {
 	})
 	if b.calls.Load() != 0 || srv.Logins() != 2 || again.prompting || again.unlock.modal {
 		t.Fatalf("silent startup interacted or duplicated login: keychain=%d logins=%d", b.calls.Load(), srv.Logins())
+	}
+}
+
+// A layout saved while the snippets and the command history were panels
+// still restores, without them.
+func TestLayoutDropsPanelsNowPanes(t *testing.T) {
+	dir := t.TempDir()
+	rememberLayoutIn(t, dir)
+	raw, err := json.Marshal(layoutSnap{Version: 1, Panels: []inspectorKind{inspectHost, "snippets", "history", inspectTmux}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "layout.json"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a, _ := appIn(t, dir, nil)
+	if a.layoutBlocked || !reflect.DeepEqual(a.panels, []inspectorKind{inspectHost, inspectTmux}) {
+		t.Fatalf("blocked=%v panels=%q", a.layoutBlocked, a.panels)
 	}
 }

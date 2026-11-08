@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"slices"
 	"strconv"
@@ -198,7 +199,7 @@ func (h *Host) Normalize() {
 	h.Name = strings.TrimSpace(h.Name)
 	h.Address = strings.TrimSpace(h.Address)
 	h.User = strings.TrimSpace(h.User)
-	h.Group = strings.TrimSpace(h.Group)
+	h.Group = CleanGroup(h.Group)
 	h.Provider, h.Note = strings.TrimSpace(h.Provider), strings.TrimSpace(h.Note)
 	h.Tmux = strings.TrimSpace(h.Tmux)
 	if h.Encoding = strings.TrimSpace(h.Encoding); h.Encoding == "UTF-8" {
@@ -360,19 +361,22 @@ type Store struct {
 	// groups hosts name are groups too.
 	groups     []string
 	groupOrder []string
+	// groupLooks are the looks of the groups given one.
+	groupLooks map[string]GroupLook
 	// discarded are the host IDs of an older file Open threw away.
 	discarded []string
 }
 
 type file struct {
-	Version     int          `json:"version"`
-	Hosts       []Host       `json:"hosts"`
-	Credentials []Credential `json:"credentials"`
-	Proxies     []Proxy      `json:"proxies"`
-	Forwards    []Forward    `json:"forwards"`
-	Groups      []string     `json:"groups,omitempty"`
-	GroupOrder  []string     `json:"groupOrder,omitempty"`
-	Snippets    []Snippet    `json:"snippets,omitempty"`
+	Version     int                  `json:"version"`
+	Hosts       []Host               `json:"hosts"`
+	Credentials []Credential         `json:"credentials"`
+	Proxies     []Proxy              `json:"proxies"`
+	Forwards    []Forward            `json:"forwards"`
+	Groups      []string             `json:"groups,omitempty"`
+	GroupOrder  []string             `json:"groupOrder,omitempty"`
+	GroupLooks  map[string]GroupLook `json:"groupLooks,omitempty"`
+	Snippets    []Snippet            `json:"snippets,omitempty"`
 }
 
 // Open reads the store at path; a missing file is an empty store. A file
@@ -416,7 +420,7 @@ func Open(path string) (*Store, error) {
 		return s, nil
 	}
 	s.hosts, s.creds, s.proxies, s.forwards, s.groups, s.snippets = f.Hosts, f.Credentials, f.Proxies, f.Forwards, f.Groups, f.Snippets
-	s.groupOrder = f.GroupOrder
+	s.groupOrder, s.groupLooks = f.GroupOrder, f.GroupLooks
 	return s, nil
 }
 
@@ -428,7 +432,7 @@ func (s *Store) save() error {
 	if s.path == "" {
 		return nil
 	}
-	f := file{Version: SchemaVersion, Hosts: s.hosts, Credentials: s.creds, Proxies: s.proxies, Forwards: s.forwards, Groups: s.groups, GroupOrder: s.groupOrder, Snippets: s.snippets}
+	f := file{Version: SchemaVersion, Hosts: s.hosts, Credentials: s.creds, Proxies: s.proxies, Forwards: s.forwards, Groups: s.groups, GroupOrder: s.groupOrder, GroupLooks: s.groupLooks, Snippets: s.snippets}
 	// Empty lists are written as [], not null.
 	if f.Hosts == nil {
 		f.Hosts = []Host{}
@@ -453,14 +457,14 @@ func (s *Store) save() error {
 func (s *Store) commit(fn func()) error {
 	h, c, p, f, g := slices.Clone(s.hosts), slices.Clone(s.creds), slices.Clone(s.proxies), slices.Clone(s.forwards), slices.Clone(s.groups)
 	n := slices.Clone(s.snippets)
-	order := slices.Clone(s.groupOrder)
+	order, looks := slices.Clone(s.groupOrder), maps.Clone(s.groupLooks)
 	fn()
 	if len(s.groupOrder) > 0 {
 		s.groupOrder = s.groupNames()
 	}
 	if err := s.save(); err != nil {
 		s.hosts, s.creds, s.proxies, s.forwards, s.groups, s.snippets = h, c, p, f, g, n
-		s.groupOrder = order
+		s.groupOrder, s.groupLooks = order, looks
 		return err
 	}
 	return nil
@@ -738,8 +742,8 @@ func (s *Store) Favorites() []Host {
 }
 
 // Groups returns the names of the groups in display order: those of the hosts and
-// those made with AddGroup, empty or not. Hosts without a group are in
-// none of them.
+// those made with AddGroup, empty or not, and the group of each subgroup.
+// Hosts without a group are in none of them.
 func (s *Store) Groups() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -750,9 +754,11 @@ func (s *Store) groupNames() []string {
 	seen := map[string]bool{}
 	var out []string
 	add := func(g string) {
-		if g != "" && !seen[g] {
-			seen[g] = true
-			out = append(out, g)
+		for _, g := range []string{GroupParent(g), g} {
+			if g != "" && !seen[g] {
+				seen[g] = true
+				out = append(out, g)
+			}
 		}
 	}
 	for _, g := range s.groups {
@@ -778,27 +784,57 @@ func (s *Store) groupNames() []string {
 		}
 		return strings.Compare(strings.ToLower(a), strings.ToLower(b))
 	})
-	return out
+	return treeOrder(out)
 }
 
-// AddGroup makes an empty group, for hosts to be moved into. The name is
-// trimmed; a group of that name, in any case, is a "taken" FieldError.
-func (s *Store) AddGroup(name string) error {
-	name = strings.TrimSpace(name)
+// AddGroup makes an empty group, for hosts to be moved into, or with a
+// path ("Prod/Web") a subgroup. The names are trimmed; a group of that
+// name, in any case, is a "taken" FieldError.
+func (s *Store) AddGroup(name string) error { return s.AddGroupLook(name, GroupLook{}) }
+
+// AddGroupLook is AddGroup making a group that looks as look.
+func (s *Store) AddGroupLook(name string, look GroupLook) error {
+	look.normalize()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	name = s.groupPath(name)
 	if err := s.checkGroup(name, ""); err != nil {
 		return err
 	}
-	return s.commit(func() { s.groups = append(s.groups, name) })
+	return s.commit(func() {
+		s.groups = append(s.groups, name)
+		s.setGroupLook(name, look)
+	})
 }
 
-// checkGroup checks a new group name, other than old.
+// groupPath trims a group's path, and spells the group of a subgroup as
+// it already is.
+func (s *Store) groupPath(name string) string {
+	name = CleanGroup(name)
+	if p := GroupParent(name); p != "" {
+		for _, g := range s.groupNames() {
+			if GroupParent(g) == "" && strings.EqualFold(g, p) {
+				return SubGroup(g, GroupLeaf(name))
+			}
+		}
+	}
+	return name
+}
+
+// checkGroup checks a new group name, other than old. A subgroup holds
+// hosts only: a name deeper than that, or a group with subgroups moved
+// into another, is a "depth" FieldError.
 func (s *Store) checkGroup(name, old string) error {
-	if name == "" {
+	parent, leaf := GroupParent(name), GroupLeaf(name)
+	if leaf == "" || (parent == "" && leaf != name) {
 		return &FieldError{Field: "group", Reason: "required"}
 	}
-	for _, g := range s.groupNames() {
+	groups := s.groupNames()
+	if strings.Contains(leaf, GroupSep) || (parent != "" && old != "" && GroupParent(old) == "" &&
+		slices.ContainsFunc(groups, func(g string) bool { return GroupParent(g) == old })) {
+		return &FieldError{Field: "group", Reason: "depth"}
+	}
+	for _, g := range groups {
 		if strings.EqualFold(g, name) && g != old {
 			return &FieldError{Field: "group", Reason: "taken"}
 		}
@@ -806,43 +842,79 @@ func (s *Store) checkGroup(name, old string) error {
 	return nil
 }
 
-// RenameGroup renames a group, and moves its hosts with it.
-func (s *Store) RenameGroup(old, name string) error {
-	name = strings.TrimSpace(name)
+// RenameGroup renames a group, and moves its hosts and subgroups with it.
+func (s *Store) RenameGroup(old, name string) error { return s.editGroup(old, name, nil) }
+
+// EditGroup is RenameGroup giving the group look as well, in one write.
+// The group is kept from then on, should it be left empty.
+func (s *Store) EditGroup(old, name string, look GroupLook) error {
+	look.normalize()
+	return s.editGroup(old, name, &look)
+}
+
+// editGroup renames old to name, and with a look gives it that.
+func (s *Store) editGroup(old, name string, look *GroupLook) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	name = s.groupPath(name)
 	if !slices.Contains(s.groupNames(), old) {
 		return ErrNotFound
 	}
 	if err := s.checkGroup(name, old); err != nil {
 		return err
 	}
+	moved := func(g string) string {
+		switch {
+		case g == old:
+			return name
+		case GroupParent(old) == "" && GroupParent(g) == old:
+			return SubGroup(name, GroupLeaf(g))
+		}
+		return g
+	}
 	order := s.groupNames()
 	return s.commit(func() {
-		order[slices.Index(order, old)] = name
+		for i, g := range order {
+			order[i] = moved(g)
+		}
 		s.groupOrder = order
-		s.groups = slices.DeleteFunc(slices.Clone(s.groups), func(g string) bool { return g == old })
-		s.groups = append(s.groups, name)
-		for i := range s.hosts {
-			if s.hosts[i].Group == old {
-				s.hosts[i].Group = name
+		var groups []string
+		for _, g := range s.groups {
+			if g != old {
+				groups = append(groups, moved(g))
 			}
+		}
+		s.groups = append(groups, name)
+		for i := range s.hosts {
+			s.hosts[i].Group = moved(s.hosts[i].Group)
+		}
+		looks := make(map[string]GroupLook, len(s.groupLooks))
+		for g, l := range s.groupLooks {
+			looks[moved(g)] = l
+		}
+		s.groupLooks = looks
+		if look != nil {
+			s.setGroupLook(name, *look)
 		}
 	})
 }
 
-// DeleteGroup removes a group. Its hosts stay, in no group.
+// DeleteGroup removes a group and its subgroups. Their hosts stay, in no
+// group.
 func (s *Store) DeleteGroup(name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !slices.Contains(s.groupNames(), name) {
 		return ErrNotFound
 	}
+	gone := func(g string) bool { return InGroupTree(g, name) }
 	return s.commit(func() {
-		s.groupOrder = slices.DeleteFunc(slices.Clone(s.groupOrder), func(g string) bool { return g == name })
-		s.groups = slices.DeleteFunc(slices.Clone(s.groups), func(g string) bool { return g == name })
+		s.groupOrder = slices.DeleteFunc(slices.Clone(s.groupOrder), gone)
+		s.groups = slices.DeleteFunc(slices.Clone(s.groups), gone)
+		s.groupLooks = maps.Clone(s.groupLooks)
+		maps.DeleteFunc(s.groupLooks, func(g string, _ GroupLook) bool { return gone(g) })
 		for i := range s.hosts {
-			if s.hosts[i].Group == name {
+			if gone(s.hosts[i].Group) {
 				s.hosts[i].Group = ""
 			}
 		}
@@ -851,7 +923,7 @@ func (s *Store) DeleteGroup(name string) error {
 
 // SetGroup moves a host into a group, "" for none.
 func (s *Store) SetGroup(id, group string) error {
-	group = strings.TrimSpace(group)
+	group = CleanGroup(group)
 	return s.modify(id, func(h *Host) { h.Group = group })
 }
 

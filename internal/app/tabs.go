@@ -123,7 +123,7 @@ func (a *App) newTabButton(c *ui.Context, m locales.Messages) {
 		if cn.kind == layout.Terminal {
 			link = cn.id
 		}
-		noAI := !remoteOnly(cn)
+		noAI := !canAI(cn)
 		beside := func(edge layout.Edge) func() {
 			return func() {
 				if t := a.ws.ActiveTab(); t != nil {
@@ -133,7 +133,7 @@ func (a *App) newTabButton(c *ui.Context, m locales.Messages) {
 		}
 		return []menuEntry{
 			a.bound(actNewTab, menuEntry{Icon: icons.Add, Label: m.NewTab(), Do: func() { a.Connect(cn.host.ID, openAt{}) }}),
-			{Icon: icons.Robot, Label: m.OpenAI(), Disabled: noAI, Do: func() { a.OpenAI(cn.host.ID, openAt{}, 0) }},
+			{Icon: icons.Robot, Label: m.OpenAI(), Disabled: noAI, Do: func() { a.OpenAIFor(cn.host.ID) }},
 			{Icon: icons.SplitRight, Label: m.OpenAIRight(), Disabled: noAI, Do: beside(layout.Right)},
 			{Icon: icons.SplitDown, Label: m.OpenAIBelow(), Disabled: noAI, Do: beside(layout.Bottom)},
 			menuSep,

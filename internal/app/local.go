@@ -45,7 +45,8 @@ func (a *App) shell(id string) session.Shell {
 	return session.Shell{}
 }
 
-// errLocalTerminalOnly is opening anything but a terminal on this computer.
+// errLocalTerminalOnly is opening anything but a terminal, or an
+// assistant that types into it, on this computer.
 var errLocalTerminalOnly = errors.New("app: this computer opens terminals only")
 
 // localHost is the local host id: named in the app's language, or for
@@ -108,6 +109,10 @@ func (a *App) localEntry(m locales.Messages) menuEntry {
 	return e
 }
 
-// remoteOnly says a pane is on an SSH server, where files and AI can
-// open.
+// remoteOnly says a pane is on an SSH server, where files can open.
 func remoteOnly(cn *conn) bool { return cn != nil && hasSSH(cn.host) }
+
+// canAI says an assistant can open for a pane's host: any host. Over SSH
+// it has files and commands; on a Telnet, serial or local terminal it
+// types into the terminal (aiTarget).
+func canAI(cn *conn) bool { return cn != nil }

@@ -103,11 +103,11 @@ func TestSidebarToolsAndGroups(t *testing.T) {
 		t.Fatalf("host in %q; texts %q", got.Group, tt.Texts())
 	}
 
-	// Renamed from the section's menu, the host goes along.
+	// Renamed from the section's edit sheet, the host goes along.
 	if err := tt.RightClick("Prod"); err != nil {
 		t.Fatal(err)
 	}
-	if err := chooseMenu(a, tt, "Rename group"); err != nil {
+	if err := chooseMenu(a, tt, "Edit group"); err != nil {
 		t.Fatalf("%v menu %q", err, menuOf(a))
 	}
 	tt.Frame()
@@ -206,7 +206,8 @@ func TestHostAppearance(t *testing.T) {
 }
 
 // TestLocalTerminal opens a shell on this computer from the status bar,
-// splits it, and offers no files or AI for it.
+// splits it, and offers no files for it but an assistant that types
+// into it.
 func TestLocalTerminal(t *testing.T) {
 	a, tt := newTestApp(t)
 	mustClick(t, tt, "Local terminal")
@@ -229,8 +230,8 @@ func TestLocalTerminal(t *testing.T) {
 	a.OpenFilesBeside()
 	a.OpenAIBeside()
 	tt.Frame()
-	if tab.Count(layout.Files) != 0 || tab.Count(layout.AI) != 0 {
-		t.Errorf("files or AI on this computer: %v", a.ws.Items())
+	if tab.Count(layout.Files) != 0 || tab.Count(layout.AI) != 1 {
+		t.Errorf("files, or no assistant, on this computer: %v", a.ws.Items())
 	}
 	if _, err := a.OpenFiles(localID, openAt{}, nil); err != errLocalTerminalOnly {
 		t.Errorf("open files: %v", err)

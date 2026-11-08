@@ -368,7 +368,8 @@ func (a *App) agentChip(c *ui.Context, cn *conn, tok theme.Tokens, m locales.Mes
 		for i, cfg := range a.settings.AIACPAgents {
 			on := curOK && cur.ID == cfg.ID
 			backend := "acp:" + cfg.ID
-			e := menuEntry{Icon: icons.Robot, Label: names[i], Checked: on, Do: func() {
+			// An external agent's tools reach SSH hosts only.
+			e := menuEntry{Icon: icons.Robot, Label: names[i], Checked: on, Disabled: !on && !hasSSH(cn.host), Do: func() {
 				if !on {
 					a.setAIAgent(cn, backend)
 				}

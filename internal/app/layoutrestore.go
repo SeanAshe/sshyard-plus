@@ -12,6 +12,11 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+// panelNowPane are the panels a saved layout may still list that are
+// panes now, the snippets and the command history: left out, not an
+// error.
+var panelNowPane = map[inspectorKind]bool{"snippets": true, "history": true}
+
 func (a *App) loadLayout() {
 	file := a.layoutPath()
 	if file == "" || !a.settings.RememberLayout || len(a.ws.Tabs) > 0 {
@@ -75,7 +80,12 @@ func (a *App) loadLayout() {
 		value := v
 		a.sections[k] = &value
 	}
-	a.panels = append([]inspectorKind(nil), snap.Panels...)
+	a.panels = nil
+	for _, k := range snap.Panels {
+		if !panelNowPane[k] {
+			a.panels = append(a.panels, k)
+		}
+	}
 	for k, v := range snap.StackPct {
 		value := v
 		a.stackPct[k] = &value
@@ -160,6 +170,9 @@ func validLayout(s layoutSnap) bool {
 	}
 	panelSeen := map[inspectorKind]bool{}
 	for _, p := range s.Panels {
+		if panelNowPane[p] {
+			continue
+		}
 		known := false
 		for _, k := range panelOrder {
 			known = known || k == p

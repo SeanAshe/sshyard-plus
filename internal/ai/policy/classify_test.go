@@ -331,6 +331,8 @@ func TestClassifyRemote(t *testing.T) {
 		{cmd: "ip route del default", cat: "network", risk: RiskHigh, prefix: "ip route del"},
 		{cmd: "ip link set eth0 up", cat: "network", risk: RiskHigh, prefix: "ip link set"},
 		{cmd: "ip addr add 10.0.0.1/24 dev eth0", cat: "network", risk: RiskHigh, prefix: "ip addr add"},
+		{cmd: "ip route $(printf del) default", cat: "unknown", risk: RiskUnknown, prefix: "ip route"},
+		{cmd: `ip addr "$(echo flush)" dev eth0`, cat: "unknown", risk: RiskUnknown, prefix: "ip addr"},
 		{cmd: "ifconfig eth0 up", cat: "network", risk: RiskHigh, prefix: "ifconfig"},
 		{cmd: "ifconfig eth0 down", cat: "network", risk: RiskHigh, prefix: "ifconfig"},
 		{cmd: "route add default gw 1.2.3.4", cat: "network", risk: RiskHigh, prefix: "route add"},
@@ -674,4 +676,60 @@ func TestPromptInjectionDoesNotDowngrade(t *testing.T) {
 			t.Fatal("injection sentence was allowed")
 		}
 	})
+}
+
+func TestClassifyTC(t *testing.T) {
+	eng := NewEngine()
+	scope := Scope{Home: "/home/user"}
+	cases := []struct {
+		command string
+		cat     Category
+		risk    Risk
+	}{
+		{"tc qdisc show", "read", RiskReadOnly},
+		{"tc qdisc", "read", RiskReadOnly},
+		{"tc qdisc show dev eth0", "read", RiskReadOnly},
+		{"tc -s qdisc show", "read", RiskReadOnly},
+		{"tc -s -d class show dev eth0", "read", RiskReadOnly},
+		{"tc filter show dev eth0", "read", RiskReadOnly},
+		{"tc qdisc add dev eth0 root tbf rate 1mbit burst 32kbit latency 400ms", "network", RiskHigh},
+		{"tc qdisc del dev eth0 root", "network", RiskHigh},
+		{"tc qdisc change dev eth0 root netem delay 100ms", "network", RiskHigh},
+		{"tc filter replace dev eth0 parent 1: protocol ip u32 match ip dst 10.0.0.1/32 flowid 1:1", "network", RiskHigh},
+		{"tc -b /tmp/batch qdisc show", "unknown", RiskUnknown},
+		{"tc -n other qdisc show", "unknown", RiskUnknown},
+		{"tc qdisc exec dd if=/dev/zero of=/dev/sda", "unknown", RiskUnknown},
+		{"tc monitor", "unknown", RiskUnknown},
+		{"tc qdisc $(printf add) dev eth0 root netem loss 100%", "unknown", RiskUnknown},
+		{`tc qdisc "$(echo del)" dev eth0 root`, "unknown", RiskUnknown},
+		{"tc qdisc show dev $(ip route show default | awk '{print $5}')", "read", RiskReadOnly},
+	}
+	for _, c := range cases {
+		t.Run(c.command, func(t *testing.T) {
+			g := eng.Classify(Action{Where: Remote, Tool: "run_command", Command: c.command}, scope)
+			if g.Category != c.cat || g.Risk != c.risk {
+				t.Fatalf("got cat=%s risk=%s prefix=%q why=%q", g.Category, g.Risk, g.Prefix, g.Why)
+			}
+		})
+	}
+}
+
+// A read-only diagnostic that mixes in a command the table does not know
+// still runs under full access instead of stopping to ask.
+func TestFullAccessSkipsUnlistedCommandQuestion(t *testing.T) {
+	eng := NewEngine()
+	scope := Scope{Home: "/root"}
+	script := `sysctl -n net.ipv4.tcp_congestion_control; tc qdisc show dev $(ip route show default | awk '{print $5}' | head -1)`
+	if g := eng.Classify(Action{Where: Remote, Tool: "run_command", Command: script, Dir: "/root"}, scope); g.Risk != RiskReadOnly {
+		t.Fatalf("tc show should not raise the grade: %+v", g)
+	}
+	script = `sysctl --system; ` + script
+	g := eng.Classify(Action{Where: Remote, Tool: "run_command", Command: script, Dir: "/root"}, scope)
+	d := eng.Decide(ModeFull, g, false)
+	if d.Outcome != Allow || d.By != ByFull || !d.Red {
+		t.Fatalf("full access asked: %+v", d)
+	}
+	if d.Similar {
+		t.Fatal("allow similar was offered for an ungraded script")
+	}
 }

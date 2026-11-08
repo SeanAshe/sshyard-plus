@@ -1,6 +1,7 @@
 package app
 
 import (
+	"slices"
 	"time"
 
 	"github.com/Licoy/sshyard/internal/assets"
@@ -140,6 +141,10 @@ func (p *TrayPanel) hosts(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 		count := len(byGroup[""])
 		for _, g := range groups {
 			count += len(byGroup[g])
+			// A group holding only subgroups shows as their sections.
+			if len(byGroup[g]) == 0 && slices.ContainsFunc(groups, func(sub string) bool { return assets.GroupParent(sub) == g }) {
+				continue
+			}
 			ui.SidebarSection(c.Key("group:"+g), p.app.pv(g), p.section("g:"+g), func() {
 				for _, h := range byGroup[g] {
 					p.host(c, h, "", tok)

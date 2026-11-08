@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Licoy/sshyard/internal/layout"
 	"github.com/Licoy/sshyard/internal/shellhist"
 	"github.com/Licoy/sshyard/locales"
 	"golang.org/x/crypto/ssh"
@@ -160,12 +161,12 @@ func TestHistoryTipShows(t *testing.T) {
 func TestHistoryShortcut(t *testing.T) {
 	a, _ := newTestApp(t)
 	a.runAction(actHistory)
-	if !a.panelOpen(inspectHistory) {
-		t.Fatal("shortcut did not open the panel")
+	if a.toolPane(layout.History) == nil {
+		t.Fatal("shortcut did not open the pane")
 	}
 	a.runAction(actHistory)
-	if a.panelOpen(inspectHistory) {
-		t.Fatal("shortcut did not close the panel")
+	if a.toolPane(layout.History) != nil {
+		t.Fatal("shortcut did not close the pane")
 	}
 }
 
@@ -203,7 +204,7 @@ func TestHistoryPanelReadsServer(t *testing.T) {
 	srv.Exec = homeExec(home)
 	a, tt := newTestApp(t)
 	c := connected(t, a, tt, srv)
-	a.openPanel(inspectHistory)
+	a.ToggleTool(layout.History)
 	tt.Frame()
 	if a.hist == nil || a.hist.host != c.host.ID {
 		t.Fatalf("panel did not read the focused host: %+v", a.hist)

@@ -946,14 +946,17 @@ func (a *App) makeConn(hostID string, kind layout.Kind, link int) (*conn, error)
 	if !ok {
 		return nil, assets.ErrNotFound
 	}
-	if isLocal(h.ID) && kind != layout.Terminal {
+	// An assistant opens on any host: on these it types into the terminal.
+	if isLocal(h.ID) && kind != layout.Terminal && kind != layout.AI {
 		return nil, errLocalTerminalOnly
 	}
-	if isStream(h) && kind != layout.Terminal {
+	if isStream(h) && kind != layout.Terminal && kind != layout.AI {
 		return nil, errTerminalOnly
 	}
-	if ex := a.serialPane(h); ex != nil {
-		return nil, &serialInUseError{ex}
+	if kind == layout.Terminal {
+		if ex := a.serialPane(h); ex != nil {
+			return nil, &serialInUseError{ex}
+		}
 	}
 	a.nextConn++
 	c := &conn{id: a.nextConn, kind: kind, host: h}
@@ -962,7 +965,7 @@ func (a *App) makeConn(hostID string, kind layout.Kind, link int) (*conn, error)
 	}
 	if kind == layout.AI {
 		agentName := a.settings.AIDefaultAgent
-		if agentName == "" {
+		if agentName == "" || !hasSSH(h) {
 			agentName = "builtin"
 		}
 		c.ai = &aiState{agent: agentName, link: link, provider: a.defaultProvider()}
@@ -1421,9 +1424,14 @@ func hostsBy(st *assets.Store, query string) (favorites []assets.Host, groups []
 		}
 		byGroup[h.Group] = append(byGroup[h.Group], h)
 	}
-	// Groups made on their own show while empty, but not in a search.
+	// Groups made on their own show while empty, but not in a search,
+	// where a group shows for the hosts of its subgroups too.
+	found := map[string]bool{}
+	for g := range byGroup {
+		found[g], found[assets.GroupParent(g)] = true, true
+	}
 	for _, g := range st.Groups() {
-		if _, ok := byGroup[g]; ok || query == "" {
+		if found[g] || query == "" {
 			groups = append(groups, g)
 		}
 	}

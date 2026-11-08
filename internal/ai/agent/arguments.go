@@ -5,16 +5,23 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/Licoy/sshyard/internal/ai/llm"
 )
 
 // toolArguments validates the declared tool contract before path resolution,
 // diff reads or authorization; omitted content must never turn into an empty write
 func toolArguments(name, raw string) (map[string]any, error) {
+	return toolArgumentsIn(ToolDefs(), name, raw)
+}
+
+// toolArgumentsIn is toolArguments against the function set defs.
+func toolArgumentsIn(defs []llm.Tool, name, raw string) (map[string]any, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(raw), &fields); err != nil || fields == nil {
 		return nil, errors.New("tool arguments must be a JSON object")
 	}
-	for _, def := range ToolDefs() {
+	for _, def := range defs {
 		if def.Name != name {
 			continue
 		}
@@ -47,7 +54,7 @@ func toolArguments(name, raw string) (map[string]any, error) {
 				if err := json.Unmarshal(value, &text); err != nil {
 					return nil, fmt.Errorf("invalid tool argument type: %s", key)
 				}
-				if (key == "path" || key == "command" || key == "query") && strings.TrimSpace(text) == "" {
+				if (key == "path" || key == "command" || key == "query" || key == "key") && strings.TrimSpace(text) == "" {
 					return nil, fmt.Errorf("empty tool argument: %s", key)
 				}
 				result[key] = text

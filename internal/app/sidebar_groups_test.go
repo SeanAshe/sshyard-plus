@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Licoy/sshyard/internal/assets"
+	"github.com/Licoy/sshyard/locales"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -160,4 +161,94 @@ func TestSidebarSectionsToggle(t *testing.T) {
 			t.Fatalf("section %s stayed closed", key)
 		}
 	}
+}
+
+func TestSidebarSubgroups(t *testing.T) {
+	a, tt := newTestApp(t)
+	m := locales.In("en")
+	web := addGroupedHost(t, a, "web", "Prod")
+	tt.Frame()
+
+	// A subgroup made from its group's sheet, with the host it was opened for.
+	a.openSubgroupForm("Prod")
+	a.group.name, a.group.host = " Cache ", web.ID
+	if !a.SaveGroup(m) {
+		t.Fatalf("subgroup not saved: %q", a.group.err)
+	}
+	if h, _ := a.store.Get(web.ID); h.Group != "Prod/Cache" {
+		t.Fatalf("host moved into %q", h.Group)
+	}
+	a.openSubgroupForm("Prod")
+	a.group.name = "a/b"
+	if a.SaveGroup(m) || a.group.err != m.GroupTooDeep() {
+		t.Fatalf("nested subgroup: err %q", a.group.err)
+	}
+	a.grouping, a.group = false, nil
+
+	// Renaming a group carries its subgroups' open state along.
+	*a.section("g:Prod/Cache") = false
+	a.openGroupForm("Prod", "")
+	if a.group.parent != "" || a.group.name != "Prod" {
+		t.Fatalf("rename form %+v", a.group)
+	}
+	a.group.name = "Live"
+	if !a.SaveGroup(m) {
+		t.Fatalf("rename: %q", a.group.err)
+	}
+	if *a.section("g:Live/Cache") {
+		t.Fatal("subgroup reopened after renaming its group")
+	}
+	a.openGroupForm("Live/Cache", "")
+	if a.group.parent != "Live" || a.group.name != "Cache" {
+		t.Fatalf("subgroup rename form %+v", a.group)
+	}
+	a.grouping, a.group = false, nil
+
+	// A search shows the group of a subgroup holding a match.
+	addGroupedHost(t, a, "other", "Dev")
+	if _, groups, byGroup := hostsBy(a.store, "web"); !slices.Equal(groups, []string{"Live", "Live/Cache"}) || len(byGroup["Live/Cache"]) != 1 {
+		t.Fatalf("search groups %q", groups)
+	}
+	tt.Frame()
+}
+
+func TestGroupEditLook(t *testing.T) {
+	a, tt := newTestApp(t)
+	m := locales.In("en")
+	addGroupedHost(t, a, "web", "Prod")
+	tt.Frame()
+
+	a.openGroupForm("Prod", "")
+	a.group.name, a.group.icon, a.group.color = "Live", assets.IconPrefix+"database", "purple"
+	if !a.SaveGroup(m) {
+		t.Fatalf("edit not saved: %q", a.group.err)
+	}
+	if got := a.store.GroupLook("Live"); got != (assets.GroupLook{Icon: "icon:database", Color: "purple"}) {
+		t.Fatalf("saved look %+v", got)
+	}
+	// The sheet opens on the look saved; an emoji shows in its field.
+	a.openGroupForm("Live", "")
+	if a.group.icon != "icon:database" || a.group.color != "purple" || a.group.emoji != "" {
+		t.Fatalf("edit form %+v", a.group)
+	}
+	a.group.icon, a.group.emoji = "🚀", "🚀"
+	if !a.SaveGroup(m) {
+		t.Fatal(a.group.err)
+	}
+	a.openGroupForm("Live", "")
+	if a.group.emoji != "🚀" {
+		t.Fatalf("emoji not in its field: %+v", a.group)
+	}
+	a.grouping, a.group = false, nil
+
+	// A new subgroup made with its look.
+	a.openSubgroupForm("Live")
+	a.group.name, a.group.color = "Cache", "green"
+	if !a.SaveGroup(m) {
+		t.Fatal(a.group.err)
+	}
+	if got := a.store.GroupLook("Live/Cache"); got != (assets.GroupLook{Color: "green"}) {
+		t.Fatalf("new subgroup look %+v", got)
+	}
+	tt.Frame()
 }

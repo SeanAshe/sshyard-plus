@@ -22,18 +22,16 @@ import (
 type inspectorKind string
 
 const (
-	inspectMonitor  inspectorKind = "monitor"
-	inspectUsage    inspectorKind = "usage"
-	inspectHost     inspectorKind = "host"
-	inspectDocker   inspectorKind = "docker"
-	inspectSnippets inspectorKind = "snippets"
-	inspectHistory  inspectorKind = "history"
-	inspectTmux     inspectorKind = "tmux"
+	inspectMonitor inspectorKind = "monitor"
+	inspectUsage   inspectorKind = "usage"
+	inspectHost    inspectorKind = "host"
+	inspectDocker  inspectorKind = "docker"
+	inspectTmux    inspectorKind = "tmux"
 )
 
 // panelOrder is the order the panels stack in, the rail's: opening or
 // closing one leaves the others where they are.
-var panelOrder = []inspectorKind{inspectMonitor, inspectUsage, inspectHost, inspectSnippets, inspectHistory, inspectDocker, inspectTmux}
+var panelOrder = []inspectorKind{inspectMonitor, inspectUsage, inspectHost, inspectDocker, inspectTmux}
 
 // railWidth is the rail's width, the status bar's height; inspectorWidth
 // the panel's, and tableInspectorWidth that of a panel of tables (usage,
@@ -51,8 +49,6 @@ func panelWidth(k inspectorKind) float32 {
 	switch k {
 	case inspectUsage, inspectDocker:
 		return tableInspectorWidth
-	case inspectSnippets, inspectHistory:
-		return snippetWidth
 	case inspectTmux:
 		return tmuxInspectorWidth
 	}
@@ -116,8 +112,6 @@ func (a *App) railView(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 		toggle(inspectMonitor, icons.Monitor, icons.MonitorOn, m.SystemMonitor())
 		toggle(inspectUsage, icons.Usage, icons.UsageOn, m.ProcessUsage())
 		toggle(inspectHost, icons.Info, icons.InfoOn, m.HostDetails())
-		toggle(inspectSnippets, icons.API, nil, m.Snippets())
-		toggle(inspectHistory, icons.History, nil, m.CommandHistory())
 		ui.Box(c.Key("sep")).Width(14).Height(1).Shrink(0).MarginY(theme.Space(1)).Background(tok.Line)
 		// The tab's files pane and AI pane, one each: lit while it has
 		// one, which a click closes.
@@ -136,7 +130,7 @@ func (a *App) railView(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 		if ai {
 			label = m.CloseAIPane()
 		}
-		if (IconButton{Icon: icons.Robot, On: icons.RobotOn, Label: label, Active: ai, Toggle: true, Disabled: !ai && !remoteOnly(cn), Size: Small}).Clicked(c, "ai") {
+		if (IconButton{Icon: icons.Robot, On: icons.RobotOn, Label: label, Active: ai, Toggle: true, Disabled: !ai && !canAI(cn), Size: Small}).Clicked(c, "ai") {
 			a.ToggleAI()
 		}
 		if (IconButton{Icon: icons.Forward, Label: m.NewForwardMenu(), Disabled: a.store.Len() == 0, Size: Small}).Clicked(c, "fwd") {
@@ -146,9 +140,15 @@ func (a *App) railView(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 			}
 			a.openFwdForm(m, nil, id)
 		}
-		// The tool panes, on several sessions at once: lit while in this
+		// The tool panes, working on the sessions: lit while in this
 		// tab.
 		ui.Box(c.Key("sep2")).Width(14).Height(1).Shrink(0).MarginY(theme.Space(1)).Background(tok.Line)
+		if (IconButton{Icon: icons.API, Label: m.Snippets(), Active: a.toolHere(layout.Snippets), Toggle: true, Size: Small}).Clicked(c, "snippets") {
+			a.ToggleTool(layout.Snippets)
+		}
+		if (IconButton{Icon: icons.History, Label: m.CommandHistory(), Active: a.toolHere(layout.History), Toggle: true, Size: Small}).Clicked(c, "history") {
+			a.ToggleTool(layout.History)
+		}
 		synced := ""
 		if n := len(a.bc.synced); n > 0 {
 			synced = strconv.Itoa(n)
@@ -213,14 +213,6 @@ func (a *App) panelStack(c *ui.Context, m locales.Messages, tok theme.Tokens, ks
 
 // panelView is panel k: its title bar, and its cards scrolling under it.
 func (a *App) panelView(c *ui.Context, m locales.Messages, tok theme.Tokens, k inspectorKind) {
-	switch k {
-	case inspectSnippets:
-		a.snippetsPanel(c, m, tok)
-		return
-	case inspectHistory:
-		a.historyPanel(c, m, tok)
-		return
-	}
 	title, tables := m.SystemMonitor(), false
 	switch k {
 	case inspectHost:

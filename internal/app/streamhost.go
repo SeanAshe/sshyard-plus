@@ -17,11 +17,12 @@ import (
 )
 
 // Telnet and serial hosts have a terminal only: there is no SSH
-// connection under them, so no files, AI, metrics, port forwards or jump
-// hosts. A serial port opens once, so a host on it has one pane.
+// connection under them, so no files, metrics, port forwards or jump
+// hosts. Their assistant types into the terminal. A serial port opens
+// once, so a host on it has one terminal pane.
 
-// errTerminalOnly is opening anything but a terminal on a Telnet or
-// serial host.
+// errTerminalOnly is opening anything but a terminal, or an assistant
+// that types into it, on a Telnet or serial host.
 var errTerminalOnly = errors.New("app: this host opens terminals only")
 
 // serialInUseError is opening a serial port a pane has open already.

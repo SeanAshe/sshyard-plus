@@ -50,6 +50,9 @@ type historyState struct {
 	limit                  int
 	// tipOpen shows the sheet of the tip on bash's history
 	tipOpen bool
+	// inline shows each command's actions as buttons, the rows being wide
+	// enough for them (rowActionsFit); else a More menu holds them.
+	inline bool
 }
 
 // readLocalHistory reads this computer's history for the local shell sh;
@@ -239,41 +242,48 @@ func (a *App) historyMenu(m locales.Messages, cmd string, disabled bool) []menuE
 	}
 }
 
-// historyPanel is the command history panel: its title bar, the search
-// and the shells over the list, and at the foot the terminal commands go
-// to.
-func (a *App) historyPanel(c *ui.Context, m locales.Messages, tok theme.Tokens) {
+// history is the history pane's state, made on first use.
+func (a *App) history() *historyState {
 	if a.hist == nil {
 		a.hist = &historyState{limit: historyPage}
 	}
-	d := a.hist
+	return a.hist
+}
+
+// historyHead is what the history pane's header holds after its name:
+// how many commands there are, the read going on, the tip on bash and
+// the button reading them again.
+func (a *App) historyHead(c *ui.Context, m locales.Messages, tok theme.Tokens) {
+	d := a.history()
+	src, _ := a.historySource(m, a.focused())
+	if src != nil && d.read && len(d.hist.Entries) > 0 {
+		ui.Text(c, strconv.Itoa(len(d.hist.Entries))).FontSize(theme.Caption).TextColor(tok.TextMuted).SingleLine()
+	}
+	ui.Spacer(c)
+	if src != nil && d.running {
+		ui.Spinner(c)
+	}
+	if src != nil && d.read && historyTipShows(d.hist) {
+		if (IconButton{Icon: icons.Warning, Label: m.HistoryBashTipTitle(), Prominent: true, Size: Tiny}).Clicked(c, "hist:tip") {
+			d.tipOpen = true
+		}
+	}
+	if (IconButton{Icon: icons.Refresh, Label: m.Refresh(), Disabled: src == nil || d.running, Size: Tiny}).Clicked(c, "hist:refresh") {
+		d.err = nil
+		a.readHistory(c, src, true)
+	}
+}
+
+// historyPanel is the command history pane under its header: the search
+// and the shells over the list, and at the foot the terminal commands go
+// to.
+func (a *App) historyPanel(c *ui.Context, m locales.Messages, tok theme.Tokens) {
+	a.history()
 	src, note := a.historySource(m, a.focused())
 	if src != nil {
 		a.readHistory(c, src, false)
 	}
 	ui.Column(c.Key("history")).Fill().Children(func() {
-		ui.Row(c).Height(toolbarHeight).Shrink(0).Padding(0, theme.Space(2), 0, theme.Space(4)).Gap(theme.Space(2)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, m.CommandHistory()).FontSize(theme.Body).FontWeight(600).Shrink(1).SingleLine()
-			if src != nil && d.read && len(d.hist.Entries) > 0 {
-				ui.Text(c, strconv.Itoa(len(d.hist.Entries))).FontSize(theme.Caption).TextColor(tok.TextMuted).SingleLine()
-			}
-			ui.Spacer(c)
-			if src != nil && d.running {
-				ui.Spinner(c)
-			}
-			if src != nil && d.read && historyTipShows(d.hist) {
-				if (IconButton{Icon: icons.Warning, Label: m.HistoryBashTipTitle(), Prominent: true, Size: Small}).Clicked(c, "hist:tip") {
-					d.tipOpen = true
-				}
-			}
-			if (IconButton{Icon: icons.Refresh, Label: m.Refresh(), Disabled: src == nil || d.running, Size: Small}).Clicked(c, "hist:refresh") {
-				d.err = nil
-				a.readHistory(c, src, true)
-			}
-			if (IconButton{Icon: icons.Close, Label: m.ClosePanel(), Size: Small}).Clicked(c, "hist:close") {
-				a.closePanel(inspectHistory)
-			}
-		})
 		if src == nil {
 			ui.Column(c.Key("hist:note")).Grow(1).Shrink(1).MinHeight(0).FillWidth().Padding(0, theme.Space(4)).Children(func() {
 				panelNote(c, tok, note)
@@ -448,18 +458,24 @@ func historyMeta(m locales.Messages, e shellhist.Entry) string {
 }
 
 // historyRow is a command: its first line and what is known of it, with
-// an IconButton for each of its actions, which a right click lists too.
-// Chosen, it opens on its whole text.
+// the button running it and, as wide as the panel allows, an IconButton
+// for each of its other actions or a More menu of them, which a right
+// click lists too. Chosen, it opens on its whole text.
 func (a *App) historyRow(c *ui.Context, m locales.Messages, tok theme.Tokens, i int, e shellhist.Entry, disabled bool) {
 	d := a.hist
 	key := strconv.Itoa(i)
 	sel := d.selected == e.Cmd
 	fam := a.termFamily()
+	more := "hist:more:" + key
 	box := ui.Column(c.Key("hist:row:" + key)).FillWidth().Radius(theme.RadiusControl)
+	if fit := rowActionsFit(box.Bounds().W, theme.Space(1)+theme.Space(4), 4); fit != d.inline {
+		d.inline = fit
+		c.Invalidate()
+	}
 	switch {
 	case sel:
 		box.Background(tok.Accent.Alpha(accentWash(tok)))
-	case box.Hovered():
+	case box.Hovered() || a.menu.key == more:
 		box.Background(tok.Hover)
 	}
 	box.Children(func() {
@@ -484,6 +500,10 @@ func (a *App) historyRow(c *ui.Context, m locales.Messages, tok theme.Tokens, i 
 			}
 			if (IconButton{Icon: icons.Send, Label: m.HistoryRun(), Disabled: disabled, Size: Small}).Clicked(c, "hist:run:"+key) {
 				a.runHistory(m, e.Cmd, true)
+			}
+			if !d.inline {
+				a.menuButton(c, more, IconButton{Icon: icons.More, Label: m.MoreActions(), Size: Small}, func() []menuEntry { return a.historyMenu(m, e.Cmd, disabled) })
+				return
 			}
 			if (IconButton{Icon: icons.Paste, Label: m.HistoryInsert(), Disabled: disabled, Size: Small}).Clicked(c, "hist:insert:"+key) {
 				a.runHistory(m, e.Cmd, false)

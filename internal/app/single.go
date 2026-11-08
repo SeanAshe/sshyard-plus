@@ -118,7 +118,7 @@ func (a *App) ToggleAI() {
 		a.CloseSession(c.id)
 		return
 	}
-	if remoteOnly(a.focused()) {
+	if canAI(a.focused()) {
 		a.OpenAIBeside()
 	}
 }

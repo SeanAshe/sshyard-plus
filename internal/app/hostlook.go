@@ -72,6 +72,27 @@ func hostAvatar(c *ui.Context, tok theme.Tokens, h assets.Host, size float32) ui
 	})
 }
 
+// groupGlyph is a group's icon: its own icon or emoji, else the folder,
+// in its color or else muted.
+func groupGlyph(c *ui.Context, tok theme.Tokens, look assets.GroupLook, size float32) ui.Element {
+	color, tinted := tok.TintNamed(look.Color)
+	if !tinted {
+		color = tok.TextMuted
+	}
+	ic := icons.Folder
+	if key, ok := strings.CutPrefix(look.Icon, assets.IconPrefix); ok {
+		if hi, ok := icons.HostIconOf(key); ok {
+			ic = hi
+		}
+	} else if look.Icon != "" {
+		if !tinted {
+			color = tok.Text
+		}
+		return ui.Text(c, look.Icon).FontSize(size * 0.85).TextColor(color).SingleLine().Shrink(0)
+	}
+	return ui.Icon(c, ic.SVG).Size(size, size).Shrink(0).TextColor(color)
+}
+
 // look is the host as the editor shows it so far: where it is and how
 // it looks, for its tile.
 func (f *hostForm) look() assets.Host {
@@ -143,32 +164,33 @@ func colorNames(m locales.Messages) []string {
 	return []string{m.ColorGreen(), m.ColorOrange(), m.ColorTeal(), m.ColorPurple(), m.ColorIndigo(), m.ColorPink(), m.ColorRed(), m.ColorBlue()}
 }
 
-// lookFields are the host editor's appearance: one of the app's icons or
-// an emoji, and a color, each "automatic" to pick them from the address.
-func (a *App) lookFields(c *ui.Context, m locales.Messages, tok theme.Tokens, f *hostForm) {
+// lookFields are an appearance in a form: one of the app's icons or an
+// emoji, and a color, each back to the default with the pill autoIcon or
+// autoColor names (a host's are picked from its address).
+func (a *App) lookFields(c *ui.Context, m locales.Messages, tok theme.Tokens, icon, emoji, color *string, autoIcon, autoColor string) {
 	ui.Column(c).Gap(10).FillWidth().Children(func() {
 		ui.Row(c.Key("f:icons")).Wrap().Gap(2).FillWidth().Children(func() {
 			for _, hi := range icons.HostIcons {
-				on := f.icon == assets.IconPrefix+hi.Key
+				on := *icon == assets.IconPrefix+hi.Key
 				if (IconButton{Icon: hi.Icon, Label: iconName(m, hi.Key), Active: on, Toggle: true, Size: Small}).Clicked(c, "f:icon:"+hi.Key) {
-					f.icon, f.emoji = assets.IconPrefix+hi.Key, ""
+					*icon, *emoji = assets.IconPrefix+hi.Key, ""
 				}
 			}
 		})
 		ui.Row(c).Gap(8).AlignItems(ui.Center).FillWidth().Children(func() {
-			in := formTextInput(c.Key("f:emoji"), &f.emoji).Placeholder(m.EmojiPlaceholder()).Label(m.HostEmoji()).Width(200)
+			in := formTextInput(c.Key("f:emoji"), emoji).Placeholder(m.EmojiPlaceholder()).Label(m.HostEmoji()).Width(200)
 			if in.Changed() {
-				f.icon = assets.IconText(f.emoji)
+				*icon = assets.IconText(*emoji)
 			}
 			ui.Spacer(c)
-			if pill(c, m.AutoIcon(), f.icon == "", false, false) {
-				f.icon, f.emoji = "", ""
+			if pill(c, autoIcon, *icon == "", false, false) {
+				*icon, *emoji = "", ""
 			}
 		})
 		ui.Row(c.Key("f:colors")).Gap(6).AlignItems(ui.Center).FillWidth().Children(func() {
 			names := colorNames(m)
 			for i, key := range theme.TintNames {
-				on := f.color == key
+				on := *color == key
 				sw := ui.ButtonBase(c.Key("f:color:"+key)).Label(names[i]).Tooltip(names[i]).Size(22, 22).Radius(theme.Capsule).
 					Background(tok.TintAt(i)).Cursor(ui.CursorPointer).Checked(on)
 				if on {
@@ -177,12 +199,12 @@ func (a *App) lookFields(c *ui.Context, m locales.Messages, tok theme.Tokens, f 
 					sw.Border(2, tok.Text.Alpha(0.25))
 				}
 				if sw.Clicked() {
-					f.color = key
+					*color = key
 				}
 			}
 			ui.Spacer(c)
-			if pill(c, m.AutoColor(), f.color == "", false, false) {
-				f.color = ""
+			if pill(c, autoColor, *color == "", false, false) {
+				*color = ""
 			}
 		})
 	})

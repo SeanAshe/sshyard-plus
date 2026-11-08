@@ -42,6 +42,8 @@ type Config struct {
 	Tools    Tools
 	Redact   bool
 	MaxChars int
+	// Target is what the tools reach; zero is an SSH host.
+	Target Target
 }
 
 // Kind is one timeline event.
@@ -92,6 +94,7 @@ type Session struct {
 	tools    Tools
 	redact   bool
 	maxChars int
+	target   Target
 	msgs     []llm.Message
 	hostSent bool
 	used     int
@@ -117,7 +120,8 @@ func New(cfg Config) *Session {
 		tools:    tools,
 		redact:   cfg.Redact,
 		maxChars: maxChars,
-		msgs:     []llm.Message{{Role: "system", Content: SystemPrompt}},
+		target:   cfg.Target,
+		msgs:     []llm.Message{{Role: "system", Content: systemPrompt(cfg.Target)}},
 	}
 }
 
@@ -146,7 +150,7 @@ func (s *Session) TurnWith(ctx context.Context, user string, parts []llm.Part, m
 		return errors.New("agent: gate is nil")
 	}
 	if !s.hostSent {
-		s.msgs = append(s.msgs, llm.Message{Role: "system", Content: s.mask(hostMessage(meta))})
+		s.msgs = append(s.msgs, llm.Message{Role: "system", Content: s.mask(hostMessageFor(s.target, meta))})
 		s.hostSent = true
 	}
 	text := user
@@ -242,7 +246,7 @@ func (s *Session) drain(ctx context.Context, emit func(Event)) error {
 
 func (s *Session) execOne(ctx context.Context, call llm.ToolCall, emit func(Event)) error {
 	raw := strings.TrimSpace(call.Arguments)
-	fields, err := toolArguments(call.Name, raw)
+	fields, err := toolArgumentsIn(ToolDefsFor(s.target), call.Name, raw)
 	if err != nil {
 		s.emitTool(emit, ToolCard{ID: call.ID, Name: call.Name, Phase: "done", Exit: 1, Output: err.Error()})
 		s.appendTool(call.ID, err.Error())
@@ -448,7 +452,7 @@ func (s *Session) request() llm.Request {
 			}
 		}
 	}
-	return llm.Request{Messages: msgs, Tools: ToolDefs()}
+	return llm.Request{Messages: msgs, Tools: ToolDefsFor(s.target)}
 }
 
 func actionFor(name string, m map[string]any) policy.Action {
@@ -457,6 +461,10 @@ func actionFor(name string, m map[string]any) policy.Action {
 	case "run_command":
 		a.Command = asString(m["command"])
 		a.Dir = asString(m["dir"])
+	case "terminal_send":
+		a.Command = asString(m["command"])
+	case "terminal_key":
+		a.Command = asString(m["key"])
 	default:
 		a.Path = asString(m["path"])
 	}

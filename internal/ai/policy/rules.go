@@ -543,6 +543,8 @@ func (e *shellEnv) core(name string, args []arg) partial {
 		return e.gradeKubectl(args)
 	case "ip":
 		return e.gradeIP(args)
+	case "tc":
+		return e.gradeTC(args)
 	case "sudoedit", "visudo":
 		return highPerm(name)
 	default:
@@ -1733,8 +1735,12 @@ func (e *shellEnv) gradeIP(args []arg) partial {
 		return unk("ip")
 	}
 	obj := ipObject(rest[0].text)
+	if len(rest) > 1 && !rest[1].ok {
+		// A substituted command could be any of them, add or del included.
+		return partial{cat: "unknown", risk: RiskUnknown, prefix: strings.TrimSpace("ip " + obj), why: "ip command substitution"}
+	}
 	act := ""
-	if len(rest) > 1 && rest[1].ok && !strings.HasPrefix(rest[1].text, "-") {
+	if len(rest) > 1 && !strings.HasPrefix(rest[1].text, "-") {
 		act = rest[1].text
 	}
 	readAct := act == "" || act == "show" || act == "list" || act == "help" || act == "get"
@@ -1776,6 +1782,71 @@ func (e *shellEnv) gradeIP(args []arg) partial {
 		return unk("ip")
 	}
 	return partial{cat: "unknown", risk: RiskUnknown, prefix: "ip " + obj, why: "unlisted command: ip " + obj}
+}
+
+// tcSafeOpts only change how tc prints a report, never what it does.
+const tcSafeOpts = "sdjpgN"
+
+// tcObjects are the traffic-control objects whose report form reads state
+// and leaves the qdiscs alone.
+var tcObjects = map[string]bool{"qdisc": true, "class": true, "filter": true, "action": true, "chain": true}
+
+// gradeTC: an object with no command, or show/list/ls, only reads kernel
+// traffic-control state. add, del, change, replace, link and attach rewrite
+// it and are High "network", like ip. -n (another namespace) and -b (run a
+// batch file) hide what runs, so they, a substituted command and every
+// other form are Unknown.
+func (e *shellEnv) gradeTC(args []arg) partial {
+	rest := args[1:]
+	for len(rest) > 0 {
+		if !rest[0].ok {
+			return namedUnk("tc", "tc argument")
+		}
+		t := rest[0].text
+		if t == "--" {
+			rest = rest[1:]
+			break
+		}
+		if t == "-" || !strings.HasPrefix(t, "-") {
+			break
+		}
+		if strings.HasPrefix(t, "--") {
+			switch strings.TrimPrefix(t, "--") {
+			case "color", "help", "version":
+				rest = rest[1:]
+				continue
+			}
+			return namedUnk("tc", "tc option "+t)
+		}
+		if strings.Trim(t[1:], tcSafeOpts) != "" {
+			return namedUnk("tc", "tc option "+t)
+		}
+		rest = rest[1:]
+	}
+	if len(rest) == 0 || !rest[0].ok {
+		return namedUnk("tc", "tc")
+	}
+	obj := rest[0].text
+	if !tcObjects[obj] {
+		return namedUnk("tc", "unlisted command: tc "+obj)
+	}
+	if len(rest) > 1 && !rest[1].ok {
+		// A substituted command could be any of them, add or del included.
+		return namedUnk("tc", "tc command substitution")
+	}
+	act := ""
+	if len(rest) > 1 && !strings.HasPrefix(rest[1].text, "-") {
+		act = rest[1].text
+	}
+	switch act {
+	case "", "show", "list", "ls":
+		prefix := strings.TrimSpace("tc " + obj + " " + act)
+		return partial{cat: "read", risk: RiskReadOnly, prefix: prefix, why: prefix}
+	case "add", "del", "delete", "change", "replace", "link", "attach":
+		prefix := "tc " + obj + " " + act
+		return partial{cat: "network", risk: RiskHigh, prefix: prefix, why: prefix}
+	}
+	return namedUnk("tc", "unlisted command: tc "+obj+" "+act)
 }
 
 func ipObject(s string) string {

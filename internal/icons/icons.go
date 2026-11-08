@@ -108,6 +108,7 @@ var (
 	Follow       = load("footprint-line")
 	FollowOn     = load("footprint-fill")
 	Collapse     = load("arrow-down-s-line")
+	GroupOpen    = Collapse
 	Expand       = load("arrow-up-s-line")
 	Rename       = load("pencil-line")
 	Robot        = load("robot-2-line")
@@ -163,6 +164,7 @@ var (
 	MoveTo      = load("folder-transfer-line")
 	Submenu     = load("arrow-right-s-line")
 	Next        = Submenu
+	GroupClosed = Submenu
 	Previous    = load("arrow-left-s-line")
 	Copy        = load("file-copy-2-line")
 	Compress    = load("file-zip-line")

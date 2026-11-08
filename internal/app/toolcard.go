@@ -56,6 +56,10 @@ func toolName(m locales.Messages, card agent.ToolCard) string {
 		return m.AiToolSearchFiles()
 	case "write_file":
 		return m.AiToolWriteFile()
+	case "terminal_send":
+		return m.AiToolTerminalSend()
+	case "terminal_key":
+		return m.AiToolTerminalKey()
 	}
 	if card.Name != "" {
 		return card.Name
@@ -127,7 +131,8 @@ func (a *App) toolDetails(c *ui.Context, cn *conn, card agent.ToolCard, tok them
 		ui.Text(c, where).FontSize(theme.Caption).TextColor(tok.TextMuted).SingleLine().Shrink(1)
 		if card.Phase == "done" && card.Run {
 			ui.Spacer(c)
-			if card.Exit >= 0 {
+			// What is typed into a terminal has no exit code to show.
+			if card.Exit >= 0 && card.Name != "terminal_send" && card.Name != "terminal_key" {
 				tint := tok.TextMuted
 				if card.Exit != 0 {
 					tint = tok.Danger

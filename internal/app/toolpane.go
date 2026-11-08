@@ -8,15 +8,17 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// The tool panes, the broadcast and the session logs, work on several
-// sessions at once. They are panes as the others are, dragged by their
+// The tool panes, the broadcast, the session logs, the snippets and the
+// command history, work on the sessions, not on one of their own. They are panes as the others are, dragged by their
 // header to any edge of a pane or another tab, but on no host, and one of
 // each in the whole workspace, which the rail opens and closes. They are
 // not saved with the layout. A tool pane never keeps a tab's focus: the
 // focused pane stays the session the panels and the shortcuts work on.
 
 // isTool reports a tool pane's kind.
-func isTool(k layout.Kind) bool { return k == layout.Broadcast || k == layout.Logs }
+func isTool(k layout.Kind) bool {
+	return k == layout.Broadcast || k == layout.Logs || k == layout.Snippets || k == layout.History
+}
 
 // toolPane is the tool pane of kind k, nil when it is not open.
 func (a *App) toolPane(k layout.Kind) *conn {
@@ -53,6 +55,8 @@ func (a *App) nameTools(m locales.Messages) {
 	}
 	a.toolNames[layout.Broadcast] = m.Broadcast()
 	a.toolNames[layout.Logs] = m.SessionLogs()
+	a.toolNames[layout.Snippets] = m.Snippets()
+	a.toolNames[layout.History] = m.CommandHistory()
 }
 
 // ToggleTool closes the tool pane of kind k when it is in the active tab;
@@ -113,8 +117,8 @@ func (a *App) settleFocus(t *layout.Tab) {
 	}
 }
 
-// toolPaneView is tool pane cn: its header, which drags it, over
-// what it shows.
+// toolPaneView is tool pane cn: its header, which drags it, with the
+// pane's own actions, over what it shows.
 func (a *App) toolPaneView(c *ui.Context, cn *conn, tok theme.Tokens, m locales.Messages) {
 	// Opened, or its tab chosen: the keyboard goes to its field, if any.
 	focus := a.focusReq == cn.id && a.page == pageWorkspace
@@ -126,7 +130,14 @@ func (a *App) toolPaneView(c *ui.Context, cn *conn, tok theme.Tokens, m locales.
 	head.Children(func() {
 		softTile(c, kindIcon(cn.kind, true), tok.Accent, paneHeadIcon)
 		ui.Text(c, a.connLabel(cn)).FontWeight(600).FontSize(theme.Footnote).SingleLine().Shrink(1).MinWidth(0)
-		ui.Spacer(c)
+		switch cn.kind {
+		case layout.Snippets:
+			a.snippetsHead(c, m, tok)
+		case layout.History:
+			a.historyHead(c, m, tok)
+		default:
+			ui.Spacer(c)
+		}
 		if (IconButton{Icon: icons.Close, Label: m.ClosePane(), Size: Tiny, Danger: true}).Clicked(c, "close") {
 			a.closeSoon(cn.id)
 		}
@@ -138,6 +149,10 @@ func (a *App) toolPaneView(c *ui.Context, cn *conn, tok theme.Tokens, m locales.
 			a.broadcastPanel(c, m, tok, focus)
 		case layout.Logs:
 			a.logPanel(c, m, tok)
+		case layout.Snippets:
+			a.snippetsPanel(c, m, tok)
+		case layout.History:
+			a.historyPanel(c, m, tok)
 		}
 	})
 }

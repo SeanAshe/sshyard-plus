@@ -166,3 +166,17 @@ func TestOutputEncodingConcurrent(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// TestOutputEncodingDecode: bytes in an output encoding decode to text, and
+// UTF-8 or an unknown encoding keeps them as they are.
+func TestOutputEncodingDecode(t *testing.T) {
+	if got := EncodingGBK.Decode([]byte{0xc4, 0xe3, 0xba, 0xc3, '#'}); got != "你好#" {
+		t.Fatalf("GBK %q", got)
+	}
+	if got := EncodingUTF8.Decode([]byte("héllo")); got != "héllo" {
+		t.Fatalf("UTF-8 %q", got)
+	}
+	if got := OutputEncoding("nope").Decode([]byte("abc")); got != "abc" {
+		t.Fatalf("unknown %q", got)
+	}
+}

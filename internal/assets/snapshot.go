@@ -3,6 +3,7 @@ package assets
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -14,13 +15,14 @@ var ErrSnapshotChanged = errors.New("assets: snapshot hosts changed")
 // Snapshot is everything the store holds, for a backup. Like the store,
 // it holds no secret.
 type Snapshot struct {
-	Hosts       []Host       `json:"hosts"`
-	Credentials []Credential `json:"credentials"`
-	Proxies     []Proxy      `json:"proxies"`
-	Forwards    []Forward    `json:"forwards"`
-	Groups      []string     `json:"groups,omitempty"`
-	GroupOrder  []string     `json:"groupOrder,omitempty"`
-	Snippets    []Snippet    `json:"snippets,omitempty"`
+	Hosts       []Host               `json:"hosts"`
+	Credentials []Credential         `json:"credentials"`
+	Proxies     []Proxy              `json:"proxies"`
+	Forwards    []Forward            `json:"forwards"`
+	Groups      []string             `json:"groups,omitempty"`
+	GroupOrder  []string             `json:"groupOrder,omitempty"`
+	GroupLooks  map[string]GroupLook `json:"groupLooks,omitempty"`
+	Snippets    []Snippet            `json:"snippets,omitempty"`
 }
 
 // Snapshot returns a copy of every entry.
@@ -31,7 +33,7 @@ func (s *Store) Snapshot() Snapshot {
 	if len(s.groupOrder) > 0 {
 		order = s.groupNames()
 	}
-	return Snapshot{Hosts: slices.Clone(s.hosts), Credentials: slices.Clone(s.creds), Proxies: slices.Clone(s.proxies), Forwards: slices.Clone(s.forwards), Groups: slices.Clone(s.groups), GroupOrder: order, Snippets: slices.Clone(s.snippets)}
+	return Snapshot{Hosts: slices.Clone(s.hosts), Credentials: slices.Clone(s.creds), Proxies: slices.Clone(s.proxies), Forwards: slices.Clone(s.forwards), Groups: slices.Clone(s.groups), GroupOrder: order, GroupLooks: maps.Clone(s.groupLooks), Snippets: slices.Clone(s.snippets)}
 }
 
 // ValidID reports whether id can name an entry: what NewID makes, and no
@@ -94,10 +96,10 @@ func (s *Store) RestoreIfHostsUnchanged(in Snapshot, expected []Host) error {
 func (s *Store) restoreLocked(in Snapshot) error {
 	h, c, p, f, g := slices.Clone(s.hosts), slices.Clone(s.creds), slices.Clone(s.proxies), slices.Clone(s.forwards), slices.Clone(s.groups)
 	n := slices.Clone(s.snippets)
-	order := slices.Clone(s.groupOrder)
+	order, looks := slices.Clone(s.groupOrder), maps.Clone(s.groupLooks)
 	undo := func() {
 		s.hosts, s.creds, s.proxies, s.forwards, s.groups, s.snippets = h, c, p, f, g, n
-		s.groupOrder = order
+		s.groupOrder, s.groupLooks = order, looks
 	}
 	if err := s.merge(in); err != nil {
 		undo()
@@ -184,6 +186,14 @@ func (s *Store) merge(in Snapshot) error {
 		name = strings.TrimSpace(name)
 		if name != "" && !slices.ContainsFunc(s.groupNames(), func(g string) bool { return strings.EqualFold(g, name) }) {
 			s.groups = append(s.groups, name)
+		}
+	}
+	// Looks are restored for the groups there are.
+	groups := s.groupNames()
+	for name, look := range in.GroupLooks {
+		look.normalize()
+		if slices.Contains(groups, name) {
+			s.setGroupLook(name, look)
 		}
 	}
 	return s.restoreGroupOrder(in.GroupOrder)

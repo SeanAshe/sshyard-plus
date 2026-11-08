@@ -323,14 +323,19 @@ func TestToolPanes(t *testing.T) {
 	if a.focused() != cs[0] {
 		t.Fatalf("focused %v once the tool pane was clicked", a.focused())
 	}
-	// It is not saved with the layout.
+	// None is saved with the layout, nor takes the focus.
+	a.ToggleTool(layout.Snippets)
+	a.ToggleTool(layout.History)
+	if a.focused() != cs[0] || a.snippetTarget() != cs[0] {
+		t.Fatalf("focused %v once the snippets and history opened", a.focused())
+	}
 	for _, tb := range a.layoutSnapshot().Tabs {
 		var walk func(n *nodeSnap)
 		walk = func(n *nodeSnap) {
 			if n == nil {
 				return
 			}
-			if n.Kind == "logs" || n.Kind == "broadcast" {
+			if n.Kind == "logs" || n.Kind == "broadcast" || n.Kind == "snippets" || n.Kind == "history" {
 				t.Fatalf("tool pane saved: %+v", n)
 			}
 			walk(n.A)

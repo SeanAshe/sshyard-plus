@@ -203,19 +203,19 @@ func TestNoBannerText(t *testing.T) {
 // in the rail's order whatever the order they opened in.
 func TestPanelsStack(t *testing.T) {
 	a, tt := newTestApp(t)
-	for _, s := range []string{"Snippets", "System Monitor", "Docker", "Host Details", "Process Usage"} {
+	for _, s := range []string{"System Monitor", "Docker", "Host Details", "Process Usage"} {
 		mustClick(t, tt, s)
 		tt.Frame()
 	}
 	a.openPanel(inspectMonitor) // once only
-	if want := []inspectorKind{inspectMonitor, inspectUsage, inspectHost, inspectSnippets, inspectDocker}; !slices.Equal(a.panels, want) {
+	if want := []inspectorKind{inspectMonitor, inspectUsage, inspectHost, inspectDocker}; !slices.Equal(a.panels, want) {
 		t.Fatalf("panels %q, want %q", a.panels, want)
 	}
 	a.togglePanel(inspectMonitor)
 	tt.Frame()
 	a.closePanel(inspectUsage)
 	a.closePanel(inspectDocker)
-	if want := []inspectorKind{inspectHost, inspectSnippets}; !slices.Equal(a.panels, want) {
+	if want := []inspectorKind{inspectHost}; !slices.Equal(a.panels, want) {
 		t.Fatalf("panels %q, want %q", a.panels, want)
 	}
 }

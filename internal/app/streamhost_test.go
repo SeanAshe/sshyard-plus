@@ -81,9 +81,10 @@ func TestHostEditorProtocols(t *testing.T) {
 	}
 }
 
-// TestStreamHostGates: a Telnet host opens terminals only, is no jump
-// host or forward host, and its pane offers a Break that reaches the
-// server, from the menu and the shortcut's action.
+// TestStreamHostGates: a Telnet host opens terminals, and an assistant
+// that types into them, only; is no jump host or forward host; and its
+// pane offers a Break that reaches the server, from the menu and the
+// shortcut's action.
 func TestStreamHostGates(t *testing.T) {
 	a, tt := newTestApp(t)
 	m := locales.In("en")
@@ -126,8 +127,11 @@ func TestStreamHostGates(t *testing.T) {
 		t.Fatalf("forward hosts %v", ids)
 	}
 	for _, e := range a.hostEntries(m, h) {
-		if (e.Label == m.OpenFiles() || e.Label == m.OpenAI() || e.Label == m.InstallPublicKey()) && !e.Disabled {
+		if (e.Label == m.OpenFiles() || e.Label == m.InstallPublicKey()) && !e.Disabled {
 			t.Errorf("%q enabled on a telnet host", e.Label)
+		}
+		if e.Label == m.OpenAI() && e.Disabled {
+			t.Error("no assistant on a telnet host")
 		}
 	}
 
@@ -138,8 +142,8 @@ func TestStreamHostGates(t *testing.T) {
 	cn := a.conns[id]
 	waitFor(t, tt, "telnet connected", func() bool { return cn.s.Status().State == session.Connected })
 	waitFor(t, tt, "the prompt", func() bool { return bytes.Contains([]byte(cn.s.Term.ScreenText()), []byte("switch>")) })
-	if remoteOnly(cn) {
-		t.Fatal("a telnet pane opens files and AI")
+	if remoteOnly(cn) || !canAI(cn) {
+		t.Fatal("a telnet pane opens files, or no assistant")
 	}
 	if !canBreak(cn) {
 		t.Fatal("cannot break")
