@@ -120,6 +120,20 @@ func appMenu() *mygo.Menu {
 }
 
 func main() {
+	// A later launch must not start another process. It hands its command
+	// line to the one already running, which opens the main window, and exits.
+	if !mygo.App.RequestSingleInstanceLock() {
+		return
+	}
+	var running *desktop
+	var reveal bool
+	mygo.App.OnSecondInstance(func([]string, string) {
+		if running == nil {
+			reveal = true
+			return
+		}
+		running.present()
+	})
 	mygo.Use(updatePlugin())
 	if runtime.GOOS == "darwin" {
 		mygo.App.SetMenu(appMenu())
@@ -173,6 +187,11 @@ func main() {
 		// once the window has made MyGo's view class.
 		macfix.TitleBarClicks()
 		d = newDesktop(a, w)
+		running = d
+		if reveal {
+			reveal = false
+			d.present()
+		}
 		a.Start()
 		w.OnMinimize(func() { a.SetMinimized(true) })
 		w.OnRestore(func() { a.SetMinimized(false) })

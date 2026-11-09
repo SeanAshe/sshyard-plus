@@ -130,6 +130,19 @@ func (d *desktop) activate() {
 	}
 }
 
+// present opens the main window of the instance that is already running.
+// A second launch asks for this instead of starting another process.
+// A window that is already on screen is only brought forward, so a
+// maximized one stays maximized.
+func (d *desktop) present() {
+	if !d.window.IsVisible() || d.window.IsMinimized() {
+		d.show()
+		return
+	}
+	d.closePanel()
+	d.window.Focus()
+}
+
 func (d *desktop) show() {
 	d.closePanel()
 	d.changingVisibility = true
