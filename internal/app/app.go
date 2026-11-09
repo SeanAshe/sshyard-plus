@@ -304,12 +304,8 @@ type App struct {
 
 	// interface state
 	page page
-	// pref is the settings page showing; panels those open beside the
-	// panes, in panelOrder, and stackPct the share of each divider between
-	// them, by the panels from it down
+	// pref is the settings page showing
 	pref     prefPage
-	panels   []inspectorKind
-	stackPct map[string]*float32
 	snippets snippetState
 	// bc is the broadcast panel's state.
 	bc broadcastState
@@ -583,7 +579,7 @@ type App struct {
 
 // New opens the app's data.
 func New(p Platform) (*App, error) {
-	a := &App{p: p, ws: layout.New(), conns: map[int]*conn{}, pool: session.NewPool(), typed: map[string]string{}, typedGen: map[string]int{}, skipKeys: map[string]bool{}, rememberKeys: map[string]localkeys.Remembered{}, lk: localkeys.Open(""), sections: map[string]*bool{}, temps: map[string]assets.Host{}, pct: map[int]*float32{}, fwds: map[string]*fwdRun{}, fwdOpen: map[string]bool{}, paneBounds: map[int]ui.Rect{}, metrics: map[string]*session.Collector{}, aiRecent: map[string]int{}, stackPct: map[string]*float32{}}
+	a := &App{p: p, ws: layout.New(), conns: map[int]*conn{}, pool: session.NewPool(), typed: map[string]string{}, typedGen: map[string]int{}, skipKeys: map[string]bool{}, rememberKeys: map[string]localkeys.Remembered{}, lk: localkeys.Open(""), sections: map[string]*bool{}, temps: map[string]assets.Host{}, pct: map[int]*float32{}, fwds: map[string]*fwdRun{}, fwdOpen: map[string]bool{}, paneBounds: map[int]ui.Rect{}, metrics: map[string]*session.Collector{}, aiRecent: map[string]int{}}
 	a.logo = appicon.Bitmap()
 	a.settings = settings.Default()
 	a.shells = detectShells()

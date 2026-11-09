@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/Licoy/sshyard/internal/layout"
 	"github.com/Licoy/sshyard/internal/session"
 	"golang.org/x/crypto/ssh"
 )
@@ -29,6 +30,14 @@ func (d *dockerExec) run(ch ssh.Channel, cmd string) int {
 		return 127
 	}
 	switch {
+	case strings.Contains(cmd, "image inspect"):
+		io.WriteString(ch, `@J
+[{"Id":"sha256:5ca1ab1e0000","RepoTags":["nginx:1.27"],"Os":"linux","Architecture":"amd64","Config":{"Cmd":["nginx","-g","daemon off;"]},"RootFS":{"Layers":["sha256:a"]}}]
+@H
+{"ID":"sha256:5ca1ab1e0000","CreatedBy":"CMD [\"nginx\"]","CreatedSince":"3 weeks ago","Size":"0B"}
+@C
+{"ID":"c0ffee000001","Names":"web","Image":"nginx:1.27","State":"running","Status":"Up 2 hours"}
+`)
 	case strings.Contains(cmd, "ps -a --no-trunc"):
 		if d.out != "" {
 			io.WriteString(ch, d.out)
@@ -51,6 +60,16 @@ func (d *dockerExec) run(ch ssh.Channel, cmd string) int {
 		}
 	case strings.Contains(cmd, "logs --tail"):
 		io.WriteString(ch, "listening on :80\n")
+	case strings.Contains(cmd, "inspect --type container"):
+		io.WriteString(ch, `@J
+[{"Id":"c0ffee000001","Name":"/web","Path":"nginx","Args":["-g","daemon off;"],"State":{"Status":"running","Pid":42},
+"Config":{"Env":["PATH=/usr/bin"],"Image":"nginx:1.27"},"Mounts":[{"Type":"volume","Name":"html","Destination":"/usr/share/nginx/html","RW":true}]}]
+@S
+{"CPUPerc":"3.50%","MemPerc":"1.20%","MemUsage":"24MiB / 1.9GiB","NetIO":"1kB / 2kB","BlockIO":"0B / 0B","PIDs":"3"}
+@T
+PID USER %CPU %MEM ELAPSED COMMAND
+42 root 0.0 0.1 01:02 nginx: master process nginx -g daemon off;
+`)
 	default:
 		d.mu.Lock()
 		d.actions = append(d.actions, cmd)
@@ -82,8 +101,11 @@ func (d *dockerExec) has(part string) bool {
 	return false
 }
 
-// TestDockerPanel: the Docker panel lists the containers and the images,
-// and stops, removes and reads the logs of the container chosen.
+// TestDockerPanel: the Docker panel lists the containers and the images;
+// a right click opens the app's own menu of a row, a click its details,
+// read from docker inspect, stats and top for a container, image inspect,
+// history and the containers made from it for an image; the containers
+// are stopped, removed and their logs read, and the images removed.
 func TestDockerPanel(t *testing.T) {
 	ex := &dockerExec{}
 	srv := startMetricSrv(t, ex.run)
@@ -92,8 +114,8 @@ func TestDockerPanel(t *testing.T) {
 	connected(t, a, tt, srv)
 	mustClick(t, tt, "Docker")
 	tt.Frame()
-	if !a.panelOpen(inspectDocker) {
-		t.Fatalf("panels %q", a.panels)
+	if !a.toolHere(layout.Docker) {
+		t.Fatal("the pane did not open")
 	}
 	waitFor(t, tt, "the containers", func() bool { return tt.HasText("web") && tt.HasText("db") })
 	for _, s := range []string{"Containers (2)", "Images (1)", "nginx:1.27", "Up 2 hours", "Select a container to manage it."} {
@@ -102,10 +124,35 @@ func TestDockerPanel(t *testing.T) {
 		}
 	}
 
-	a.docker.ctrSel = 0
+	if err := tt.RightClick("db"); err != nil {
+		t.Fatal(err)
+	}
 	tt.Frame()
-	if !tt.HasText("0.0.0.0:80->80/tcp") || !tt.HasText("c0ffee000001") {
-		t.Fatalf("card: %q", tt.Texts())
+	want := []string{"Details", "-", "Start", "Restart", "Pause", "-", "Logs", "Open Shell in Container", "-", "Remove Container"}
+	if got := menuOf(a); !slices.Equal(got, want) || a.docker.detailOpen {
+		t.Fatalf("menu %q (details open %v), want %q", got, a.docker.detailOpen, want)
+	}
+	if err := chooseMenu(a, tt, "Start"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, tt, "start", func() bool { return ex.did("start", "c0ffee000002") })
+	waitFor(t, tt, "done", func() bool { return a.docker.busy == "" })
+
+	mustClick(t, tt, "web")
+	tt.Frame()
+	if d := a.docker; !d.detailOpen || d.detailRef != "c0ffee000001" || d.ctrSel != 0 {
+		t.Fatalf("the click opened %q (open %v, row %d)", d.detailRef, d.detailOpen, d.ctrSel)
+	}
+	waitFor(t, tt, "the details", func() bool { return a.docker.detailRead })
+	det := a.docker.detail
+	if det.Inspect.Command() != "nginx -g daemon off;" || det.Inspect.State.Pid != 42 || len(det.Inspect.Mounts) != 1 {
+		t.Errorf("inspect %+v", det.Inspect)
+	}
+	if det.Stats == nil || det.Stats.PIDs != "3" || session.Percent(det.Stats.CPU) != 3.5 {
+		t.Errorf("stats %+v", det.Stats)
+	}
+	if len(det.Top.Rows) != 1 || det.Top.Rows[0][5] != "nginx: master process nginx -g daemon off;" {
+		t.Errorf("top %+v", det.Top)
 	}
 	mustClick(t, tt, "Stop")
 	waitFor(t, tt, "stop", func() bool { return ex.did("stop", "c0ffee000001") })
@@ -113,7 +160,7 @@ func TestDockerPanel(t *testing.T) {
 
 	mustClick(t, tt, "Logs")
 	waitFor(t, tt, "the logs", func() bool { return tt.HasText("Logs of web") && tt.HasText("listening on :80\n") })
-	mustClick(t, tt, "Close")
+	a.docker.logsOpen = false
 	tt.Frame()
 
 	mustClick(t, tt, "Remove Container")
@@ -125,13 +172,40 @@ func TestDockerPanel(t *testing.T) {
 	waitFor(t, tt, "rm", func() bool { return ex.did("rm -f", "c0ffee000001") })
 	waitFor(t, tt, "done", func() bool { return a.docker.busy == "" })
 
+	// Closed, the details leave no row chosen, so a click opens them again.
+	a.docker.detailOpen = false
+	tt.Frame()
+	if a.docker.ctrSel != -1 {
+		t.Errorf("row %d still chosen", a.docker.ctrSel)
+	}
+
 	a.docker.view = 1
 	tt.Frame()
 	if !tt.HasText("187MB") || !tt.HasText("3 weeks ago") {
 		t.Fatalf("images: %q", tt.Texts())
 	}
-	a.docker.imgSel = 0
+	if err := tt.RightClick("187MB"); err != nil {
+		t.Fatal(err)
+	}
 	tt.Frame()
+	if got := menuOf(a); !slices.Equal(got, []string{"Details", "-", "Remove Image"}) {
+		t.Fatalf("image menu %q", got)
+	}
+	if err := chooseMenu(a, tt, "Details"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, tt, "the image", func() bool { return a.docker.imgRead })
+	img := a.docker.img
+	if img.Inspect.Platform() != "linux/amd64" || len(img.History) != 1 || len(img.Containers) != 1 || img.Containers[0].Name != "web" {
+		t.Errorf("image %+v", img)
+	}
+	a.docker.imgOpen = false
+	tt.Frame()
+	mustClick(t, tt, "187MB")
+	tt.Frame()
+	if !a.docker.imgOpen || a.docker.imgRef != "sha256:5ca1ab1e0000" {
+		t.Fatalf("the click opened %q (open %v)", a.docker.imgRef, a.docker.imgOpen)
+	}
 	mustClick(t, tt, "Remove Image")
 	tt.Frame()
 	mustClick(t, tt, "Delete")
@@ -158,7 +232,7 @@ func TestDockerCompose(t *testing.T) {
 	a, tt := newTestApp(t)
 	tt.SetSize(1400, 900)
 	connected(t, a, tt, srv)
-	a.panels = []inspectorKind{inspectDocker}
+	a.ShowTool(layout.Docker)
 	tt.Frame()
 	waitFor(t, tt, "the project", func() bool {
 		return tt.HasText("shop") && tt.HasText("web") && tt.HasText("db") && tt.HasText("redis") && tt.HasText("1 of 2 running")
@@ -167,7 +241,8 @@ func TestDockerCompose(t *testing.T) {
 	if err := tt.RightClick("shop"); err != nil {
 		t.Fatal(err)
 	}
-	got := tt.Menu()
+	tt.Frame()
+	got := menuOf(a)
 	for _, want := range []string{"Compose Up", "Compose Down", "Compose Restart", "Compose Stop", "Compose Start", "Compose Logs"} {
 		if !slices.Contains(got, want) {
 			t.Errorf("project menu %q lacks %q", got, want)
@@ -176,7 +251,7 @@ func TestDockerCompose(t *testing.T) {
 	if slices.Contains(got, "Stop") || slices.Contains(got, "Remove Container") {
 		t.Errorf("project menu has container commands: %q", got)
 	}
-	if err := tt.ChooseMenuItem("Compose Stop"); err != nil {
+	if err := chooseMenu(a, tt, "Compose Stop"); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "compose stop", func() bool {
@@ -187,26 +262,31 @@ func TestDockerCompose(t *testing.T) {
 	if err := tt.RightClick("web"); err != nil {
 		t.Fatal(err)
 	}
-	got = tt.Menu()
+	tt.Frame()
+	got = menuOf(a)
 	for _, want := range []string{"Stop", "Compose Up", "Compose Down", "Compose Logs"} {
 		if !slices.Contains(got, want) {
 			t.Errorf("container menu %q lacks %q", got, want)
 		}
 	}
-	tt.CloseMenu()
+	a.menu, a.ctx.entries = dropMenu{}, nil
+	tt.Frame()
 
 	if err := tt.RightClick("redis"); err != nil {
 		t.Fatal(err)
 	}
-	if slices.Contains(tt.Menu(), "Compose Up") {
-		t.Errorf("a container without a project has compose commands: %q", tt.Menu())
+	tt.Frame()
+	if slices.Contains(menuOf(a), "Compose Up") {
+		t.Errorf("a container without a project has compose commands: %q", menuOf(a))
 	}
-	tt.CloseMenu()
+	a.menu, a.ctx.entries = dropMenu{}, nil
+	tt.Frame()
 
 	if err := tt.RightClick("shop"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tt.ChooseMenuItem("Compose Down"); err != nil {
+	tt.Frame()
+	if err := chooseMenu(a, tt, "Compose Down"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -219,7 +299,8 @@ func TestDockerCompose(t *testing.T) {
 	if err := tt.RightClick("shop"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tt.ChooseMenuItem("Compose Logs"); err != nil {
+	tt.Frame()
+	if err := chooseMenu(a, tt, "Compose Logs"); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the logs", func() bool { return tt.HasText("Compose logs of shop") && tt.HasText("shop is up\n") })
@@ -233,15 +314,15 @@ func TestDockerShell(t *testing.T) {
 	a, tt := newTestApp(t)
 	tt.SetSize(1400, 900)
 	connected(t, a, tt, srv)
-	a.panels = []inspectorKind{inspectDocker}
+	a.ShowTool(layout.Docker)
 	tt.Frame()
 	waitFor(t, tt, "the containers", func() bool { return tt.HasText("web") })
-	a.docker.ctrSel = 0
+	a.openContainer(a.docker.info.Containers[0])
 	tt.Frame()
 	tabs := len(a.ws.Tabs)
 	mustClick(t, tt, "Open Shell in Container")
-	if len(a.ws.Tabs) != tabs+1 {
-		t.Fatalf("tabs %d, want %d", len(a.ws.Tabs), tabs+1)
+	if len(a.ws.Tabs) != tabs+1 || a.docker.detailOpen {
+		t.Fatalf("tabs %d, want %d; details open %v", len(a.ws.Tabs), tabs+1, a.docker.detailOpen)
 	}
 	cn := a.focused()
 	waitFor(t, tt, "connected", func() bool { return cn.s.Status().State == session.Connected })
@@ -255,7 +336,7 @@ func TestDockerMissing(t *testing.T) {
 	srv := startMetricSrv(t, (&dockerExec{missing: true}).run)
 	a, tt := newTestApp(t)
 	connected(t, a, tt, srv)
-	a.panels = []inspectorKind{inspectDocker}
+	a.ShowTool(layout.Docker)
 	tt.Frame()
 	waitFor(t, tt, "the note", func() bool { return tt.HasText("Docker is not installed on this server.") })
 }

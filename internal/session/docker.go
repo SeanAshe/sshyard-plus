@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -456,4 +457,333 @@ func ComposeLogs(ctx context.Context, client *ssh.Client, p Compose, lines int) 
 	}
 	out, err := runDocker(ctx, client, composePrefix(p)+"logs --tail "+strconv.Itoa(lines)+" --no-color")
 	return string(out), err
+}
+
+// dockerDetailScript prints what docker inspect says of the container $1
+// (after @J), and, while it runs, its resource use (@S, one JSON object)
+// and its processes (@T, as docker top prints them).
+const dockerDetailScript = dockerPrelude + `echo @J
+$D inspect --type container "$1" || exit 1
+[ "$($D inspect --type container --format "{{.State.Running}}" "$1" 2>/dev/null)" = true ] || exit 0
+echo @S
+$D stats --no-stream --no-trunc --format "{{json .}}" "$1" 2>/dev/null
+echo @T
+$D top "$1" -eo pid,user,pcpu,pmem,etime,args 2>/dev/null || $D top "$1" 2>/dev/null
+exit 0`
+
+// ContainerStats is a running container's resource use, as docker stats
+// words it.
+type ContainerStats struct {
+	CPU      string `json:"CPUPerc"`
+	Mem      string `json:"MemPerc"`
+	MemUsage string `json:"MemUsage"`
+	NetIO    string `json:"NetIO"`
+	BlockIO  string `json:"BlockIO"`
+	PIDs     string `json:"PIDs"`
+}
+
+// Percent is a docker stats percentage ("12.5%") as a number, -1 when
+// it holds none.
+func Percent(s string) float64 {
+	f, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(s), "%")), 64)
+	if err != nil {
+		return -1
+	}
+	return f
+}
+
+// Mount is a volume or a bind of a container.
+type Mount struct {
+	Type        string `json:"Type"`
+	Name        string `json:"Name"`
+	Source      string `json:"Source"`
+	Destination string `json:"Destination"`
+	Mode        string `json:"Mode"`
+	RW          bool   `json:"RW"`
+}
+
+// ContainerNet is a network the container is on.
+type ContainerNet struct {
+	Name    string
+	IP      string `json:"IPAddress"`
+	IPv6    string `json:"GlobalIPv6Address"`
+	Gateway string `json:"Gateway"`
+	MAC     string `json:"MacAddress"`
+}
+
+// ContainerInspect is the part of docker inspect the details show.
+type ContainerInspect struct {
+	ID      string   `json:"Id"`
+	Name    string   `json:"Name"`
+	Created string   `json:"Created"`
+	Path    string   `json:"Path"`
+	Args    []string `json:"Args"`
+	Image   string   `json:"Image"`
+	Driver  string   `json:"Driver"`
+	Restart int      `json:"RestartCount"`
+	State   struct {
+		Status     string `json:"Status"`
+		Pid        int    `json:"Pid"`
+		ExitCode   int    `json:"ExitCode"`
+		Error      string `json:"Error"`
+		OOMKilled  bool   `json:"OOMKilled"`
+		StartedAt  string `json:"StartedAt"`
+		FinishedAt string `json:"FinishedAt"`
+		Health     *struct {
+			Status        string `json:"Status"`
+			FailingStreak int    `json:"FailingStreak"`
+		} `json:"Health"`
+	} `json:"State"`
+	Config struct {
+		Hostname   string            `json:"Hostname"`
+		User       string            `json:"User"`
+		Env        []string          `json:"Env"`
+		Cmd        []string          `json:"Cmd"`
+		Entrypoint []string          `json:"Entrypoint"`
+		WorkingDir string            `json:"WorkingDir"`
+		Image      string            `json:"Image"`
+		Labels     map[string]string `json:"Labels"`
+	} `json:"Config"`
+	HostConfig struct {
+		NetworkMode   string `json:"NetworkMode"`
+		Privileged    bool   `json:"Privileged"`
+		RestartPolicy struct {
+			Name  string `json:"Name"`
+			Count int    `json:"MaximumRetryCount"`
+		} `json:"RestartPolicy"`
+		Memory   int64 `json:"Memory"`
+		NanoCpus int64 `json:"NanoCpus"`
+		ShmSize  int64 `json:"ShmSize"`
+	} `json:"HostConfig"`
+	Mounts          []Mount `json:"Mounts"`
+	NetworkSettings struct {
+		Networks map[string]ContainerNet `json:"Networks"`
+	} `json:"NetworkSettings"`
+}
+
+// Command is how the container was started: its entrypoint and its
+// arguments.
+func (c ContainerInspect) Command() string {
+	return strings.TrimSpace(strings.Join(append([]string{c.Path}, c.Args...), " "))
+}
+
+// Nets are the container's networks, by name.
+func (c ContainerInspect) Nets() []ContainerNet {
+	ns := make([]ContainerNet, 0, len(c.NetworkSettings.Networks))
+	for name, n := range c.NetworkSettings.Networks {
+		n.Name = name
+		ns = append(ns, n)
+	}
+	slices.SortFunc(ns, func(a, b ContainerNet) int { return strings.Compare(a.Name, b.Name) })
+	return ns
+}
+
+// Top is the processes of a container: the columns docker top printed,
+// and a row of as many cells for each process.
+type Top struct {
+	Titles []string
+	Rows   [][]string
+}
+
+// ContainerDetail is what DockerInspect read: Stats and Top are only
+// read while the container runs.
+type ContainerDetail struct {
+	Inspect ContainerInspect
+	Stats   *ContainerStats
+	Top     Top
+}
+
+// ParseDockerDetail reads the output of the detail script.
+func ParseDockerDetail(out []byte) (ContainerDetail, error) {
+	var d ContainerDetail
+	parts, ok := dockerSections(out, "@J", "@S", "@T")
+	if !ok {
+		return d, errors.New("session: unreadable docker output")
+	}
+	var all []ContainerInspect
+	if err := json.Unmarshal([]byte(parts["@J"]), &all); err != nil || len(all) == 0 {
+		return d, errors.New("session: unreadable docker output")
+	}
+	d.Inspect = all[0]
+	if s := strings.TrimSpace(parts["@S"]); s != "" {
+		var st ContainerStats
+		if json.Unmarshal([]byte(s), &st) == nil {
+			d.Stats = &st
+		}
+	}
+	d.Top = parseTop(parts["@T"])
+	return d, nil
+}
+
+// dockerSections splits a script's output at the lines that are one of
+// marks into what follows each; ok is false when it has none of them.
+func dockerSections(out []byte, marks ...string) (parts map[string]string, ok bool) {
+	parts = map[string]string{}
+	var b strings.Builder
+	part := ""
+	flush := func() {
+		if part != "" {
+			parts[part] = b.String()
+		}
+		b.Reset()
+	}
+	for line := range strings.Lines(string(out)) {
+		if t := strings.TrimSpace(line); slices.Contains(marks, t) {
+			flush()
+			part = t
+			continue
+		}
+		if part != "" {
+			b.WriteString(line)
+		}
+	}
+	flush()
+	return parts, part != ""
+}
+
+// parseTop reads docker top: a line of titles, then a line a process,
+// whose last cell (the command) may hold spaces.
+func parseTop(s string) Top {
+	var t Top
+	for line := range strings.Lines(s) {
+		f := strings.Fields(line)
+		if len(f) == 0 {
+			continue
+		}
+		if t.Titles == nil {
+			t.Titles = f
+			continue
+		}
+		n := len(t.Titles)
+		if len(f) > n {
+			// The command is what is left after the other cells.
+			rest := strings.TrimSpace(line)
+			for range n - 1 {
+				rest = strings.TrimLeft(rest[strings.IndexFunc(rest, isSpace):], " \t")
+			}
+			f = append(f[:n-1], strings.TrimSpace(rest))
+		}
+		t.Rows = append(t.Rows, f)
+	}
+	return t
+}
+
+func isSpace(r rune) bool { return r == ' ' || r == '\t' }
+
+// DockerInspect reads the details of the container ref.
+func DockerInspect(ctx context.Context, client *ssh.Client, ref string) (ContainerDetail, error) {
+	if !DockerRefOK(ref) {
+		return ContainerDetail{}, errors.New("session: bad docker reference")
+	}
+	out, err := runDocker(ctx, client, dockerDetailScript, ref)
+	if err != nil {
+		return ContainerDetail{}, err
+	}
+	return ParseDockerDetail(out)
+}
+
+// dockerImageScript prints what docker image inspect says of the image
+// $1 (after @J), its layers as docker history lists them (@H, one JSON
+// object a line) and the containers made from it (@C, as docker ps).
+const dockerImageScript = dockerPrelude + `echo @J
+$D image inspect "$1" || exit 1
+echo @H
+$D history --no-trunc --format "{{json .}}" "$1" 2>/dev/null
+echo @C
+$D ps -a --no-trunc --filter "ancestor=$1" --format "{{json .}}" 2>/dev/null
+exit 0`
+
+// ImageInspect is the part of docker image inspect the details show.
+type ImageInspect struct {
+	ID            string   `json:"Id"`
+	RepoTags      []string `json:"RepoTags"`
+	RepoDigests   []string `json:"RepoDigests"`
+	Created       string   `json:"Created"`
+	Author        string   `json:"Author"`
+	DockerVersion string   `json:"DockerVersion"`
+	Architecture  string   `json:"Architecture"`
+	Variant       string   `json:"Variant"`
+	Os            string   `json:"Os"`
+	Size          int64    `json:"Size"`
+	Config        struct {
+		User         string              `json:"User"`
+		Env          []string            `json:"Env"`
+		Cmd          []string            `json:"Cmd"`
+		Entrypoint   []string            `json:"Entrypoint"`
+		WorkingDir   string              `json:"WorkingDir"`
+		ExposedPorts map[string]struct{} `json:"ExposedPorts"`
+		Volumes      map[string]struct{} `json:"Volumes"`
+		Labels       map[string]string   `json:"Labels"`
+	} `json:"Config"`
+	RootFS struct {
+		Layers []string `json:"Layers"`
+	} `json:"RootFS"`
+}
+
+// Platform is the image's OS and architecture, as linux/arm64/v8.
+func (i ImageInspect) Platform() string {
+	return strings.Join(slices.DeleteFunc([]string{i.Os, i.Architecture, i.Variant}, func(s string) bool { return s == "" }), "/")
+}
+
+// ImageLayer is a step of an image's build, as docker history lists it.
+type ImageLayer struct {
+	ID        string `json:"ID"`
+	CreatedBy string `json:"CreatedBy"`
+	Created   string `json:"CreatedSince"`
+	Size      string `json:"Size"`
+	Comment   string `json:"Comment"`
+}
+
+// Step is the instruction that made the layer, without the shell the
+// legacy builder wrapped it in.
+func (l ImageLayer) Step() string {
+	s := strings.TrimSpace(l.CreatedBy)
+	s = strings.TrimPrefix(s, "/bin/sh -c #(nop) ")
+	return strings.TrimSpace(s)
+}
+
+// ImageDetail is what DockerImageInspect read.
+type ImageDetail struct {
+	Inspect    ImageInspect
+	History    []ImageLayer
+	Containers []Container
+}
+
+// ParseDockerImage reads the output of the image script.
+func ParseDockerImage(out []byte) (ImageDetail, error) {
+	var d ImageDetail
+	parts, ok := dockerSections(out, "@J", "@H", "@C")
+	if !ok {
+		return d, errors.New("session: unreadable docker output")
+	}
+	var all []ImageInspect
+	if err := json.Unmarshal([]byte(parts["@J"]), &all); err != nil || len(all) == 0 {
+		return d, errors.New("session: unreadable docker output")
+	}
+	d.Inspect = all[0]
+	for line := range strings.Lines(parts["@H"]) {
+		var l ImageLayer
+		if json.Unmarshal([]byte(line), &l) == nil && (l.CreatedBy != "" || l.ID != "") {
+			d.History = append(d.History, l)
+		}
+	}
+	for line := range strings.Lines(parts["@C"]) {
+		var c Container
+		if json.Unmarshal([]byte(line), &c) == nil && c.ID != "" {
+			d.Containers = append(d.Containers, c)
+		}
+	}
+	return d, nil
+}
+
+// DockerImageInspect reads the details of the image ref.
+func DockerImageInspect(ctx context.Context, client *ssh.Client, ref string) (ImageDetail, error) {
+	if !DockerRefOK(ref) {
+		return ImageDetail{}, errors.New("session: bad docker reference")
+	}
+	out, err := runDocker(ctx, client, dockerImageScript, ref)
+	if err != nil {
+		return ImageDetail{}, err
+	}
+	return ParseDockerImage(out)
 }

@@ -108,6 +108,119 @@ func TestDockerCommand(t *testing.T) {
 	}
 }
 
+// TestDockerDetailScript runs the detail script on a fake docker: a
+// running container's inspect, stats and processes, whose commands keep
+// their spaces.
+func TestDockerDetailScript(t *testing.T) {
+	env := fakeDocker(t, `case "$1" in
+version) echo 27.1.0;;
+inspect) case "$*" in
+  *State.Running*) echo true;;
+  *) echo '[{"Id":"abc123","Name":"/web","Path":"nginx","Args":["-g","daemon off;"],"RestartCount":2,
+  "State":{"Status":"running","Pid":42,"Health":{"Status":"healthy"}},
+  "Config":{"Env":["A=1"],"Image":"nginx:1.27","Labels":{"k":"v"}},
+  "HostConfig":{"RestartPolicy":{"Name":"always"},"Memory":536870912},
+  "Mounts":[{"Type":"bind","Source":"/srv","Destination":"/usr/share/nginx/html","RW":false}],
+  "NetworkSettings":{"Networks":{"web":{"IPAddress":"172.18.0.2"},"bridge":{"IPAddress":"172.17.0.2"}}}}]';;
+  esac;;
+stats) echo '{"CPUPerc":"12.50%","MemPerc":"1.20%","MemUsage":"24MiB / 1.9GiB","NetIO":"1kB / 2kB","BlockIO":"0B / 0B","PIDs":"3"}';;
+top) echo 'PID USER %CPU %MEM ELAPSED COMMAND'
+    echo '42 root 0.0 0.1 01:02 nginx: master process nginx -g daemon off;'
+    echo '50 101 0.1 0.2 01:01 nginx: worker process';;
+esac`)
+	cmd := exec.Command("sh", "-c", dockerDetailScript, "_", "web")
+	cmd.Env = env
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	d, err := ParseDockerDetail(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := d.Inspect
+	if in.ID != "abc123" || in.Command() != "nginx -g daemon off;" || in.Restart != 2 || in.State.Health == nil ||
+		in.HostConfig.RestartPolicy.Name != "always" || len(in.Mounts) != 1 || in.Config.Labels["k"] != "v" {
+		t.Errorf("inspect %+v", in)
+	}
+	if ns := in.Nets(); len(ns) != 2 || ns[0].Name != "bridge" || ns[1].IP != "172.18.0.2" {
+		t.Errorf("networks %+v", ns)
+	}
+	if d.Stats == nil || Percent(d.Stats.CPU) != 12.5 || d.Stats.PIDs != "3" {
+		t.Errorf("stats %+v", d.Stats)
+	}
+	if len(d.Top.Titles) != 6 || len(d.Top.Rows) != 2 {
+		t.Fatalf("top %+v", d.Top)
+	}
+	if r := d.Top.Rows[0]; len(r) != 6 || r[5] != "nginx: master process nginx -g daemon off;" {
+		t.Errorf("first process %q", r)
+	}
+}
+
+// TestDockerDetailStopped: a stopped container has its inspect, and no
+// stats or processes are asked for.
+func TestDockerDetailStopped(t *testing.T) {
+	env := fakeDocker(t, `case "$1" in
+version) echo 27.1.0;;
+inspect) case "$*" in
+  *State.Running*) echo false;;
+  *) echo '[{"Id":"def456","Name":"/job","State":{"Status":"exited","ExitCode":1}}]';;
+  esac;;
+stats|top) echo "asked $1" >&2; exit 1;;
+esac`)
+	cmd := exec.Command("sh", "-c", dockerDetailScript, "_", "job")
+	cmd.Env = env
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	d, err := ParseDockerDetail(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Inspect.State.ExitCode != 1 || d.Stats != nil || len(d.Top.Rows) != 0 {
+		t.Errorf("%+v", d)
+	}
+	if Percent("n/a") != -1 || Percent("--") != -1 {
+		t.Error("a missing percentage read as a number")
+	}
+}
+
+// TestDockerImageScript runs the image script on a fake docker: the
+// image's inspect, its build steps and the containers made from it.
+func TestDockerImageScript(t *testing.T) {
+	env := fakeDocker(t, `case "$1" in
+version) echo 27.1.0;;
+image) echo '[{"Id":"sha256:5ca1ab1e","RepoTags":["nginx:1.27"],"Os":"linux","Architecture":"arm64","Variant":"v8","Size":192000000,
+  "Config":{"Cmd":["nginx","-g","daemon off;"],"ExposedPorts":{"80/tcp":{}}},"RootFS":{"Layers":["sha256:a","sha256:b"]}}]';;
+history) echo '{"ID":"sha256:5ca1ab1e","CreatedBy":"/bin/sh -c #(nop)  CMD [\"nginx\"]","CreatedSince":"3 weeks ago","Size":"0B"}'
+    echo '{"ID":"<missing>","CreatedBy":"RUN /bin/sh -c apt-get update # buildkit","CreatedSince":"3 weeks ago","Size":"60MB"}';;
+ps) case "$*" in *ancestor=sha256:5ca1ab1e*) echo '{"ID":"c1","Names":"web","Image":"nginx:1.27","State":"running","Status":"Up"}';; esac;;
+esac`)
+	cmd := exec.Command("sh", "-c", dockerImageScript, "_", "sha256:5ca1ab1e")
+	cmd.Env = env
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	d, err := ParseDockerImage(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if in := d.Inspect; in.ID != "sha256:5ca1ab1e" || in.Platform() != "linux/arm64/v8" || len(in.RootFS.Layers) != 2 || len(in.Config.ExposedPorts) != 1 {
+		t.Errorf("inspect %+v", in)
+	}
+	if len(d.History) != 2 || d.History[0].Step() != `CMD ["nginx"]` || d.History[1].Size != "60MB" {
+		t.Errorf("history %+v", d.History)
+	}
+	if len(d.Containers) != 1 || d.Containers[0].Name != "web" {
+		t.Errorf("containers %+v", d.Containers)
+	}
+	if _, err := ParseDockerImage([]byte("Error: No such image\n")); err == nil {
+		t.Error("output without the inspect read")
+	}
+}
+
 func TestGroupCompose(t *testing.T) {
 	lab := func(project, service string) string {
 		return "com.docker.compose.project=" + project +

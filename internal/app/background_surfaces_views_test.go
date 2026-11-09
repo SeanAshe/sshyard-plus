@@ -53,7 +53,7 @@ func backgroundHostView(t *testing.T) backgroundView {
 	a, tt := newTestApp(t)
 	h := savedHost(t, a, "background host", "10.0.0.8")
 	a.selected = h.ID
-	a.openPanel(inspectHost)
+	a.ShowTool(layout.HostInfo)
 	tt.Frame()
 	return backgroundView{a, tt, func() {
 		m := locales.In("en")

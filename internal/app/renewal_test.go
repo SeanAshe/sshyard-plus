@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Licoy/sshyard/internal/assets"
+	"github.com/Licoy/sshyard/internal/layout"
 	"github.com/Licoy/sshyard/locales"
 )
 
@@ -124,8 +125,8 @@ func TestRemindRenewals(t *testing.T) {
 	}
 	// Clicking it shows the host.
 	tt.Frame()
-	if a.selected != web.ID || !a.panelOpen(inspectHost) {
-		t.Fatalf("click showed %q, panels %v", a.selected, a.panels)
+	if a.selected != web.ID || !a.toolHere(layout.HostInfo) {
+		t.Fatalf("click showed %q, host pane %v", a.selected, a.toolHere(layout.HostInfo))
 	}
 	// Each renewal notifies once, as many days before as its host says.
 	a.remindRenewals(at("2026-10-31"))

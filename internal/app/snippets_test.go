@@ -193,7 +193,7 @@ func TestSnippetUIFocusedTargetAndSend(t *testing.T) {
 	got := ""
 	waitFor(t, tt, "UI snippet bytes", func() bool { got += shell.take(); return strings.Contains(got, "echo UI marker") })
 	if got != "\x1b[200~echo UI marker\x1b[201~" || a.toolPane(layout.Snippets) == nil {
-		t.Fatalf("send %q panels %q", got, a.panels)
+		t.Fatalf("send %q, snippets pane %v", got, a.toolPane(layout.Snippets) != nil)
 	}
 
 	tt.Key(0, ui.KeyEnter)
@@ -270,10 +270,9 @@ func TestSnippetUIFilterFollowsSavedAndDeletedGroup(t *testing.T) {
 	}
 }
 
-func TestSnippetUIWelcomeActionsWithPanel(t *testing.T) {
+func TestSnippetUIWelcomeActions(t *testing.T) {
 	a, tt := newTestApp(t)
 	m := locales.In("en")
-	a.panels = []inspectorKind{inspectTmux}
 	tt.SetSize(820, 520)
 	tt.Frame()
 	for _, label := range []string{m.QuickMigration(), m.QuickConnect(), m.NewHost()} {

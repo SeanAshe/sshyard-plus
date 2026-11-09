@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -18,8 +19,9 @@ import (
 // session's server, read again every dockerEvery while the panel shows,
 // and what can be done to them: start, stop, restart, pause, remove,
 // read a container's logs, open a shell in it. Containers that belong to
-// a Compose project are grouped under it, as in the Containers view, and
-// the group's menu runs compose against that project.
+// a Compose project are grouped under it, and the group's menu runs
+// compose against that project. A container's or an image's details open
+// in their own sheet.
 
 // dockerEvery is how often the panel reads the server again.
 const dockerEvery = 5 * time.Second
@@ -69,13 +71,30 @@ type dockerState struct {
 	confirmImg     bool
 	confirmCompose bool
 	confirmComp    session.Compose
-	logsComp       session.Compose // set while the logs are a project's
 	logsOpen       bool
 	logsRef        string
 	logsName       string
+	logsComp       session.Compose // set while the logs are a project's
 	logs           string
 	logsBusy       bool
 	logsErr        string
+	// The details sheet of the container detailRef, read again every
+	// dockerEvery while it shows. A click on a row opens it, and the
+	// row stays chosen only while it shows.
+	detailOpen    bool
+	detailRef     string
+	detail        session.ContainerDetail
+	detailRead    bool
+	detailRunning bool
+	detailAt      time.Time
+	detailErr     error
+	// The details sheet of the image imgRef, read as it opens.
+	imgOpen    bool
+	imgRef     string
+	img        session.ImageDetail
+	imgRead    bool
+	imgRunning bool
+	imgErr     error
 }
 
 // dockerErrText is a failure of the panel in words.
@@ -100,6 +119,8 @@ func (a *App) readDocker(c *ui.Context, tc *conn, now bool) {
 		d.ctrSel, d.imgSel = -1, -1
 		d.ctr.Open.Clear()
 		d.seen, d.rowOf = nil, nil
+		d.detailOpen, d.detailRunning = false, false
+		d.imgOpen, d.imgRunning = false, false
 	}
 	if d.running {
 		return
@@ -150,7 +171,7 @@ func (a *App) dockerDo(tc *conn, action session.DockerAction, ref string) {
 			if d.gen != gen {
 				return
 			}
-			d.busy, d.at = "", time.Time{} // read again at once
+			d.busy, d.at, d.detailAt = "", time.Time{}, time.Time{} // read again at once
 			if err != nil {
 				a.toasts = append(a.toasts, func(m locales.Messages) ui.Toast {
 					return ui.Toast{Title: dockerErrText(m, err), Type: "error"}
@@ -204,7 +225,7 @@ func (a *App) dockerCompose(tc *conn, action session.ComposeAction, comp session
 			if d.gen != gen {
 				return
 			}
-			d.busy, d.at = "", time.Time{}
+			d.busy, d.at, d.detailAt = "", time.Time{}, time.Time{}
 			if err != nil {
 				a.toasts = append(a.toasts, func(m locales.Messages) ui.Toast {
 					return ui.Toast{Title: dockerErrText(m, err), Type: "error"}
@@ -310,6 +331,8 @@ func (a *App) dockerPanel(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 	} else {
 		a.imagesView(c, m, tok, tc)
 	}
+	a.dockerImageView(c, m, tok, tc)
+	a.dockerDetailView(c, m, tok, tc)
 	a.dockerConfirm(c, m, tc)
 	a.dockerLogsView(c, m, tok, tc)
 }
@@ -337,6 +360,15 @@ func (a *App) containersView(c *ui.Context, m locales.Messages, tok theme.Tokens
 	roots, children, rowOf := composeTree(session.GroupCompose(cs))
 	d.rowOf = rowOf
 	a.openNewCompose(roots)
+	// A container stays chosen only while its details show. A Compose
+	// project stays chosen so its card keeps showing.
+	if d.ctrSel >= 0 && d.ctrSel < d.ctr.Rows() {
+		if row, ok := d.rowOf[d.ctr.Item(d.ctrSel)]; !ok || (!row.group && !d.detailOpen) {
+			d.ctrSel = -1
+		}
+	} else {
+		d.ctrSel = -1
+	}
 	d.ctr.List.RoundRows = true
 	d.ctr.List.Selected = &d.ctrSel
 	d.ctr.List.Label = func(i int) string {
@@ -351,11 +383,8 @@ func (a *App) containersView(c *ui.Context, m locales.Messages, tok theme.Tokens
 		}
 		return ""
 	}
-	d.ctr.List.CellMenu = func(menu *ui.Menu, row, _ int) {
-		a.dockerRowMenu(menu, m, tc, row)
-	}
 	cols := []ui.TableColumn{{Title: m.ColName(), MinWidth: 90}, {Title: m.DockerColImage(), Width: 120}, {Title: m.DockerColStatus(), Width: 120}}
-	ui.OutlineTable(c.Key("containers"), &d.ctr, cols, roots, children, func(item dockerItem, col int) {
+	tbl := ui.OutlineTable(c.Key("containers"), &d.ctr, cols, roots, children, func(item dockerItem, col int) {
 		row, ok := d.rowOf[item]
 		if !ok {
 			return
@@ -364,83 +393,48 @@ func (a *App) containersView(c *ui.Context, m locales.Messages, tok theme.Tokens
 		if d.ctrSel >= 0 && d.ctrSel < d.ctr.Rows() && d.ctr.Item(d.ctrSel) == item {
 			muted = tok.AccentText
 		}
-		if row.group {
-			a.composeGroupCell(c, m, tok, row.g, col, muted)
-			return
-		}
-		ct := row.ct
-		switch col {
-		case 0:
-			ui.Row(c).Gap(6).AlignItems(ui.Center).Grow(1).MinWidth(0).Children(func() {
+		cell := ui.Row(c).Gap(6).AlignItems(ui.Center).Grow(1).MinWidth(0).AlignSelf(ui.Stretch).Children(func() {
+			if row.group {
+				a.composeGroupCell(c, m, tok, row.g, col, muted)
+				return
+			}
+			ct := row.ct
+			switch col {
+			case 0:
 				dot(c, stateTint(tok, ct.State))
 				ui.Text(c, ct.Name).FontSize(theme.Footnote).SingleLine()
-			})
-		case 1:
-			ui.Text(c, ct.Image).FontSize(theme.Footnote).TextColor(muted).SingleLine()
-		case 2:
-			ui.Text(c, ct.Status).FontSize(theme.Footnote).TextColor(muted).SingleLine()
+			case 1:
+				ui.Text(c, ct.Image).FontSize(theme.Footnote).TextColor(muted).SingleLine()
+			case 2:
+				ui.Text(c, ct.Status).FontSize(theme.Footnote).TextColor(muted).SingleLine()
+			}
+		})
+		if row.group {
+			comp := row.g.Compose
+			a.contextMenu(cell, func() []menuEntry { return a.composeEntries(m, tc, comp) })
+			return
 		}
+		id := row.ct.ID
+		a.contextMenu(cell, func() []menuEntry { return a.containerEntries(m, tc, id) })
 	}).Grow(1).Shrink(1).MinHeight(0).FillWidth()
+	if (tbl.Changed() || tbl.Submitted()) && d.ctrSel >= 0 && d.ctrSel < d.ctr.Rows() {
+		if row, ok := d.rowOf[d.ctr.Item(d.ctrSel)]; ok {
+			if row.group {
+				d.detailOpen = false
+			} else {
+				d.imgOpen = false
+				a.openContainer(row.ct)
+			}
+		}
+	}
 	if d.ctrSel < 0 || d.ctrSel >= d.ctr.Rows() {
 		panelNote(c, tok, m.DockerPickContainer())
 		return
 	}
 	row, ok := d.rowOf[d.ctr.Item(d.ctrSel)]
-	if !ok {
-		return
-	}
-	if row.group {
+	if ok && row.group {
 		a.composeCard(c, m, tok, tc, row.g)
-		return
 	}
-	ct := row.ct
-	a.contentCard(c.Key("ctrcard"), tok).FillWidth().Padding(theme.Space(3)).Gap(theme.Space(2)).Children(func() {
-		ui.Row(c).Gap(8).AlignItems(ui.Center).FillWidth().Children(func() {
-			softTile(c, icons.Docker, stateTint(tok, ct.State), 22)
-			ui.Column(c).Gap(1).Grow(1).Shrink(1).MinWidth(0).Children(func() {
-				ui.Text(c, ct.Name).FontSize(theme.Body).FontWeight(600).SingleLine()
-				ui.Text(c, ct.Status).FontSize(theme.Caption).TextColor(tok.TextMuted).SingleLine()
-			})
-		})
-		ports := ct.Ports
-		if ports == "" {
-			ports = m.MetricsDash()
-		}
-		facts(c, tok, a.termFamily(), m.DockerColImage(), ct.Image, "ID", shortID(ct.ID), m.DockerPorts(), ports)
-		ui.Row(c.Key("ctracts")).Gap(2).AlignItems(ui.Center).FillWidth().Children(func() {
-			busy := d.busy != ""
-			if ct.Running() {
-				if (IconButton{Icon: icons.Halt, Label: m.DockerStop(), Disabled: busy}).Clicked(c, "stop") {
-					a.dockerDo(tc, session.DockerStop, ct.ID)
-				}
-			} else if (IconButton{Icon: icons.Resume, Label: m.DockerStart(), Disabled: busy}).Clicked(c, "start") {
-				a.dockerDo(tc, session.DockerStart, ct.ID)
-			}
-			if (IconButton{Icon: icons.Reconnect, Label: m.DockerRestart(), Disabled: busy}).Clicked(c, "restart") {
-				a.dockerDo(tc, session.DockerRestart, ct.ID)
-			}
-			if ct.State == "paused" {
-				if (IconButton{Icon: icons.Resume, Label: m.DockerUnpause(), Disabled: busy, Active: true}).Clicked(c, "unpause") {
-					a.dockerDo(tc, session.DockerUnpause, ct.ID)
-				}
-			} else if (IconButton{Icon: icons.Pause, Label: m.DockerPause(), Disabled: busy || ct.State != "running"}).Clicked(c, "pause") {
-				a.dockerDo(tc, session.DockerPause, ct.ID)
-			}
-			if (IconButton{Icon: icons.Logs, Label: m.DockerLogs()}).Clicked(c, "logs") {
-				a.dockerLogs(tc, ct.ID, ct.Name)
-			}
-			if (IconButton{Icon: icons.Terminal, Label: m.DockerShell(), Disabled: ct.State != "running"}).Clicked(c, "shell") {
-				a.dockerShell(tc, ct.ID)
-			}
-			ui.Spacer(c)
-			if busy {
-				ui.Spinner(c)
-			}
-			if (IconButton{Icon: icons.Delete, Label: m.DockerRemove(), Danger: true, Disabled: busy}).Clicked(c, "rm") {
-				d.confirm, d.confirmRef, d.confirmImg, d.confirmCompose = true, ct.ID, false, false
-			}
-		})
-	})
 }
 
 // composeTree is the outline: projects and containers that belong to none
@@ -506,10 +500,8 @@ func composeTint(tok theme.Tokens, g session.ComposeGroup) ui.Color {
 func (a *App) composeGroupCell(c *ui.Context, m locales.Messages, tok theme.Tokens, g session.ComposeGroup, col int, muted ui.Color) {
 	switch col {
 	case 0:
-		ui.Row(c).Gap(6).AlignItems(ui.Center).Grow(1).MinWidth(0).Children(func() {
-			ui.Icon(c, icons.Compose.SVG).Size(14, 14).Shrink(0).TextColor(composeTint(tok, g))
-			ui.Text(c, g.Compose.Name).FontSize(theme.Footnote).FontWeight(600).SingleLine()
-		})
+		ui.Icon(c, icons.Compose.SVG).Size(14, 14).Shrink(0).TextColor(composeTint(tok, g))
+		ui.Text(c, g.Compose.Name).FontSize(theme.Footnote).FontWeight(600).SingleLine()
 	case 1:
 		label := unixBase(g.Compose.Dir)
 		tip := g.Compose.Dir
@@ -604,85 +596,121 @@ func (a *App) composeButtons(c *ui.Context, m locales.Messages, tc *conn, comp s
 	})
 }
 
-// dockerRowMenu is a row's menu: compose commands for a project, and a
-// container's own commands plus its project's when it has one.
-func (a *App) dockerRowMenu(menu *ui.Menu, m locales.Messages, tc *conn, row int) {
-	d := a.docker
-	if row < 0 || row >= d.ctr.Rows() {
-		return
-	}
-	info, ok := d.rowOf[d.ctr.Item(row)]
-	if !ok {
-		return
-	}
-	if info.group {
-		a.composeItems(menu, m, tc, info.g.Compose)
-		return
-	}
-	a.containerMenu(menu, m, tc, info.ct)
-	if comp, ok := info.ct.Compose(); ok {
-		menu.Separator()
-		a.composeItems(menu, m, tc, comp)
-	}
-}
-
-// composeItems adds the compose commands, the ones the group's menu shows.
-func (a *App) composeItems(menu *ui.Menu, m locales.Messages, tc *conn, comp session.Compose) {
+// composeEntries are the compose commands of a project's menu.
+func (a *App) composeEntries(m locales.Messages, tc *conn, comp session.Compose) []menuEntry {
 	d := a.docker
 	off := d.busy != "" || !session.ComposeOK(comp)
-	if menu.Item(m.DockerComposeUp()).Disabled(off).Chosen() {
-		a.dockerCompose(tc, session.ComposeUp, comp)
-	}
-	if menu.Item(m.DockerComposeDown()).Disabled(off).Chosen() {
-		d.confirm, d.confirmRef, d.confirmImg, d.confirmCompose = true, comp.Name, false, true
-		d.confirmComp = comp
-	}
-	if menu.Item(m.DockerComposeRestart()).Disabled(off).Chosen() {
-		a.dockerCompose(tc, session.ComposeRestart, comp)
-	}
-	if menu.Item(m.DockerComposeStop()).Disabled(off).Chosen() {
-		a.dockerCompose(tc, session.ComposeStop, comp)
-	}
-	if menu.Item(m.DockerComposeStart()).Disabled(off).Chosen() {
-		a.dockerCompose(tc, session.ComposeStart, comp)
-	}
-	menu.Separator()
-	if menu.Item(m.DockerComposeLogs()).Disabled(!session.ComposeOK(comp)).Chosen() {
-		a.composeLogs(tc, comp)
+	return []menuEntry{
+		{Icon: icons.Resume, Label: m.DockerComposeUp(), Disabled: off, Do: func() { a.dockerCompose(tc, session.ComposeUp, comp) }},
+		{Icon: icons.Delete, Label: m.DockerComposeDown(), Danger: true, Disabled: off, Do: func() {
+			d.confirm, d.confirmRef, d.confirmImg, d.confirmCompose = true, comp.Name, false, true
+			d.confirmComp = comp
+		}},
+		{Icon: icons.Reconnect, Label: m.DockerComposeRestart(), Disabled: off, Do: func() { a.dockerCompose(tc, session.ComposeRestart, comp) }},
+		{Icon: icons.Halt, Label: m.DockerComposeStop(), Disabled: off, Do: func() { a.dockerCompose(tc, session.ComposeStop, comp) }},
+		{Icon: icons.Resume, Label: m.DockerComposeStart(), Disabled: off, Do: func() { a.dockerCompose(tc, session.ComposeStart, comp) }},
+		menuSep,
+		{Icon: icons.Logs, Label: m.DockerComposeLogs(), Disabled: !session.ComposeOK(comp), Do: func() { a.composeLogs(tc, comp) }},
 	}
 }
 
-// containerMenu is a container row's menu: what its card's buttons do.
-func (a *App) containerMenu(menu *ui.Menu, m locales.Messages, tc *conn, ct session.Container) {
+// containerActions are the buttons doing to the container ct what its
+// menu does.
+func (a *App) containerActions(c *ui.Context, m locales.Messages, tc *conn, ct session.Container) {
 	d := a.docker
+	ui.Row(c.Key("ctracts")).Gap(2).AlignItems(ui.Center).FillWidth().Children(func() {
+		busy := d.busy != ""
+		if ct.Running() {
+			if (IconButton{Icon: icons.Halt, Label: m.DockerStop(), Disabled: busy}).Clicked(c, "stop") {
+				a.dockerDo(tc, session.DockerStop, ct.ID)
+			}
+		} else if (IconButton{Icon: icons.Resume, Label: m.DockerStart(), Disabled: busy}).Clicked(c, "start") {
+			a.dockerDo(tc, session.DockerStart, ct.ID)
+		}
+		if (IconButton{Icon: icons.Reconnect, Label: m.DockerRestart(), Disabled: busy}).Clicked(c, "restart") {
+			a.dockerDo(tc, session.DockerRestart, ct.ID)
+		}
+		if ct.State == "paused" {
+			if (IconButton{Icon: icons.Resume, Label: m.DockerUnpause(), Disabled: busy, Active: true}).Clicked(c, "unpause") {
+				a.dockerDo(tc, session.DockerUnpause, ct.ID)
+			}
+		} else if (IconButton{Icon: icons.Pause, Label: m.DockerPause(), Disabled: busy || ct.State != "running"}).Clicked(c, "pause") {
+			a.dockerDo(tc, session.DockerPause, ct.ID)
+		}
+		if (IconButton{Icon: icons.Logs, Label: m.DockerLogs()}).Clicked(c, "logs") {
+			a.dockerLogs(tc, ct.ID, ct.Name)
+		}
+		if (IconButton{Icon: icons.Terminal, Label: m.DockerShell(), Disabled: ct.State != "running"}).Clicked(c, "shell") {
+			d.detailOpen = false
+			a.dockerShell(tc, ct.ID)
+		}
+		ui.Spacer(c)
+		if busy {
+			ui.Spinner(c)
+		}
+		if (IconButton{Icon: icons.Delete, Label: m.DockerRemove(), Danger: true, Disabled: busy}).Clicked(c, "rm") {
+			d.confirm, d.confirmRef, d.confirmImg, d.confirmCompose = true, ct.ID, false, false
+		}
+	})
+}
+
+// containerEntries are the menu of the container id: what the buttons
+// of its details do. None once it is gone.
+func (a *App) containerEntries(m locales.Messages, tc *conn, id string) []menuEntry {
+	d := a.docker
+	i := slices.IndexFunc(d.info.Containers, func(ct session.Container) bool { return ct.ID == id })
+	if i < 0 {
+		return nil
+	}
+	ct := d.info.Containers[i]
 	busy := d.busy != ""
+	do := func(action session.DockerAction) func() { return func() { a.dockerDo(tc, action, ct.ID) } }
+	es := []menuEntry{{Icon: icons.Info, Label: m.DockerDetails(), Do: func() {
+		d.imgOpen = false
+		a.openContainer(ct)
+	}}, menuSep}
 	if ct.Running() {
-		if menu.Item(m.DockerStop()).Disabled(busy).Chosen() {
-			a.dockerDo(tc, session.DockerStop, ct.ID)
-		}
-	} else if menu.Item(m.DockerStart()).Disabled(busy).Chosen() {
-		a.dockerDo(tc, session.DockerStart, ct.ID)
+		es = append(es, menuEntry{Icon: icons.Halt, Label: m.DockerStop(), Disabled: busy, Do: do(session.DockerStop)})
+	} else {
+		es = append(es, menuEntry{Icon: icons.Resume, Label: m.DockerStart(), Disabled: busy, Do: do(session.DockerStart)})
 	}
-	if menu.Item(m.DockerRestart()).Disabled(busy).Chosen() {
-		a.dockerDo(tc, session.DockerRestart, ct.ID)
-	}
+	es = append(es, menuEntry{Icon: icons.Reconnect, Label: m.DockerRestart(), Disabled: busy, Do: do(session.DockerRestart)})
 	if ct.State == "paused" {
-		if menu.Item(m.DockerUnpause()).Disabled(busy).Chosen() {
-			a.dockerDo(tc, session.DockerUnpause, ct.ID)
-		}
-	} else if menu.Item(m.DockerPause()).Disabled(busy || ct.State != "running").Chosen() {
-		a.dockerDo(tc, session.DockerPause, ct.ID)
+		es = append(es, menuEntry{Icon: icons.Resume, Label: m.DockerUnpause(), Disabled: busy, Do: do(session.DockerUnpause)})
+	} else {
+		es = append(es, menuEntry{Icon: icons.Pause, Label: m.DockerPause(), Disabled: busy || ct.State != "running", Do: do(session.DockerPause)})
 	}
-	menu.Separator()
-	if menu.Item(m.DockerLogs()).Chosen() {
-		a.dockerLogs(tc, ct.ID, ct.Name)
+	es = append(es, menuSep,
+		menuEntry{Icon: icons.Logs, Label: m.DockerLogs(), Do: func() { a.dockerLogs(tc, ct.ID, ct.Name) }},
+		menuEntry{Icon: icons.Terminal, Label: m.DockerShell(), Disabled: ct.State != "running", Do: func() {
+			d.detailOpen, d.imgOpen = false, false
+			a.dockerShell(tc, ct.ID)
+		}},
+		menuSep,
+		menuEntry{Icon: icons.Delete, Label: m.DockerRemove(), Danger: true, Disabled: busy, Do: func() {
+			d.confirm, d.confirmRef, d.confirmImg, d.confirmCompose = true, ct.ID, false, false
+		}},
+	)
+	if comp, ok := ct.Compose(); ok {
+		es = append(es, menuSep)
+		es = append(es, a.composeEntries(m, tc, comp)...)
 	}
-	if menu.Item(m.DockerShell()).Disabled(ct.State != "running").Chosen() {
-		a.dockerShell(tc, ct.ID)
+	return es
+}
+
+// imageEntries are the menu of the image id. None once it is gone.
+func (a *App) imageEntries(m locales.Messages, tc *conn, id string) []menuEntry {
+	d := a.docker
+	i := slices.IndexFunc(d.info.Images, func(im session.Image) bool { return im.ID == id })
+	if i < 0 {
+		return nil
 	}
-	menu.Separator()
-	if menu.Item(m.DockerRemove()).Disabled(busy).Chosen() {
-		d.confirm, d.confirmRef, d.confirmImg, d.confirmCompose = true, ct.ID, false, false
+	return []menuEntry{
+		{Icon: icons.Info, Label: m.DockerDetails(), Do: func() { a.openImage(tc, id) }},
+		menuSep,
+		{Icon: icons.Delete, Label: m.DockerRemoveImage(), Danger: true, Disabled: d.busy != "", Do: func() {
+			d.confirm, d.confirmRef, d.confirmImg, d.confirmCompose = true, id, true, false
+		}},
 	}
 }
 
@@ -693,44 +721,36 @@ func (a *App) imagesView(c *ui.Context, m locales.Messages, tok theme.Tokens, tc
 		panelNote(c, tok, m.DockerNoImages())
 		return
 	}
-	if d.imgSel >= len(is) {
+	if !d.imgOpen || d.imgSel >= len(is) {
 		d.imgSel = -1
 	}
 	d.imgList.Selected = &d.imgSel
 	cols := []ui.TableColumn{{Title: m.DockerColImage(), MinWidth: 120}, {Title: m.ColSize(), Width: 72, Align: ui.End}, {Title: m.DockerColCreated(), Width: 110}}
-	d.imgList.CellMenu = func(menu *ui.Menu, row, _ int) {
-		if row < len(is) && menu.Item(m.DockerRemoveImage()).Disabled(d.busy != "").Chosen() {
-			d.confirm, d.confirmRef, d.confirmImg, d.confirmCompose = true, is[row].ID, true, false
-		}
-	}
-	ui.Table(c.Key("images"), &d.imgList, cols, len(is), func(row, col int) {
+	tbl := ui.Table(c.Key("images"), &d.imgList, cols, len(is), func(row, col int) {
 		im := is[row]
 		muted := tok.TextMuted
 		if d.imgSel == row {
 			muted = tok.AccentText
 		}
-		switch col {
-		case 0:
-			ui.Text(c, im.Ref()).FontSize(theme.Footnote).SingleLine().Tooltip(im.Ref() + " · " + shortID(im.ID))
-		case 1:
-			ui.Text(c, im.Size).FontSize(theme.Footnote).TextColor(muted).SingleLine()
-		case 2:
-			ui.Text(c, im.Created).FontSize(theme.Footnote).TextColor(muted).SingleLine()
-		}
+		cell := ui.Row(c).AlignItems(ui.Center).Grow(1).MinWidth(0).AlignSelf(ui.Stretch).Children(func() {
+			switch col {
+			case 0:
+				ui.Text(c, im.Ref()).FontSize(theme.Footnote).SingleLine().Tooltip(im.Ref() + " · " + shortID(im.ID))
+			case 1:
+				ui.Spacer(c)
+				ui.Text(c, im.Size).FontSize(theme.Footnote).TextColor(muted).SingleLine()
+			case 2:
+				ui.Text(c, im.Created).FontSize(theme.Footnote).TextColor(muted).SingleLine()
+			}
+		})
+		a.contextMenu(cell, func() []menuEntry { return a.imageEntries(m, tc, im.ID) })
 	}).Grow(1).Shrink(1).MinHeight(0).FillWidth()
-	if d.imgSel < 0 {
-		return
+	if (tbl.Changed() || tbl.Submitted()) && d.imgSel >= 0 && d.imgSel < len(is) {
+		a.openImage(tc, is[d.imgSel].ID)
 	}
-	im := is[d.imgSel]
-	ui.Row(c.Key("imgacts")).Gap(8).AlignItems(ui.Center).FillWidth().Children(func() {
-		ui.Text(c, im.Ref()).FontSize(theme.Footnote).FontWeight(600).SingleLine().Grow(1).Shrink(1)
-		if d.busy != "" {
-			ui.Spinner(c)
-		}
-		if (IconButton{Icon: icons.Delete, Label: m.DockerRemoveImage(), Danger: true, Disabled: d.busy != ""}).Clicked(c, "rmi") {
-			d.confirm, d.confirmRef, d.confirmImg, d.confirmCompose = true, im.ID, true, false
-		}
-	})
+	if d.imgSel < 0 {
+		panelNote(c, tok, m.DockerPickImage())
+	}
 }
 
 // dockerConfirm asks before a container or an image is removed, or a

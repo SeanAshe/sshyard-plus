@@ -115,34 +115,30 @@ func TestStatusBar(t *testing.T) {
 	}
 }
 
-// TestRailAndMonitor: the rail opens the system monitor beside the panes,
-// then the host's details under it; each closes on its own.
+// TestRailAndMonitor: the rail opens the system monitor as a pane beside
+// the terminal, then the host's details; the terminal keeps the focus,
+// and each closes on its own.
 func TestRailAndMonitor(t *testing.T) {
 	ex := &frameExec{frames: linuxFrames(true)}
 	srv := startMetricSrv(t, ex.run)
 	a, tt := newTestApp(t)
 	tt.SetSize(1400, 1400)
-	connected(t, a, tt, srv)
+	cn := connected(t, a, tt, srv)
 	mustClick(t, tt, "System Monitor")
 	tt.Frame()
-	if !a.panelOpen(inspectMonitor) {
-		t.Fatalf("panels %q", a.panels)
-	}
-
 	mustClick(t, tt, "Host Details")
 	tt.Frame()
-	// Panels stack: the monitor stays, the host's details under it.
-	if len(a.panels) != 2 || a.panels[0] != inspectMonitor || a.panels[1] != inspectHost {
-		t.Fatalf("panels %q", a.panels)
+	tab := a.ws.ActiveTab()
+	if tab.Count(layout.Monitor) != 1 || tab.Count(layout.HostInfo) != 1 || a.focused() != cn {
+		t.Fatalf("items %v, focused %v", tab.Items(), a.focused())
 	}
-	mustClick(t, tt, "Close Panel")
-	tt.Frame()
-	if len(a.panels) != 1 || a.panels[0] != inspectHost {
-		t.Fatalf("closing the monitor left %q", a.panels)
+	a.ToggleTool(layout.Monitor)
+	if tab.Count(layout.Monitor) != 0 || tab.Count(layout.HostInfo) != 1 {
+		t.Fatalf("closing the monitor left %v", tab.Items())
 	}
-	mustClick(t, tt, "Close Panel")
-	if len(a.panels) != 0 {
-		t.Fatal("the panel did not close")
+	a.ToggleTool(layout.HostInfo)
+	if tab.Count(layout.HostInfo) != 0 {
+		t.Fatal("the host's details did not close")
 	}
 
 	mustClick(t, tt, "Open Files on the Right")
@@ -163,7 +159,7 @@ func TestMonitorMetricsOff(t *testing.T) {
 		t.Fatal(err)
 	}
 	connected(t, a, tt, srv)
-	a.panels = []inspectorKind{inspectMonitor}
+	a.ShowTool(layout.Monitor)
 	tt.Frame()
 	mustClick(t, tt, "Open Settings")
 	if a.page != pageSettings || a.prefNow() != prefMonitoring {
@@ -199,23 +195,27 @@ func TestNoBannerText(t *testing.T) {
 	}
 }
 
-// TestPanelsStack: the rail's panels open together, each once, stacked
-// in the rail's order whatever the order they opened in.
-func TestPanelsStack(t *testing.T) {
+// TestHostToolPanes: the rail's panels on the host are tool panes, one
+// of each in the workspace: showing one already open keeps it, toggling
+// it closes it.
+func TestHostToolPanes(t *testing.T) {
 	a, tt := newTestApp(t)
-	for _, s := range []string{"System Monitor", "Docker", "Host Details", "Process Usage"} {
+	kinds := []layout.Kind{layout.Monitor, layout.Docker, layout.HostInfo, layout.Usage, layout.Tmux}
+	for _, s := range []string{"System Monitor", "Docker", "Host Details", "Process Usage", "tmux Sessions"} {
 		mustClick(t, tt, s)
 		tt.Frame()
 	}
-	a.openPanel(inspectMonitor) // once only
-	if want := []inspectorKind{inspectMonitor, inspectUsage, inspectHost, inspectDocker}; !slices.Equal(a.panels, want) {
-		t.Fatalf("panels %q, want %q", a.panels, want)
+	a.ShowTool(layout.Monitor) // once only
+	tab := a.ws.ActiveTab()
+	for _, k := range kinds {
+		if !isTool(k) || tab.Count(k) != 1 {
+			t.Fatalf("%v: items %v", k, tab.Items())
+		}
 	}
-	a.togglePanel(inspectMonitor)
+	a.ToggleTool(layout.Monitor)
+	a.ToggleTool(layout.Usage)
 	tt.Frame()
-	a.closePanel(inspectUsage)
-	a.closePanel(inspectDocker)
-	if want := []inspectorKind{inspectHost}; !slices.Equal(a.panels, want) {
-		t.Fatalf("panels %q, want %q", a.panels, want)
+	if tab.Count(layout.Monitor) != 0 || tab.Count(layout.Usage) != 0 || tab.Count(layout.HostInfo) != 1 {
+		t.Fatalf("items %v", tab.Items())
 	}
 }

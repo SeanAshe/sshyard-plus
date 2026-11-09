@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Licoy/sshyard/internal/layout"
 	"github.com/Licoy/sshyard/internal/session"
 	"github.com/Licoy/sshyard/locales"
 	"golang.org/x/crypto/ssh"
@@ -99,8 +100,8 @@ func TestTmuxPanel(t *testing.T) {
 	cn := connected(t, a, tt, srv)
 	mustClick(t, tt, "tmux Sessions")
 	tt.Frame()
-	if !a.panelOpen(inspectTmux) {
-		t.Fatalf("panels %q", a.panels)
+	if !a.toolHere(layout.Tmux) {
+		t.Fatal("the pane did not open")
 	}
 	waitFor(t, tt, "the sessions", func() bool { return tt.HasText("dev") })
 	for _, s := range []string{"tmux 3.4 · 1 session", "2 windows · 1 client", "/srv/api"} {
@@ -188,7 +189,7 @@ func TestTmuxPanelMine(t *testing.T) {
 	a, tt := newTestApp(t)
 	tt.SetSize(1400, 900)
 	cn := connected(t, a, tt, srv)
-	a.panels = []inspectorKind{inspectTmux}
+	a.ShowTool(layout.Tmux)
 	tt.Frame()
 	waitFor(t, tt, "the banner", func() bool { return tt.HasText("This terminal is attached to “dev”.") })
 	if !tt.HasText("This terminal") || !tt.HasText("build") || !tt.HasText("Not attached") {
@@ -228,7 +229,7 @@ func TestTmuxAttachBusy(t *testing.T) {
 		tt.SetSize(1400, 900)
 		m := locales.In("en")
 		cn := connected(t, a, tt, srv)
-		a.panels = []inspectorKind{inspectTmux}
+		a.ShowTool(layout.Tmux)
 		tt.Frame()
 		waitFor(t, tt, "the sessions", func() bool { return tt.HasText("dev") })
 		tabs := len(a.ws.Tabs)
@@ -254,7 +255,7 @@ func TestTmuxPanelEmpty(t *testing.T) {
 		srv := startMetricSrv(t, x.run)
 		a, tt := newTestApp(t)
 		connected(t, a, tt, srv)
-		a.panels = []inspectorKind{inspectTmux}
+		a.ShowTool(layout.Tmux)
 		tt.Frame()
 		for _, s := range want {
 			waitFor(t, tt, s, func() bool { return tt.HasText(s) })

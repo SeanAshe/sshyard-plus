@@ -8,8 +8,10 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// The tool panes, the broadcast, the session logs, the snippets and the
-// command history, work on the sessions, not on one of their own. They are panes as the others are, dragged by their
+// The tool panes, the broadcast, the session logs, the snippets, the
+// command history and the panels on the focused session's host (the
+// system monitor, the process usage, the host's details, Docker and
+// tmux), work on the sessions, not on one of their own. They are panes as the others are, dragged by their
 // header to any edge of a pane or another tab, but on no host, and one of
 // each in the whole workspace, which the rail opens and closes. They are
 // not saved with the layout. A tool pane never keeps a tab's focus: the
@@ -17,7 +19,12 @@ import (
 
 // isTool reports a tool pane's kind.
 func isTool(k layout.Kind) bool {
-	return k == layout.Broadcast || k == layout.Logs || k == layout.Snippets || k == layout.History
+	switch k {
+	case layout.Broadcast, layout.Logs, layout.Snippets, layout.History,
+		layout.Monitor, layout.Usage, layout.HostInfo, layout.Docker, layout.Tmux:
+		return true
+	}
+	return false
 }
 
 // toolPane is the tool pane of kind k, nil when it is not open.
@@ -57,6 +64,19 @@ func (a *App) nameTools(m locales.Messages) {
 	a.toolNames[layout.Logs] = m.SessionLogs()
 	a.toolNames[layout.Snippets] = m.Snippets()
 	a.toolNames[layout.History] = m.CommandHistory()
+	a.toolNames[layout.Monitor] = m.SystemMonitor()
+	a.toolNames[layout.Usage] = m.ProcessUsage()
+	a.toolNames[layout.HostInfo] = m.HostDetails()
+	a.toolNames[layout.Docker] = m.DockerManager()
+	a.toolNames[layout.Tmux] = m.TmuxManager()
+}
+
+// ShowTool opens the tool pane of kind k in the active tab, or brings it
+// there, leaving it open when it already is.
+func (a *App) ShowTool(k layout.Kind) {
+	if !a.toolHere(k) {
+		a.ToggleTool(k)
+	}
 }
 
 // ToggleTool closes the tool pane of kind k when it is in the active tab;
@@ -153,6 +173,8 @@ func (a *App) toolPaneView(c *ui.Context, cn *conn, tok theme.Tokens, m locales.
 			a.snippetsPanel(c, m, tok)
 		case layout.History:
 			a.historyPanel(c, m, tok)
+		default:
+			a.hostToolPanel(c, m, tok, cn.kind)
 		}
 	})
 }

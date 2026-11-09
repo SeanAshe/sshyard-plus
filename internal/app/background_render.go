@@ -43,13 +43,6 @@ func (a *App) contentRegionFill(col ui.Color) ui.Color {
 	return ui.Transparent
 }
 
-func (a *App) backgroundInspectorFill(col ui.Color) ui.Color {
-	if a.hasBackground() {
-		return a.backgroundContentFill(col)
-	}
-	return a.contentFill(col, canvasAlpha)
-}
-
 func (a *App) editorWindowFill(col ui.Color) ui.Color {
 	if a.hasBackground() {
 		return a.backgroundContentFill(col)

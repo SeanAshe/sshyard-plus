@@ -16,13 +16,13 @@ import (
 )
 
 // Version 1 keeps workspace structure only, never session content or directories.
+// The "panels" and "stackPct" an older build saved are ignored: those panels
+// are tool panes now, which are not saved.
 type layoutSnap struct {
-	Version  int                `json:"version"`
-	Active   int                `json:"active"`
-	Tabs     []tabSnap          `json:"tabs"`
-	Sections map[string]bool    `json:"sections,omitempty"`
-	Panels   []inspectorKind    `json:"panels,omitempty"`
-	StackPct map[string]float32 `json:"stackPct,omitempty"`
+	Version  int             `json:"version"`
+	Active   int             `json:"active"`
+	Tabs     []tabSnap       `json:"tabs"`
+	Sections map[string]bool `json:"sections,omitempty"`
 }
 type tabSnap struct {
 	Title string    `json:"title,omitempty"`
@@ -54,15 +54,10 @@ func (a *App) layoutPath() string {
 	return filepath.Join(a.p.DataDir, "layout.json")
 }
 func (a *App) layoutSnapshot() layoutSnap {
-	snap := layoutSnap{Version: 1, Active: 0, Sections: map[string]bool{}, Panels: append([]inspectorKind(nil), a.panels...), StackPct: map[string]float32{}}
+	snap := layoutSnap{Version: 1, Active: 0, Sections: map[string]bool{}}
 	for _, key := range a.sidebarSectionKeys() {
 		if p := a.sections[key]; p != nil {
 			snap.Sections[key] = *p
-		}
-	}
-	for k, p := range a.stackPct {
-		if p != nil {
-			snap.StackPct[k] = *p
 		}
 	}
 	for i, t := range a.ws.Tabs {

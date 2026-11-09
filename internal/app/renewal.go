@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Licoy/sshyard/internal/assets"
+	"github.com/Licoy/sshyard/internal/layout"
 	"github.com/Licoy/sshyard/internal/theme"
 	"github.com/Licoy/sshyard/locales"
 	"github.com/egoist/mygo/i18n"
@@ -252,7 +253,7 @@ func (a *App) revealHost(id string) {
 		return
 	}
 	a.selected, a.page = id, pageWorkspace
-	a.openPanel(inspectHost)
+	a.ShowTool(layout.HostInfo)
 	a.invalidate()
 }
 

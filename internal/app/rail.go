@@ -14,89 +14,12 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// The right edge of the workspace: a rail of IconButtons, the panels it
-// opens beside the panes (the system monitor, the host's details) and
-// actions on the focused session.
+// The right edge of the workspace: a rail of IconButtons opening the tool
+// panes (the system monitor, the host's details, the snippets and the
+// others; see toolpane.go) and actions on the focused session.
 
-// inspectorKind is a panel open beside the panes.
-type inspectorKind string
-
-const (
-	inspectMonitor inspectorKind = "monitor"
-	inspectUsage   inspectorKind = "usage"
-	inspectHost    inspectorKind = "host"
-	inspectDocker  inspectorKind = "docker"
-	inspectTmux    inspectorKind = "tmux"
-)
-
-// panelOrder is the order the panels stack in, the rail's: opening or
-// closing one leaves the others where they are.
-var panelOrder = []inspectorKind{inspectMonitor, inspectUsage, inspectHost, inspectDocker, inspectTmux}
-
-// railWidth is the rail's width, the status bar's height; inspectorWidth
-// the panel's, and tableInspectorWidth that of a panel of tables (usage,
-// Docker); tmuxInspectorWidth the tmux panel's, room for a session's
-// actions.
-const (
-	railWidth           = statusBarHeight
-	inspectorWidth      = 300
-	tableInspectorWidth = 460
-	tmuxInspectorWidth  = 320
-)
-
-// panelWidth is the width panel k wants.
-func panelWidth(k inspectorKind) float32 {
-	switch k {
-	case inspectUsage, inspectDocker:
-		return tableInspectorWidth
-	case inspectTmux:
-		return tmuxInspectorWidth
-	}
-	return inspectorWidth
-}
-
-// panelOpen reports whether panel k shows.
-func (a *App) panelOpen(k inspectorKind) bool {
-	for _, p := range a.panels {
-		if p == k {
-			return true
-		}
-	}
-	return false
-}
-
-// openPanel shows panel k with the others open, in panelOrder.
-func (a *App) openPanel(k inspectorKind) {
-	if a.panelOpen(k) {
-		return
-	}
-	var out []inspectorKind
-	for _, p := range panelOrder {
-		if p == k || a.panelOpen(p) {
-			out = append(out, p)
-		}
-	}
-	a.panels = out
-}
-
-// closePanel hides panel k.
-func (a *App) closePanel(k inspectorKind) {
-	var out []inspectorKind
-	for _, p := range a.panels {
-		if p != k {
-			out = append(out, p)
-		}
-	}
-	a.panels = out
-}
-
-func (a *App) togglePanel(k inspectorKind) {
-	if a.panelOpen(k) {
-		a.closePanel(k)
-	} else {
-		a.openPanel(k)
-	}
-}
+// railWidth is the rail's width, the status bar's height.
+const railWidth = statusBarHeight
 
 // railView is the rail: the panels' toggles, then actions on the focused
 // session, then ways to reach a new host at the bottom.
@@ -104,14 +27,15 @@ func (a *App) railView(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 	cn := a.focused()
 	ui.Column(c.Key("rail")).Width(railWidth).Shrink(0).FillHeight().Padding(theme.Space(2), 0).Gap(theme.Space(1)).
 		AlignItems(ui.Center).Background(a.chromeFill(tok.Glass)).Children(func() {
-		toggle := func(k inspectorKind, ic, on *icons.Icon, label string) {
-			if (IconButton{Icon: ic, On: on, Label: label, Active: a.panelOpen(k), Toggle: true, Size: Small}).Clicked(c, "insp:"+string(k)) {
-				a.togglePanel(k)
+		// A tool pane's toggle, lit while it is in this tab.
+		toggle := func(k layout.Kind, ic, on *icons.Icon, label string) {
+			if (IconButton{Icon: ic, On: on, Label: label, Active: a.toolHere(k), Toggle: true, Size: Small}).Clicked(c, "tool:"+k.String()) {
+				a.ToggleTool(k)
 			}
 		}
-		toggle(inspectMonitor, icons.Monitor, icons.MonitorOn, m.SystemMonitor())
-		toggle(inspectUsage, icons.Usage, icons.UsageOn, m.ProcessUsage())
-		toggle(inspectHost, icons.Info, icons.InfoOn, m.HostDetails())
+		toggle(layout.Monitor, icons.Monitor, icons.MonitorOn, m.SystemMonitor())
+		toggle(layout.Usage, icons.Usage, icons.UsageOn, m.ProcessUsage())
+		toggle(layout.HostInfo, icons.Info, icons.InfoOn, m.HostDetails())
 		ui.Box(c.Key("sep")).Width(14).Height(1).Shrink(0).MarginY(theme.Space(1)).Background(tok.Line)
 		// The tab's files pane and AI pane, one each: lit while it has
 		// one, which a click closes.
@@ -124,8 +48,8 @@ func (a *App) railView(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 		if (IconButton{Icon: icons.Folder, On: icons.FolderOn, Label: label, Active: files, Toggle: true, Disabled: !files && !remoteOnly(cn), Size: Small}).Clicked(c, "files") {
 			a.ToggleFiles()
 		}
-		toggle(inspectDocker, icons.Docker, icons.DockerOn, m.DockerManager())
-		toggle(inspectTmux, icons.Tmux, icons.TmuxOn, m.TmuxManager())
+		toggle(layout.Docker, icons.Docker, icons.DockerOn, m.DockerManager())
+		toggle(layout.Tmux, icons.Tmux, icons.TmuxOn, m.TmuxManager())
 		label = m.OpenAIRight()
 		if ai {
 			label = m.CloseAIPane()
@@ -143,12 +67,8 @@ func (a *App) railView(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 		// The tool panes, working on the sessions: lit while in this
 		// tab.
 		ui.Box(c.Key("sep2")).Width(14).Height(1).Shrink(0).MarginY(theme.Space(1)).Background(tok.Line)
-		if (IconButton{Icon: icons.API, Label: m.Snippets(), Active: a.toolHere(layout.Snippets), Toggle: true, Size: Small}).Clicked(c, "snippets") {
-			a.ToggleTool(layout.Snippets)
-		}
-		if (IconButton{Icon: icons.History, Label: m.CommandHistory(), Active: a.toolHere(layout.History), Toggle: true, Size: Small}).Clicked(c, "history") {
-			a.ToggleTool(layout.History)
-		}
+		toggle(layout.Snippets, icons.API, nil, m.Snippets())
+		toggle(layout.History, icons.History, nil, m.CommandHistory())
 		synced := ""
 		if n := len(a.bc.synced); n > 0 {
 			synced = strconv.Itoa(n)
@@ -176,91 +96,32 @@ func (a *App) railView(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 	})
 }
 
-// inspectorView is the panels the rail opened, stacked in one column as
-// wide as the widest wants, each with its title bar over its cards; the
-// dividers between them resize them.
-func (a *App) inspectorView(c *ui.Context, m locales.Messages, tok theme.Tokens) {
-	width := float32(0)
-	for _, k := range a.panels {
-		width = max(width, panelWidth(k))
-	}
-	ui.Column(c.Key("inspector")).Width(width).Shrink(0).FillHeight().Background(a.backgroundInspectorFill(tok.Canvas)).Children(func() {
-		a.panelStack(c, m, tok, a.panels)
-	})
-}
-
-// panelStack is ks, the first over the rest: the first takes an equal
-// share of the room until its divider is moved.
-func (a *App) panelStack(c *ui.Context, m locales.Messages, tok theme.Tokens, ks []inspectorKind) {
-	if len(ks) == 1 {
-		a.panelView(c, m, tok, ks[0])
+// hostToolPanel is the body of tool pane k on the focused session's host:
+// the monitor and the host's details as cards scrolling, the usage,
+// Docker and tmux as tables (the tmux list) that scroll themselves.
+func (a *App) hostToolPanel(c *ui.Context, m locales.Messages, tok theme.Tokens, k layout.Kind) {
+	switch k {
+	case layout.Usage, layout.Docker, layout.Tmux:
+		ui.Column(c.Key("panel")).Fill().MinHeight(0).Padding(theme.Space(3)).Gap(theme.Space(2.5)).Children(func() {
+			switch k {
+			case layout.Usage:
+				a.usagePanel(c, m, tok)
+			case layout.Tmux:
+				a.tmuxPanel(c, m, tok)
+			default:
+				a.dockerPanel(c, m, tok)
+			}
+		})
 		return
 	}
-	var key strings.Builder
-	for _, k := range ks {
-		key.WriteString(string(k) + "/")
-	}
-	p, ok := a.stackPct[key.String()]
-	if !ok {
-		v := float32(100) / float32(len(ks))
-		p = &v
-		a.stackPct[key.String()] = p
-	}
-	ui.SplitVerticalPercent(c.Key("stack:"+key.String()), p,
-		func() { a.panelView(c, m, tok, ks[0]) },
-		func() { a.panelStack(c, m, tok, ks[1:]) }).Fill()
-}
-
-// panelView is panel k: its title bar, and its cards scrolling under it.
-func (a *App) panelView(c *ui.Context, m locales.Messages, tok theme.Tokens, k inspectorKind) {
-	title, tables := m.SystemMonitor(), false
-	switch k {
-	case inspectHost:
-		title = m.HostDetails()
-	case inspectUsage:
-		title, tables = m.ProcessUsage(), true
-	case inspectDocker:
-		title, tables = m.DockerManager(), true
-	case inspectTmux:
-		title, tables = m.TmuxManager(), true
-	}
-	ui.Column(c.Key("panel:" + string(k))).Fill().Children(func() {
-		a.panelHead(c, m, k, title)
-		if tables {
-			// Its tables (the tmux panel its list) scroll themselves: the
-			// panel gives them its height.
-			ui.Column(c.Key("body")).Grow(1).Shrink(1).MinHeight(0).FillWidth().
-				Padding(0, theme.Space(3), theme.Space(3), theme.Space(3)).Gap(theme.Space(2.5)).Children(func() {
-				switch k {
-				case inspectUsage:
-					a.usagePanel(c, m, tok)
-				case inspectTmux:
-					a.tmuxPanel(c, m, tok)
-				default:
-					a.dockerPanel(c, m, tok)
-				}
-			})
-			return
-		}
-		ui.Scroll(c.Key("body")).Grow(1).Shrink(1).MinHeight(0).FillWidth().Children(func() {
-			ui.Column(c).FillWidth().Padding(0, theme.Space(3), theme.Space(3), theme.Space(3)).Gap(theme.Space(2.5)).Children(func() {
-				if k == inspectMonitor {
-					a.monitorPanel(c, m, tok)
-				} else {
-					a.hostPanel(c, m, tok)
-				}
-			})
+	ui.Scroll(c.Key("panel")).Fill().MinHeight(0).Children(func() {
+		ui.Column(c).FillWidth().Padding(theme.Space(3)).Gap(theme.Space(2.5)).Children(func() {
+			if k == layout.Monitor {
+				a.monitorPanel(c, m, tok)
+			} else {
+				a.hostPanel(c, m, tok)
+			}
 		})
-	})
-}
-
-// panelHead is the title bar of panel k, with the button closing it.
-func (a *App) panelHead(c *ui.Context, m locales.Messages, k inspectorKind, title string) {
-	ui.Row(c.Key("head")).Height(toolbarHeight).Shrink(0).Padding(0, 8, 0, 16).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, title).FontSize(theme.Body).FontWeight(600).Grow(1).Shrink(1).SingleLine()
-		if (IconButton{Icon: icons.Close, Label: m.ClosePanel(), Size: Small}).Clicked(c, "close") {
-			a.closePanel(k)
-		}
 	})
 }
 

@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/Licoy/sshyard/internal/layout"
 	"github.com/egoist/mygo/ui"
 	"golang.org/x/crypto/ssh"
 )
@@ -43,8 +44,8 @@ func TestUsagePanel(t *testing.T) {
 	connected(t, a, tt, srv)
 	mustClick(t, tt, "Process Usage")
 	tt.Frame()
-	if !a.panelOpen(inspectUsage) {
-		t.Fatalf("panels %q", a.panels)
+	if !a.toolHere(layout.Usage) {
+		t.Fatal("the pane did not open")
 	}
 	waitFor(t, tt, "the processes", func() bool { return tt.HasText("busyloop") && tt.HasText("2 processes") })
 	waitFor(t, tt, "the CPU", func() bool {
@@ -93,7 +94,7 @@ func TestUsagePanelNotLinux(t *testing.T) {
 	})
 	a, tt := newTestApp(t)
 	connected(t, a, tt, srv)
-	a.panels = []inspectorKind{inspectUsage}
+	a.ShowTool(layout.Usage)
 	tt.Frame()
 	waitFor(t, tt, "the note", func() bool { return tt.HasText("only Linux servers") })
 	tt.Advance(3 * usageEvery)
