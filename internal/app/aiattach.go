@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/Licoy/sshyard/internal/ai/agent"
@@ -16,6 +18,7 @@ import (
 	"github.com/Licoy/sshyard/internal/icons"
 	"github.com/Licoy/sshyard/internal/settings"
 	"github.com/Licoy/sshyard/locales"
+	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -139,24 +142,90 @@ func (a *App) addAttach(cn *conn, f *aiAttach) {
 // attachPaths reads the files at paths, off the UI thread, and attaches
 // them to the pane's question.
 func (a *App) attachPaths(cn *conn, paths []string) {
-	id := cn.id
-	go func() {
+	a.attachRead(cn, func(add func(*aiAttach, error)) {
 		for _, p := range paths {
-			f, err := readAttach(p)
-			a.post(func() {
-				cn := a.conns[id]
-				if cn == nil || cn.ai == nil {
-					return
-				}
-				var ea *errAttach
-				if errors.As(err, &ea) {
-					a.toast(func(m locales.Messages) ui.Toast { return ui.Toast{Title: ea.msg(m), Type: "error"} })
-					return
-				}
-				a.addAttach(cn, f)
-			})
+			add(readAttach(p))
 		}
-	}()
+	})
+}
+
+// attachImage attaches an image given as data, as one pasted, named name.
+func (a *App) attachImage(cn *conn, name string, data []byte) {
+	a.attachRead(cn, func(add func(*aiAttach, error)) {
+		if len(data) > maxAttachFile {
+			add(nil, &errAttach{func(m locales.Messages) string { return m.AiAttachTooLarge(name, humanSize(maxAttachFile)) }})
+			return
+		}
+		add(attachData(name, data))
+	})
+}
+
+// attachRead runs read off the UI thread, and attaches each file it adds
+// to the pane's question, or says in a toast why it cannot.
+func (a *App) attachRead(cn *conn, read func(add func(*aiAttach, error))) {
+	id := cn.id
+	go read(func(f *aiAttach, err error) {
+		a.post(func() {
+			cn := a.conns[id]
+			if cn == nil || cn.ai == nil {
+				return
+			}
+			var ea *errAttach
+			if errors.As(err, &ea) {
+				a.toast(func(m locales.Messages) ui.Toast { return ui.Toast{Title: ea.msg(m), Type: "error"} })
+				return
+			}
+			a.addAttach(cn, f)
+		})
+	})
+}
+
+// pasteAttach takes a paste into the question that is files, long text
+// or an image, and attaches it: files copied in a file manager, text of
+// more than pasteLines lines or pasteRunes characters, as a log, and an
+// image copied without text, as a screenshot. It leaves shorter text,
+// which the question takes as typed, and reports whether it took the
+// paste.
+func (a *App) pasteAttach(cn *conn, svc ui.Services, text string) bool {
+	formats := svc.ClipboardFormats()
+	if slices.Contains(formats, transfer.FileList) || slices.Contains(formats, transfer.URIList) {
+		if paths, err := svc.ReadClipboardData(transfer.FileList, transfer.URIList).Files(); err == nil && len(paths) > 0 {
+			a.attachPaths(cn, paths)
+			return true
+		}
+	}
+	stamp := time.Now().Format("20060102-150405")
+	if longPaste(text) {
+		name := "text-" + stamp + ".txt"
+		if len(text) > maxAttachText {
+			a.toast(func(m locales.Messages) ui.Toast {
+				return ui.Toast{Title: m.AiAttachTooLarge(name, humanSize(maxAttachText)), Type: "error"}
+			})
+			return true
+		}
+		a.addAttach(cn, &aiAttach{name: name, data: []byte(text)})
+		return true
+	}
+	if text != "" || !slices.Contains(formats, transfer.PNG) {
+		return false
+	}
+	data, err := svc.ReadClipboardData(transfer.PNG).Read(transfer.PNG)
+	if err != nil || len(data) == 0 {
+		return false
+	}
+	a.attachImage(cn, "image-"+stamp+".png", data)
+	return true
+}
+
+// Pasted text longer than this attaches as a file rather than going into
+// the question.
+const (
+	pasteLines = 20
+	pasteRunes = 2000
+)
+
+func longPaste(text string) bool {
+	return strings.Count(strings.TrimRight(text, "\n"), "\n")+1 > pasteLines || utf8.RuneCountInString(text) > pasteRunes
 }
 
 // pickAttach asks for files through the system's open dialog.

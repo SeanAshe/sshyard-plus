@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Licoy/sshyard/internal/ai/agent"
 	"github.com/Licoy/sshyard/internal/ai/policy"
@@ -342,5 +343,37 @@ func TestModelMenuGroupsProviders(t *testing.T) {
 	tt.Frame()
 	if cn := a.conns[id]; cn.ai.provider != "p2" || cn.ai.model != "beta-2" {
 		t.Fatalf("chose %q %q", cn.ai.provider, cn.ai.model)
+	}
+}
+
+// TestAIWorkingWhileTextQuiet checks that a running turn shows it is at
+// work unless its text is streaming: once the text stops growing, as while
+// a tool call is written or reviewed, it shows again.
+func TestAIWorkingWhileTextQuiet(t *testing.T) {
+	now := time.Unix(1000, 0)
+	s := &aiState{running: true, items: []aiItem{{kind: "user", text: "q"}}}
+	if ok, _ := aiWorking(s, now); !ok {
+		t.Fatal("waiting for the first reply: not working")
+	}
+	s.items = append(s.items, aiItem{kind: "text", text: "Checking"})
+	if ok, wait := aiWorking(s, now); ok || wait != aiQuiet {
+		t.Fatalf("text streaming: working %v, wait %v", ok, wait)
+	}
+	now = now.Add(aiQuiet / 2)
+	s.items[1].text += " the host"
+	if ok, wait := aiWorking(s, now); ok || wait != aiQuiet {
+		t.Fatalf("text grew: working %v, wait %v", ok, wait)
+	}
+	now = now.Add(aiQuiet)
+	if ok, wait := aiWorking(s, now); !ok || wait != 0 {
+		t.Fatalf("text quiet: working %v, wait %v", ok, wait)
+	}
+	s.items = append(s.items, aiItem{kind: "tool"})
+	if ok, _ := aiWorking(s, now); !ok {
+		t.Fatal("tool running: not working")
+	}
+	s.running = false
+	if ok, wait := aiWorking(s, now); ok || wait != 0 {
+		t.Fatalf("turn done: working %v, wait %v", ok, wait)
 	}
 }

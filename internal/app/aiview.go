@@ -511,8 +511,11 @@ func (a *App) aiTimeline(c *ui.Context, cn *conn, tok theme.Tokens, m locales.Me
 				a.aiCard(c, cn, i, tok, m)
 			}
 			forgot(len(cn.ai.items))
-			n := len(cn.ai.items)
-			if cn.ai.running && (n == 0 || cn.ai.items[n-1].kind != "text") {
+			working, wait := aiWorking(cn.ai, c.Now())
+			if wait > 0 {
+				c.After(wait)
+			}
+			if working {
 				ui.Row(c.Key("aiworking")).Gap(theme.Space(2)).AlignItems(ui.Center).Children(func() {
 					ui.Spinner(c).Label(m.AiWorking())
 					ui.Text(c, m.AiWorking()).FontSize(theme.Footnote).TextColor(tok.TextMuted)
@@ -534,6 +537,31 @@ func (a *App) aiTimeline(c *ui.Context, cn *conn, tok theme.Tokens, m locales.Me
 			end.ScrollIntoView()
 		}
 	})
+}
+
+// aiQuiet is how long the reply's text may stop growing before the
+// timeline says the agent is at work again: a tool call being written, or
+// reviewed, streams nothing.
+const aiQuiet = 800 * time.Millisecond
+
+// aiWorking reports whether the running turn shows that it is at work:
+// always, unless its text is streaming. Otherwise wait is when to look
+// again, for the text to go quiet.
+func aiWorking(s *aiState, now time.Time) (working bool, wait time.Duration) {
+	if !s.running {
+		return false, 0
+	}
+	n := len(s.items)
+	if n == 0 || s.items[n-1].kind != "text" {
+		return true, 0
+	}
+	if l := len(s.items[n-1].text); n != s.textN || l != s.textLen {
+		s.textN, s.textLen, s.textAt = n, l, now
+	}
+	if wait = s.textAt.Add(aiQuiet).Sub(now); wait > 0 {
+		return false, wait
+	}
+	return true, 0
 }
 
 // aiComposer is the question being written, on two to eight lines of its
@@ -564,7 +592,7 @@ func (a *App) aiComposer(c *ui.Context, cn *conn, tok theme.Tokens, m locales.Me
 		if paths := box.DroppedFiles(); len(paths) > 0 {
 			a.attachPaths(cn, paths)
 		}
-		id := cn.id
+		id, svc := cn.id, c.Services()
 		box.Border(1, edge).Children(func() {
 			if drag {
 				ui.Text(c.Key("aidrop"), m.AiDropFiles()).FontSize(theme.Footnote).TextColor(tok.Accent).Padding(theme.Space(1), theme.Space(2), 0, theme.Space(2))
@@ -579,6 +607,10 @@ func (a *App) aiComposer(c *ui.Context, cn *conn, tok theme.Tokens, m locales.Me
 			in := ui.TextAreaBase(c.Key("aiin:"+strconv.Itoa(cn.id)+":"+strconv.Itoa(cn.ai.gen)), &cn.ai.input).
 				Placeholder(m.AiPlaceholder()).Label(m.AiPlaceholder()).FontSize(theme.Body).Padding(theme.Space(1), theme.Space(2)).
 				FillWidth().Lines(2, 8).
+				OnPaste(func(text string) bool {
+					cn := a.conns[id]
+					return cn != nil && cn.ai != nil && a.pasteAttach(cn, svc, text)
+				}).
 				OnTextKey(func(k ui.TextKey) bool {
 					if k.Key != ui.KeyEnter || k.Mods != 0 {
 						return false
@@ -725,9 +757,9 @@ func (a *App) aiCard(c *ui.Context, cn *conn, i int, tok theme.Tokens, m locales
 	case "text":
 		ui.Column(key).FillWidth().Children(func() {
 			if cn.ai.running && i == len(cn.ai.items)-1 {
-				markdown.Stream(c, it.text, cn.ai.md).FillWidth()
+				markdown.Stream(c, boldAsMeant(it.text), cn.ai.md).FillWidth()
 			} else {
-				markdown.View(c, it.text, cn.ai.md).FillWidth()
+				markdown.View(c, boldAsMeant(it.text), cn.ai.md).FillWidth()
 			}
 		})
 	case "think":

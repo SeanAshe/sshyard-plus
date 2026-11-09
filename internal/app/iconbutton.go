@@ -13,7 +13,8 @@ import (
 // assistive technology reads. The look follows the theme in use (light or
 // dark): a circle, clear and muted at rest; a quiet tint of the brand
 // accent (#1984FC) with the icon in the accent on hover, press and while
-// Active; MyGo's focus ring in the accent's focus color from the keyboard.
+// Active, a little deeper on hover while Active; MyGo's focus ring in the
+// accent's focus color from the keyboard.
 type IconButton struct {
 	Icon *icons.Icon
 	// On is the icon while Active, as the "-fill" of a "-line" icon; nil
@@ -29,7 +30,8 @@ type IconButton struct {
 	Toggle bool
 	// Disabled dims the button; it reports no clicks.
 	Disabled bool
-	// Danger tints the hover red, for a destructive action.
+	// Danger tints the hover red, for a destructive action, and an
+	// Active button red at rest, as Stop while a turn runs.
 	Danger bool
 	// Prominent keeps the accent (or danger tint) visible at rest.
 	Prominent bool
@@ -93,15 +95,15 @@ func (b IconButton) Show(c *ui.Context, key string) ui.Element {
 	case el.Pressed():
 		el.Background(hue.Alpha(strong * 1.8))
 		fg = hue
-	case el.Hovered():
+	case el.Hovered() && b.Active:
+		el.Background(hue.Alpha(strong * 1.4))
+		fg = hue
+	case el.Hovered(), b.Active:
 		el.Background(hue.Alpha(strong))
 		fg = hue
-	case b.Active:
-		el.Background(th.Accent.Alpha(strong))
-		fg = th.Accent
 	}
 	if b.Active && !b.Disabled {
-		fg = th.Accent
+		fg = hue
 	}
 	ic := b.Icon
 	if b.Active && b.On != nil {

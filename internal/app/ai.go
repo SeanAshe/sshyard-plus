@@ -88,6 +88,11 @@ type aiState struct {
 	// fullSeen is set once the full access banner is dismissed, until
 	// the pane leaves full access.
 	fullSeen bool
+	// textN and textLen are the reply's trailing text as the timeline last
+	// saw it, and textAt when it last grew: a reply quiet for a while is
+	// still being worked on, as a tool call being written or reviewed.
+	textN, textLen int
+	textAt         time.Time
 }
 
 type aiItem struct {

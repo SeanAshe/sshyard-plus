@@ -14,6 +14,7 @@ import (
 
 	"github.com/Licoy/sshyard/internal/ai/agent"
 	"github.com/Licoy/sshyard/internal/ai/llm"
+	"github.com/egoist/mygo/transfer"
 )
 
 // partsModel answers at once, keeping the last question it was asked.
@@ -185,5 +186,74 @@ func TestAIPaneAttachments(t *testing.T) {
 	tt.Frame()
 	if len(cn.ai.attach) != 1 || !tt.HasText("“shot.png” can’t be attached: this agent reads text files only.") {
 		t.Fatalf("ACP took an image: %d %q", len(cn.ai.attach), tt.Texts())
+	}
+}
+
+// TestAIPasteAttachments checks what a paste into the question attaches:
+// files copied in a file manager, long text and an image copied without
+// text, while shorter text, with or without an image beside it, is left
+// to the question.
+func TestAIPasteAttachments(t *testing.T) {
+	a, tt := newTestApp(t)
+	h := savedHost(t, a, "web", "10.0.0.8")
+	id, err := a.OpenAI(h.ID, openAt{}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cn := a.conns[id]
+	tt.Frame()
+	notes := filepath.Join(t.TempDir(), "notes.txt")
+	if err := os.WriteFile(notes, []byte("disk is full"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	files, err := transfer.FileData(notes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tt.SetClipboardData(files)
+	if !a.pasteAttach(cn, a.svc, notes) {
+		t.Fatal("pasted files not taken")
+	}
+	waitFor(t, tt, "pasted file", func() bool { return len(cn.ai.attach) == 1 && cn.ai.attach[0].name == "notes.txt" })
+
+	shot := pngBytes(t)
+	tt.SetClipboardData(transfer.New(transfer.NewItem(transfer.Bytes(transfer.PNG, shot))))
+	if !a.pasteAttach(cn, a.svc, "") {
+		t.Fatal("pasted image not taken")
+	}
+	waitFor(t, tt, "pasted image", func() bool { return len(cn.ai.attach) == 2 && cn.ai.attach[1].mime == "image/png" })
+	if f := cn.ai.attach[1]; !bytes.Equal(f.data, shot) || !strings.HasSuffix(f.name, ".png") {
+		t.Fatalf("pasted image %q, %d bytes", f.name, len(f.data))
+	}
+
+	long := strings.Repeat("kernel: eth0 link up\n", pasteLines+1)
+	tt.SetClipboardData(transfer.TextData(long))
+	if !a.pasteAttach(cn, a.svc, long) {
+		t.Fatal("long text not taken")
+	}
+	if f := cn.ai.attach[len(cn.ai.attach)-1]; len(cn.ai.attach) != 3 || !f.text() || string(f.data) != long || !strings.HasSuffix(f.name, ".txt") {
+		t.Fatalf("long text attached as %q, %d attachments", f.name, len(cn.ai.attach))
+	}
+	wide := strings.Repeat("磁", pasteRunes+1)
+	if !a.pasteAttach(cn, a.svc, wide) || len(cn.ai.attach) != 4 {
+		t.Fatal("text of many characters not attached")
+	}
+	cn.ai.attach = cn.ai.attach[:2]
+	short := strings.Repeat("line\n", pasteLines)
+	if a.pasteAttach(cn, a.svc, short) {
+		t.Fatal("text of pasteLines lines taken as an attachment")
+	}
+
+	tt.SetClipboardData(transfer.TextData("df -h"))
+	if a.pasteAttach(cn, a.svc, "df -h") {
+		t.Fatal("pasted text taken as an attachment")
+	}
+	tt.SetClipboardData(transfer.New(transfer.NewItem(transfer.Bytes(transfer.Text, []byte("table")), transfer.Bytes(transfer.PNG, shot))))
+	if a.pasteAttach(cn, a.svc, "table") {
+		t.Fatal("text with an image beside it taken as an attachment")
+	}
+	tt.Frame()
+	if len(cn.ai.attach) != 2 {
+		t.Fatalf("attachments after text pastes: %d", len(cn.ai.attach))
 	}
 }
