@@ -93,8 +93,8 @@ func TestAboutLicenseLink(t *testing.T) {
 	tt.SetSize(1200, 1600)
 	a.openSettings(prefAbout)
 	tt.Frame()
-	mustClick(t, tt, "github.com/Licoy/sshyard/blob/main/LICENSE")
-	if got := tt.OpenedURLs(); !slices.Equal(got, []string{"https://github.com/Licoy/sshyard/blob/main/LICENSE"}) {
+	mustClick(t, tt, "github.com/SeanAshe/sshyard-plus/blob/main/LICENSE")
+	if got := tt.OpenedURLs(); !slices.Equal(got, []string{"https://github.com/SeanAshe/sshyard-plus/blob/main/LICENSE"}) {
 		t.Errorf("license opened %q", got)
 	}
 }

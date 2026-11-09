@@ -17,8 +17,8 @@ import (
 // languageNames are the languages offered, by their own names.
 var languageNames = map[string]string{"en": "English", "zh-Hans": "简体中文", "zh-Hant": "繁體中文", "ko": "한국어", "ja": "日本語"}
 
-// repoURL is where SSHYard's source and issues live.
-const repoURL = "https://github.com/Licoy/sshyard"
+// repoURL is where this project's source and issues live.
+const repoURL = "https://github.com/SeanAshe/sshyard-plus"
 
 // prefPage is a page of the settings, chosen in their sidebar.
 type prefPage string
