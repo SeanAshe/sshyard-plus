@@ -42,6 +42,8 @@ type providerForm struct {
 	fetched  int
 	fetchErr string
 	hold     focusHold
+	// proxy is the proxy choice (settings.AIProvider.Proxy)
+	proxy string
 }
 
 // providerFormats are the wire formats in the order the sheet lists them.
@@ -63,7 +65,7 @@ func formatIndex(format string) int {
 func (f *providerForm) provider(id string) settings.AIProvider {
 	p := settings.AIProvider{ID: id, Name: strings.TrimSpace(f.name), Format: providerFormats[f.format],
 		BaseURL: strings.TrimSpace(f.base), Model: strings.TrimSpace(f.model), Models: f.models,
-		LegacyMaxTokens: f.legacy && f.format == 0}
+		LegacyMaxTokens: f.legacy && f.format == 0, Proxy: f.proxy}
 	if f.useTemp {
 		v := f.temp
 		p.Temperature = &v
@@ -79,14 +81,16 @@ func (f *providerForm) provider(id string) settings.AIProvider {
 	return p
 }
 
-// llmClient is the client for one profile and its key.
-func llmClient(p settings.AIProvider, key string) *llm.Client {
+// llmClient is the client for one profile and its key, going out
+// through the profile's proxy.
+func (a *App) llmClient(p settings.AIProvider, key string) *llm.Client {
 	hdr := map[string]string{}
 	for k, v := range p.Headers {
 		hdr[k] = v
 	}
 	cl := &llm.Client{Format: p.Format, BaseURL: p.BaseURL, APIKey: key, Model: p.Model, Headers: hdr,
-		Temperature: p.Temperature, TopP: p.TopP, LegacyMaxTokens: p.LegacyMaxTokens}
+		Temperature: p.Temperature, TopP: p.TopP, LegacyMaxTokens: p.LegacyMaxTokens, HTTP: a.proxyClient(p.Proxy),
+		Timeout: time.Duration(a.settings.AIRequestTimeout) * time.Second}
 	if p.MaxTokens != nil {
 		cl.MaxTokens = *p.MaxTokens
 	}
@@ -144,6 +148,12 @@ func (a *App) aiSettings(c *ui.Context, m locales.Messages, tok theme.Tokens, s 
 					s.AIMaxToolCalls = v
 					*changed = true
 				}
+			}
+		})
+		g.row(m.AiRequestTimeout(), m.AiRequestTimeoutNote(), func() {
+			if ui.NumberInput(c.Key("aiwait"), &a.aiWait, settings.AIRequestTimeoutMin, settings.AIRequestTimeoutMax, 10).Label(m.AiRequestTimeout()).Changed() {
+				s.AIRequestTimeout = int(a.aiWait)
+				*changed = true
 			}
 		})
 		g.row(m.AiAuditDays(), "", func() {
@@ -273,6 +283,7 @@ func (a *App) openProvider(p *settings.AIProvider) {
 	if p != nil {
 		f.id, f.name, f.base, f.model = p.ID, p.Name, p.BaseURL, p.Model
 		f.format, f.models, f.legacy = formatIndex(p.Format), append([]string(nil), p.Models...), p.LegacyMaxTokens
+		f.proxy = p.Proxy
 		if p.Temperature != nil {
 			f.useTemp, f.temp = true, *p.Temperature
 		}
@@ -344,6 +355,17 @@ func (a *App) providerSheet(c *ui.Context, m locales.Messages, tok theme.Tokens)
 					formTextInput(c.Key("ap:key"), &f.key).Password().Label(m.AiAPIKey()).Placeholder(hint)
 				})
 				note(m.AiAPIKeyNote())
+				ui.Field(c, m.FieldProxy(), func() {
+					a.proxySelect(c.Key("ap:proxy"), m, &f.proxy, proxyPick{system: true, owner: f,
+						leave: func() { a.provOpen = false },
+						back: func(id string) {
+							a.prov, a.provOpen = f, true
+							if id != "" {
+								f.proxy = id
+							}
+						}})
+				})
+				note(m.ProxySystemNote())
 				ui.Field(c, m.AiDefaultModel(), func() {
 					ui.Row(c).Gap(theme.Space(2)).AlignItems(ui.Center).FillWidth().Children(func() {
 						models, hint := f.models, "gpt-5.1"
@@ -400,7 +422,7 @@ func (a *App) providerSheet(c *ui.Context, m locales.Messages, tok theme.Tokens)
 			})
 		})
 	}), tok)
-	if !a.provOpen {
+	if !a.provOpen && !a.proxyKeeps(f) {
 		a.prov = nil
 	}
 }
@@ -622,7 +644,7 @@ func (a *App) testProvider() {
 	hdr, _ := parseHeaders(f.headers)
 	p := f.provider(f.id)
 	p.Headers = hdr
-	cl := llmClient(p, key)
+	cl := a.llmClient(p, key)
 	f.testing = true
 	f.test = ""
 	go func() {
@@ -672,7 +694,7 @@ func (a *App) fetchModels() {
 	hdr, _ := parseHeaders(f.headers)
 	p := f.provider(f.id)
 	p.Headers = hdr
-	cl := llmClient(p, key)
+	cl := a.llmClient(p, key)
 	f.fetching, f.fetchErr = true, ""
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

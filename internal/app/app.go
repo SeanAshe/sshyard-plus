@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -313,6 +314,12 @@ type App struct {
 	// others in its menu of more tabs; tabRoom the width they had
 	tabStart int
 	tabRoom  float32
+	// tabWheeled is set once the wheel moves the tabs shown, which then
+	// stay where it left them until another tab than tabKept is active;
+	// tabWheel is what of a touchpad's scroll has yet to move them by one
+	tabWheeled bool
+	tabKept    int
+	tabWheel   float32
 	// tabsOpen shows the popover of the tabs that do not fit
 	tabsOpen bool
 	// menu is the drop-down or context menu open (menuButton,
@@ -360,6 +367,9 @@ type App struct {
 	// proxyForm is the proxy sheet open, from settings or the host editor
 	proxyForm    *proxyForm
 	proxyEditing bool
+	// proxyClients are the HTTP clients of proxyClient by proxy choice,
+	// under mu
+	proxyClients map[string]*http.Client
 	credDelete   string
 	credDeleting bool
 	rebindChoice string
@@ -414,8 +424,10 @@ type App struct {
 	win         *WindowControls
 	maximized   bool
 	updateCheck bool
-	// updEvery is the index of the update interval in its control.
+	// updEvery is the index of the update interval in its control;
+	// updProxy the updates' proxy choice in its select.
 	updEvery  int
+	updProxy  string
 	themeIdx  int
 	autoRecon bool
 	// lkChoice and lkMCPChoice are the switches of settings.LocalKeys and
@@ -490,6 +502,8 @@ type App struct {
 	aiRecent map[string]int
 	aiLines  float64
 	aiDays   float64
+	// aiWait is the AI request timeout field, in seconds.
+	aiWait float64
 	// aiCalls is the tool-call limit field, empty for the default.
 	aiCalls   string
 	aiModeIdx int
@@ -640,6 +654,7 @@ type disabledUpdates struct{}
 func (disabledUpdates) Enabled() bool                { return false }
 func (disabledUpdates) Check()                       {}
 func (disabledUpdates) SetAutomatic(bool)            {}
+func (disabledUpdates) SetRoute(updater.Route)       {}
 func (disabledUpdates) Available() string            { return "" }
 func (disabledUpdates) OnChange(func()) (off func()) { return func() {} }
 
@@ -662,6 +677,7 @@ func (a *App) syncChoices() {
 	a.metMount = a.settings.MetricsMount
 	a.aiLines = float64(a.settings.AIContextLines)
 	a.aiDays = float64(a.settings.AIAuditRetentionDays)
+	a.aiWait = float64(a.settings.AIRequestTimeout)
 	a.aiCalls = maxToolCallsText(a.settings.AIMaxToolCalls)
 	a.mcpPort = float64(a.settings.MCPPort)
 }
@@ -759,6 +775,9 @@ func (a *App) ApplySettings(s settings.Settings) error {
 	}
 	if s.CheckUpdates != old.CheckUpdates {
 		a.upd.SetAutomatic(s.CheckUpdates)
+	}
+	if s.UpdateProxy != old.UpdateProxy {
+		a.routeUpdates()
 	}
 	a.syncChoices()
 	return nil

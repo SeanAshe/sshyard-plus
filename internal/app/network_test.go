@@ -165,11 +165,15 @@ func TestProxySheetAndEditor(t *testing.T) {
 	// The host editor makes one in place, and comes back with it chosen.
 	mustClick(t, tt, "Close Settings")
 	a.openEditor(nil)
+	a.form.netOpen = true
 	tt.Frame()
 	a.form.name, a.form.address, a.form.user = "web", "10.0.0.5", "root"
 	hf := a.form
-	a.openProxyForm(nil, hf)
-	a.editing = false
+	hf.proxy = proxyNew // "New proxy…" chosen in the select
+	tt.Frame()
+	if a.proxyForm == nil || a.editing || hf.proxy != "" {
+		t.Fatalf("New proxy…: sheet %v, editing %v, proxy %q", a.proxyForm != nil, a.editing, hf.proxy)
+	}
 	tt.Frame()
 	if a.form != hf {
 		t.Fatal("the editor was dropped behind the proxy sheet")
@@ -177,7 +181,7 @@ func TestProxySheetAndEditor(t *testing.T) {
 	a.proxyForm.name, a.proxyForm.address = "socks", "127.0.0.1"
 	mustClick(t, tt, "Save")
 	tt.Frame()
-	if !a.editing || a.form != hf || hf.proxy != "socks" {
+	if p, _ := a.Store().Proxy(hf.proxy); !a.editing || a.form != hf || p.Name != "socks" {
 		t.Fatalf("back to the editor: editing %v, proxy %q", a.editing, hf.proxy)
 	}
 	if !a.SaveForm(m) {
@@ -202,7 +206,7 @@ func TestProxySheetAndEditor(t *testing.T) {
 	// The editor shows the network section open for it.
 	a.openEditor(&h)
 	tt.Frame()
-	if !a.form.netOpen || !tt.HasText("Network") || a.form.proxy != "socks" {
+	if !a.form.netOpen || !tt.HasText("Network") || a.form.proxy != socks.ID {
 		t.Errorf("editor network: open %v, proxy %q", a.form.netOpen, a.form.proxy)
 	}
 }

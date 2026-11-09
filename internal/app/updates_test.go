@@ -7,6 +7,7 @@ import (
 
 	"github.com/Licoy/sshyard/internal/keychain"
 	"github.com/Licoy/sshyard/internal/settings"
+	"github.com/Licoy/sshyard/internal/updater"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -17,11 +18,13 @@ type fakeUpdates struct {
 	checks    int
 	automatic []bool
 	available string
+	route     *updater.Route
 }
 
 func (f *fakeUpdates) Enabled() bool                { return f.enabled }
 func (f *fakeUpdates) Check()                       { f.checks++ }
 func (f *fakeUpdates) SetAutomatic(on bool)         { f.automatic = append(f.automatic, on) }
+func (f *fakeUpdates) SetRoute(r updater.Route)     { f.route = &r }
 func (f *fakeUpdates) Available() string            { return f.available }
 func (f *fakeUpdates) OnChange(func()) (off func()) { return func() {} }
 

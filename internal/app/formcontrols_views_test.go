@@ -84,7 +84,7 @@ func TestFormHostSelectCreateEditPersistence(t *testing.T) {
 			}
 			a.openEditor(&saved)
 			tt.Frame()
-			if a.form.auth != m.AuthAgent() || a.form.proxy != proxy.Name {
+			if a.form.auth != m.AuthAgent() || a.form.proxy != proxy.ID {
 				t.Fatal("reopening lost authentication or proxy choice")
 			}
 		})

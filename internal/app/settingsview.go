@@ -20,6 +20,12 @@ var languageNames = map[string]string{"en": "English", "zh-Hans": "简体中文"
 // repoURL is where this project's source and issues live.
 const repoURL = "https://github.com/SeanAshe/sshyard-plus"
 
+// issuesURL is where feedback goes on GitHub, qqGroupURL the users' QQ group.
+const (
+	issuesURL  = repoURL + "/issues"
+	qqGroupURL = "https://qm.qq.com/q/OcPq9MNkeO"
+)
+
 // prefPage is a page of the settings, chosen in their sidebar.
 type prefPage string
 
@@ -794,6 +800,23 @@ func (a *App) aboutPage(c *ui.Context, m locales.Messages, tok theme.Tokens, s *
 			}
 			if formSegmented(c.Key("updevery"), &a.updEvery, false, labels...).Label(m.UpdateInterval()).Changed() {
 				s.UpdateIntervalHours = settings.UpdateIntervals[a.updEvery]
+				*changed = true
+			}
+		})
+		// Checks and downloads go the way chosen, from the next request.
+		g.row(m.FieldProxy(), m.ProxySystemNote(), func() {
+			sel := a.proxySelect(c.Key("updproxy"), m, &a.updProxy, proxyPick{system: true, back: func(id string) {
+				if id == "" {
+					return
+				}
+				ns := a.settings
+				ns.UpdateProxy = id
+				if err := a.ApplySettings(ns); err != nil {
+					a.toastError(m.ErrGeneric(err.Error()))
+				}
+			}})
+			if sel.Changed() && a.updProxy != s.UpdateProxy {
+				s.UpdateProxy = a.updProxy
 				*changed = true
 			}
 		})

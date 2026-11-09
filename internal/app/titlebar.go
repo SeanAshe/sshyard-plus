@@ -81,7 +81,8 @@ func (a *App) settingsBack(c *ui.Context, m locales.Messages, tok theme.Tokens) 
 }
 
 // appButtons are the app's own IconButtons in the title bar: updates, its
-// source on GitHub and the settings. Updates show in the accent while a
+// source on GitHub, feedback (GitHub issues or the QQ group) and the
+// settings. Updates show in the accent while a
 // newer version is out; a click checks, and the update window shows what
 // it found with the release notes.
 func (a *App) appButtons(c *ui.Context, m locales.Messages) {
@@ -96,6 +97,12 @@ func (a *App) appButtons(c *ui.Context, m locales.Messages) {
 	if iconButton(c, "github", icons.GitHub, m.GitHubRepo()) {
 		c.OpenURL(repoURL)
 	}
+	a.menuButton(c, "feedback", IconButton{Icon: icons.Feedback, Label: m.Feedback()}, func() []menuEntry {
+		return []menuEntry{
+			{Icon: icons.GitHub, Label: m.FeedbackGitHub(), Do: func() { c.OpenURL(issuesURL) }},
+			{Icon: icons.QQ, Label: m.FeedbackQQGroup(), Do: func() { c.OpenURL(qqGroupURL) }},
+		}
+	})
 	if a.page == pageSettings {
 		if (IconButton{Icon: icons.Close, Label: m.CloseSettings(), Danger: true, Prominent: true}).Clicked(c, "settings") {
 			a.closeSettings()

@@ -635,7 +635,8 @@ func TestOnePromptForSharedFailure(t *testing.T) {
 
 func TestSearchClear(t *testing.T) {
 	a, tt := newTestApp(t)
-	for _, n := range []string{"web", "db"} {
+	// Names no other text on screen contains, as "db" is in "Feedback".
+	for _, n := range []string{"web-01", "db-01"} {
 		if _, err := a.Store().Add(assets.Host{Name: n, Address: n + ".example", User: "root", Auth: assets.AuthAsk}); err != nil {
 			t.Fatal(err)
 		}
@@ -644,12 +645,12 @@ func TestSearchClear(t *testing.T) {
 	mustClick(t, tt, "Search hosts")
 	tt.Type("web")
 	tt.Frame()
-	if a.search != "web" || tt.HasText("db") {
+	if a.search != "web" || tt.HasText("db-01") {
 		t.Fatalf("search %q, texts %q", a.search, tt.Texts())
 	}
 	mustClick(t, tt, "Close search")
 	tt.Frame()
-	if a.search != "" || a.searchOpen || !tt.HasText("db") {
+	if a.search != "" || a.searchOpen || !tt.HasText("db-01") {
 		t.Fatalf("not closed: %q", a.search)
 	}
 	// Opened again, the field has the keyboard.

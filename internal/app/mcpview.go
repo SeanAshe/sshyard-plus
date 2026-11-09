@@ -23,7 +23,7 @@ func (a *App) prefAgents(c *ui.Context, m locales.Messages, tok theme.Tokens, s 
 	on := s.MCPEnabled
 	srv := a.mcp.srv
 	if on {
-		aiBanner(c, tok.Warning, icons.Warning, m.McpOnBanner())
+		aiBanner(c, tok.Warning, icons.Warning, m.McpOnBanner(), nil)
 	}
 	offNote := func(g *settingsGroup) {
 		ui.Row(c).MinHeight(44).Padding(8, 14).Children(func() {

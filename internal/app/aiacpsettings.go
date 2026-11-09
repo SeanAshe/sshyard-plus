@@ -501,7 +501,7 @@ func (a *App) acpOptionChips(c *ui.Context, cn *conn, tok theme.Tokens, m locale
 		return []menuEntry{{Label: m.AiACPNoOptions(), Disabled: true}}
 	})
 	if thought, ok := firstOption(opts, acp.CategoryThought); ok {
-		tc := chip{Icon: icons.Thinking, Tip: m.AiThinkingLevel(), Label: optionName(thought)}.fit(m, fit, 0)
+		tc := chip{Icon: icons.Thinking, Tip: m.AiThinkingLevel(), Label: optionName(thought)}.meter(tok, thought.Current).fit(m, fit, 0)
 		a.menuChip(c, "acpeffort:"+strconv.Itoa(cn.id), tc, func() []menuEntry {
 			return a.acpOptionEntries(cn, cfg, thought, false)
 		})

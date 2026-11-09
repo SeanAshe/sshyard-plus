@@ -253,3 +253,49 @@ type denyTransport struct{}
 func (denyTransport) RoundTrip(*http.Request) (*http.Response, error) {
 	return nil, errors.New("dialed")
 }
+
+// TestStreamTimeout checks that a reply that stops coming fails with
+// ErrTimeout once it has waited Timeout, while one whose pieces keep
+// coming, each sooner than Timeout, runs to its end however long it takes.
+func TestStreamTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		f := w.(http.Flusher)
+		if strings.Contains(r.Header.Get("X-Case"), "stall") {
+			io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"a\"}}]}\n\n")
+			f.Flush()
+			<-r.Context().Done()
+			return
+		}
+		for i := 0; i < 6; i++ {
+			io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"a\"}}]}\n\n")
+			f.Flush()
+			time.Sleep(40 * time.Millisecond)
+		}
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
+	}))
+	defer srv.Close()
+	req := Request{Messages: []Message{{Role: "user", Content: "ping"}}}
+
+	stall := &Client{BaseURL: srv.URL, APIKey: "test-key-not-real", Model: "m", Timeout: 150 * time.Millisecond, Headers: map[string]string{"X-Case": "stall"}}
+	start := time.Now()
+	if _, err := stall.Stream(context.Background(), req, nil); !errors.Is(err, ErrTimeout) || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("stalled reply: %v", err)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Fatalf("timed out after %v", d)
+	}
+
+	steady := &Client{BaseURL: srv.URL, APIKey: "test-key-not-real", Model: "m", Timeout: 150 * time.Millisecond}
+	msg, err := steady.Stream(context.Background(), req, nil)
+	if err != nil || msg.Content != "aaaaaa" {
+		t.Fatalf("steady reply: %q %v", msg.Content, err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { time.Sleep(50 * time.Millisecond); cancel() }()
+	if _, err := stall.Stream(ctx, req, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled reply: %v", err)
+	}
+}

@@ -432,7 +432,11 @@ func (a *App) DeleteProxy(id string) error {
 			return &keychainDeleteError{err}
 		}
 	}
-	return a.store.DeleteProxy(id)
+	if err := a.store.DeleteProxy(id); err != nil {
+		return err
+	}
+	a.proxiesChanged()
+	return nil
 }
 
 // pickKeyFile reads a key through the system's open dialog, off the UI

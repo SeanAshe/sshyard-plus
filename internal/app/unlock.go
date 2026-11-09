@@ -82,6 +82,7 @@ func (a *App) prepareStorage() error {
 	a.updateCheck = a.settings.CheckUpdates
 	// The updater keeps its own choice: follow the settings.
 	a.upd.SetAutomatic(a.settings.CheckUpdates)
+	a.routeUpdates()
 	return nil
 }
 

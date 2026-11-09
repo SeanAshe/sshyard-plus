@@ -393,7 +393,7 @@ type targetForm struct {
 	url, dir, user, bucket, region, gistID string
 	pathStyle                              bool
 	secret                                 string
-	// proxy is the proxy select's label
+	// proxy is the proxy select's ID, "" none
 	proxy string
 	keep  float64
 	// source says whether the place seals with the default backup
@@ -426,9 +426,7 @@ func (a *App) openTargetForm(t *settings.BackupTarget) {
 		if t.DefaultPassword {
 			f.source = pwDefault
 		}
-		if px, ok := a.store.Proxy(t.ProxyID); ok {
-			f.proxy = px.Name
-		}
+		f.proxy = t.ProxyID
 	}
 	f.kind = max(slices.Index(targetKinds, f.orig.Kind), 0)
 	if i := slices.Index(settings.BackupAutoHours, f.orig.AutoHours); i >= 0 {
@@ -470,11 +468,7 @@ func (a *App) targetDraft(m locales.Messages, f *targetForm) (settings.BackupTar
 	if f.auto {
 		t.AutoHours = settings.BackupAutoHours[f.every]
 	}
-	labels, ids := a.proxyChoices(m)
-	t.ProxyID = ""
-	if i := slices.Index(labels, f.proxy); i > 0 {
-		t.ProxyID = ids[i]
-	}
+	t.ProxyID = f.proxy
 	// What only another kind uses goes.
 	switch t.Kind {
 	case settings.BackupWebDAV:
@@ -966,7 +960,7 @@ func (a *App) targetView(c *ui.Context, m locales.Messages) {
 			})
 		})
 	}), tok)
-	if !a.targetEditing && a.target == f {
+	if !a.targetEditing && a.target == f && !a.proxyKeeps(f) {
 		a.closeTargetForm()
 	}
 }
@@ -1004,11 +998,16 @@ func (a *App) targetFields(c *ui.Context, m locales.Messages, tok theme.Tokens, 
 			ui.Field(c, m.GistToken(), func() { formTextInput(c.Key("bt:secret"), &f.secret).Password().Placeholder(unchanged) })
 			ui.Field(c, m.GistID(), func() { formTextInput(c.Key("bt:gist"), &f.gistID).Placeholder(m.GistIDPlaceholder()) })
 		}
-		labels, _ := a.proxyChoices(m)
-		if !slices.Contains(labels, f.proxy) {
-			f.proxy = labels[0]
-		}
-		ui.Field(c, m.FieldProxy(), func() { formSelect(c.Key("bt:proxy"), &f.proxy, labels).Label(m.FieldProxy()) })
+		ui.Field(c, m.FieldProxy(), func() {
+			a.proxySelect(c.Key("bt:proxy"), m, &f.proxy, proxyPick{owner: f,
+				leave: func() { a.targetEditing = false },
+				back: func(id string) {
+					a.target, a.targetEditing = f, true
+					if id != "" {
+						f.proxy = id
+					}
+				}})
+		})
 		ui.Field(c, m.BackupKeep(), func() {
 			ui.NumberInput(c.Key("bt:keep"), &f.keep, 0, settings.BackupKeepMax, 1).Label(m.BackupKeep())
 		})

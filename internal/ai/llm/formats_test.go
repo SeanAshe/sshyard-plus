@@ -398,3 +398,35 @@ func TestAPIErrorDetail(t *testing.T) {
 		t.Fatalf("detail is %d runes", len(r))
 	}
 }
+
+// TestResponsesSummaryPartBreak checks that a summary part ends with a
+// blank line only when it had text, so an empty part sends no thinking.
+func TestResponsesSummaryPartBreak(t *testing.T) {
+	srv, _, _ := serve(t, `data: {"type":"response.reasoning_summary_part.done"}
+
+data: {"type":"response.reasoning_summary_text.delta","delta":"one"}
+
+data: {"type":"response.reasoning_summary_part.done"}
+
+data: {"type":"response.reasoning_summary_part.done"}
+
+data: {"type":"response.reasoning_summary_text.delta","delta":"two"}
+
+data: {"type":"response.output_text.delta","delta":"ok"}
+
+data: {"type":"response.completed","response":{"status":"completed","output":[]}}
+
+`)
+	c := &Client{Format: FormatResponses, BaseURL: srv.URL + "/v1", APIKey: "test-key-not-real", Model: "gpt"}
+	var think []string
+	if _, err := c.Stream(t.Context(), Request{Messages: []Message{{Role: "user", Content: "hi"}}}, func(e Event) {
+		if e.Thinking != "" {
+			think = append(think, e.Thinking)
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(think, "|"); got != "one|\n\n|two" {
+		t.Fatalf("thinking %q", got)
+	}
+}

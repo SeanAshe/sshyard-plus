@@ -255,7 +255,7 @@ func TestDeleteKeychainFailure(t *testing.T) {
 	if _, ok := a.Store().Proxy(p.ID); !ok || !a.kc.Has(keychain.ProxyPassword(p.ID)) {
 		t.Fatal("proxy or its password gone")
 	}
-	a.closeProxyForm()
+	a.closeProxyForm("")
 	// From its row in Settings, the error is a toast.
 	a.openSettings(prefProxies)
 	tt.SetSize(1200, 2400)

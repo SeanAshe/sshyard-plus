@@ -13,7 +13,7 @@ func TestAIDefaults(t *testing.T) {
 	if s.AIDefaultAgent != "builtin" || s.AIDefaultMode != "ask" || s.AIReviewProvider != "" {
 		t.Fatalf("defaults %+v", s)
 	}
-	if s.AIContextLines != 200 || s.AIAuditRetentionDays != 90 || !s.AIRedact {
+	if s.AIContextLines != 200 || s.AIAuditRetentionDays != 90 || !s.AIRedact || s.AIRequestTimeout != DefaultAIRequestTimeout {
 		t.Fatalf("defaults %+v", s)
 	}
 	if len(s.AIProviders) != 0 || len(s.AIConsentHosts) != 0 {
@@ -27,11 +27,12 @@ func TestAINormalize(t *testing.T) {
 	s.AIDefaultMode = "nope"
 	s.AIContextLines = 3
 	s.AIAuditRetentionDays = 0
+	s.AIRequestTimeout = 3
 	s.AIReviewProvider = "missing"
 	s.AIDefaultProvider = "missing"
 	s.AIProviders = []AIProvider{{ID: "p", Name: "n", BaseURL: "https://example.test/v1", Model: "m"}}
 	s.Normalize()
-	if s.AIDefaultAgent != "builtin" || s.AIDefaultMode != "ask" || s.AIContextLines != 50 || s.AIAuditRetentionDays != 90 {
+	if s.AIDefaultAgent != "builtin" || s.AIDefaultMode != "ask" || s.AIContextLines != 50 || s.AIAuditRetentionDays != 90 || s.AIRequestTimeout != AIRequestTimeoutMin {
 		t.Fatalf("normalized %+v", s)
 	}
 	if s.AIReviewProvider != "" {
@@ -51,9 +52,10 @@ func TestAINormalize(t *testing.T) {
 	s.AIDefaultMode = "full"
 	s.AIContextLines = 5000
 	s.AIAuditRetentionDays = 30
+	s.AIRequestTimeout = 99999
 	s.AIRedact = false
 	s.Normalize()
-	if s.AIDefaultMode != "full" || s.AIContextLines != 2000 || s.AIAuditRetentionDays != 30 || s.AIRedact {
+	if s.AIDefaultMode != "full" || s.AIContextLines != 2000 || s.AIAuditRetentionDays != 30 || s.AIRequestTimeout != AIRequestTimeoutMax || s.AIRedact {
 		t.Fatalf("kept %+v", s)
 	}
 
@@ -61,7 +63,7 @@ func TestAINormalize(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "s.json")
 	os.WriteFile(p, []byte(`{"theme":"dark"}`), 0o600)
 	got, err := Load(p)
-	if err != nil || got.AIDefaultAgent != "builtin" || got.AIDefaultMode != "ask" || got.AIContextLines != 200 || !got.AIRedact || got.AIAuditRetentionDays != 90 {
+	if err != nil || got.AIDefaultAgent != "builtin" || got.AIDefaultMode != "ask" || got.AIContextLines != 200 || !got.AIRedact || got.AIAuditRetentionDays != 90 || got.AIRequestTimeout != DefaultAIRequestTimeout {
 		t.Fatalf("old file %+v %v", got, err)
 	}
 }

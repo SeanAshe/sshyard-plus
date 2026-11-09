@@ -45,6 +45,10 @@ type Settings struct {
 	KeepAliveSeconds    int     `json:"keepAliveSeconds"`
 	AutoReconnect       bool    `json:"autoReconnect"`
 	SidebarWidth        float32 `json:"sidebarWidth"`
+	// UpdateProxy is how the checks for updates and their downloads go
+	// out: "" the system's proxy settings, ProxyDirect none, else a
+	// proxy's ID.
+	UpdateProxy string `json:"updateProxy,omitempty"`
 	// TerminalLineHeight and TerminalCharWidth are the height of the
 	// terminal's rows and the width of its cells, in percent of the
 	// font's own line and advance.
@@ -174,6 +178,10 @@ type Settings struct {
 	AIContextLines int `json:"aiContextLines,omitempty"`
 	// AIAuditRetentionDays is how long audit files are kept.
 	AIAuditRetentionDays int `json:"aiAuditRetentionDays,omitempty"`
+	// AIRequestTimeout is how many seconds the built-in agent waits for a
+	// reply to start, and then between two pieces of it, before the turn
+	// fails, AIRequestTimeoutMin to AIRequestTimeoutMax.
+	AIRequestTimeout int `json:"aiRequestTimeout,omitempty"`
 	// AIMaxToolCalls caps the tool calls one AI turn runs before it pauses
 	// for the user. Unset takes DefaultMaxToolCalls; a pointer to 0 runs
 	// without a limit.
@@ -467,7 +475,14 @@ type AIProvider struct {
 	TopP            *float64          `json:"topP,omitempty"`
 	MaxTokens       *int              `json:"maxTokens,omitempty"`
 	LegacyMaxTokens bool              `json:"legacyMaxTokens,omitempty"`
+	// Proxy is how the requests go out: "" the system's proxy settings,
+	// ProxyDirect none, else a proxy's ID.
+	Proxy string `json:"proxy,omitempty"`
 }
+
+// ProxyDirect is the proxy choice of AIProvider.Proxy and UpdateProxy
+// that goes out without one, ignoring the system's proxy settings.
+const ProxyDirect = "direct"
 
 // The wire formats of an AIProvider, as internal/ai/llm names them.
 const (
@@ -537,6 +552,13 @@ const (
 const (
 	DefaultMaxToolCalls = 25
 	AIMaxToolCallsMax   = 10_000
+)
+
+// The bounds of AIRequestTimeout, in seconds, and its default.
+const (
+	DefaultAIRequestTimeout = 120
+	AIRequestTimeoutMin     = 10
+	AIRequestTimeoutMax     = 1800
 )
 
 // MaxToolCalls is the cap on the tool calls one AI turn runs before it
@@ -640,7 +662,7 @@ const (
 // Default returns the defaults.
 func Default() Settings {
 	return Settings{Background: DefaultBackground(), Theme: theme.Auto, CloseBehavior: CloseToTray, TrayIcon: TrayIconColor, TrayClick: TrayClickPanel, TrayMaterial: MaterialTranslucent, TrayHeight: DefaultTrayHeight, CheckUpdates: true, UpdateIntervalHours: 1, TerminalFontSize: 13, TerminalLineHeight: 100, TerminalCharWidth: 100, TerminalCursorStyle: CursorBlock, TerminalCursorBlink: true, TerminalStripe: true, KeepAliveSeconds: 30, AutoReconnect: true, SidebarWidth: 240, ChromeMaterial: MaterialTranslucent, ContentMaterial: MaterialOpaque, MonospacedOnly: true, TransferConcurrency: 3, OpenConfirmMB: 10, FilesSplit: 50, FilesEdge: FilesRight, TerminalRightClick: RightClickMenu, EditorTreeWidth: 240, OSC52Write: OSC52Ask, OSC52MaxBytes: OSC52MaxDefault, MetricsEnabled: true, MetricsInterval: 2,
-		AIDefaultAgent: "builtin", AIDefaultMode: "ask", AIReviewStrictness: AIReviewStandard, AIContextLines: 200, AIAuditRetentionDays: 90, AIRedact: true, MCPPort: MCPPortDefault, LocalKeys: true, Highlight: Highlight{On: true}, RenewalNotify: true}
+		AIDefaultAgent: "builtin", AIDefaultMode: "ask", AIReviewStrictness: AIReviewStandard, AIContextLines: 200, AIAuditRetentionDays: 90, AIRequestTimeout: DefaultAIRequestTimeout, AIRedact: true, MCPPort: MCPPortDefault, LocalKeys: true, Highlight: Highlight{On: true}, RenewalNotify: true}
 }
 
 // ResolveOSC52Write is the write policy in effect. A host value of allow,
@@ -688,6 +710,7 @@ func (s *Settings) Normalize() {
 	if !slices.Contains(UpdateIntervals, s.UpdateIntervalHours) {
 		s.UpdateIntervalHours = d.UpdateIntervalHours
 	}
+	s.UpdateProxy = strings.TrimSpace(s.UpdateProxy)
 	if s.UIZoom != 0 && !slices.Contains(UIZooms, s.UIZoom) {
 		s.UIZoom = d.UIZoom
 	}
@@ -837,6 +860,14 @@ func (s *Settings) normalizeAI(d Settings) {
 	case s.AIAuditRetentionDays > 3650:
 		s.AIAuditRetentionDays = 3650
 	}
+	switch {
+	case s.AIRequestTimeout <= 0:
+		s.AIRequestTimeout = d.AIRequestTimeout
+	case s.AIRequestTimeout < AIRequestTimeoutMin:
+		s.AIRequestTimeout = AIRequestTimeoutMin
+	case s.AIRequestTimeout > AIRequestTimeoutMax:
+		s.AIRequestTimeout = AIRequestTimeoutMax
+	}
 	// Unset keeps the built-in default; 0 is a choice (no limit) and stays.
 	if s.AIMaxToolCalls != nil {
 		switch n := *s.AIMaxToolCalls; {
@@ -871,6 +902,7 @@ func (p *AIProvider) normalize() {
 	p.Name = strings.TrimSpace(p.Name)
 	p.BaseURL = strings.TrimSpace(p.BaseURL)
 	p.Model = strings.TrimSpace(p.Model)
+	p.Proxy = strings.TrimSpace(p.Proxy)
 	switch p.Format {
 	case AIFormatChat, AIFormatResponses, AIFormatAnthropic, AIFormatTypeSafe:
 	case "":

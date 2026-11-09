@@ -39,7 +39,7 @@ type hostForm struct {
 	cwdFollow bool
 	// metricsIdx is 0 follow, 1 on, 2 off.
 	metricsIdx int
-	// proxy is the name chosen in the proxy select ("" none); jumps the
+	// proxy is the ID chosen in the proxy select ("" none); jumps the
 	// jump chain's host IDs, first hop first; jumpPick the add select
 	proxy    string
 	jumps    []string
@@ -139,9 +139,7 @@ func (a *App) openEditor(h *assets.Host) {
 		}
 		f.metricsIdx = metricsIndex(h.Metrics)
 		f.jumps = slices.Clone(h.JumpChain)
-		if p, ok := a.store.Proxy(h.ProxyID); ok {
-			f.proxy = p.Name
-		}
+		f.proxy = h.ProxyID
 		f.netOpen = f.proxy != "" || len(f.jumps) > 0
 		f.termDir, f.remoteDir, f.localDir = h.TerminalDir, h.RemoteDir, h.LocalDir
 		f.tmux = h.Tmux
@@ -274,13 +272,7 @@ func (a *App) SaveForm(m locales.Messages) bool {
 			h.Auth, h.CredentialID = ch.method, ch.cred
 		}
 	}
-	h.ProxyID = ""
-	labels, ids := a.proxyChoices(m)
-	for i, l := range labels {
-		if l == f.proxy && i > 0 {
-			h.ProxyID = ids[i]
-		}
-	}
+	h.ProxyID = f.proxy
 	h.JumpChain = slices.Clone(f.jumps)
 	h.TerminalDir, h.RemoteDir, h.LocalDir = f.termDir, f.remoteDir, f.localDir
 	h.Tmux = strings.TrimSpace(f.tmux)
@@ -541,7 +533,7 @@ func (a *App) editorView(c *ui.Context, m locales.Messages) {
 				})
 			})
 		}), tok)
-		if !a.editing && (a.credForm == nil || a.credForm.back != f) && (a.proxyForm == nil || a.proxyForm.back != f) {
+		if !a.editing && (a.credForm == nil || a.credForm.back != f) && !a.proxyKeeps(f) {
 			a.form = nil
 		}
 	}
@@ -562,21 +554,16 @@ func (a *App) editorView(c *ui.Context, m locales.Messages) {
 // hop, and the jump hosts dialed through in order, which drag reorders.
 func (a *App) networkFields(c *ui.Context, m locales.Messages, tok theme.Tokens, f *hostForm) {
 	ui.Column(c).Gap(10).FillWidth().Margin(8, 0, 0, 0).Children(func() {
-		labels, _ := a.proxyChoices(m)
-		if f.proxy == "" {
-			f.proxy = labels[0]
-		}
 		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, m.FieldProxy()).FontSize(theme.Footnote).TextColor(tok.TextMuted).Width(92)
-			prev := f.proxy
-			all := append(slices.Clone(labels), m.NewProxyChoice())
-			if formSelect(c.Key("f:proxy"), &f.proxy, all).Label(m.FieldProxy()).Grow(1).Changed() && f.proxy == m.NewProxyChoice() {
-				// The proxy sheet replaces the editor, then comes back
-				// with the new proxy chosen.
-				f.proxy = prev
-				a.openProxyForm(nil, f)
-				a.editing = false
-			}
+			a.proxySelect(c.Key("f:proxy"), m, &f.proxy, proxyPick{owner: f,
+				leave: func() { a.editing = false },
+				back: func(id string) {
+					a.form, a.editing = f, true
+					if id != "" {
+						f.proxy = id
+					}
+				}}).Grow(1)
 		})
 		// Telnet goes through a proxy only: jump hosts are SSH.
 		if f.protocol() != assets.ProtoSSH {

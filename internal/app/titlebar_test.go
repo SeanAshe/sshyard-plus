@@ -148,6 +148,15 @@ func TestTabsOverflow(t *testing.T) {
 		t.Errorf("active %d not shown: from %d", a.ws.Active, a.tabStart)
 	}
 	more := mustFind(t, tt, strconv.Itoa(12-a.tabRoomShown())+" more tabs")
+	// The wheel moves along the tabs, away from the active one, which
+	// stays there until another is chosen.
+	from := a.tabStart
+	tt.Wheel(more.X+more.W/2, more.Y+more.H/2, 0, -40)
+	tt.Frame()
+	tt.Frame()
+	if a.tabStart != from-1 || a.ws.Active != 11 {
+		t.Errorf("wheel: from %d to %d, active %d", from, a.tabStart, a.ws.Active)
+	}
 	if err := tt.Click(strconv.Itoa(12-a.tabRoomShown()) + " more tabs"); err != nil {
 		t.Fatal(err)
 	}
@@ -171,6 +180,28 @@ func TestTabsOverflow(t *testing.T) {
 func (a *App) tabRoomShown() int {
 	_, k := tabsShown(len(a.ws.Tabs), a.ws.Active, a.tabStart, a.tabRoom)
 	return k
+}
+
+func TestTabWheelStep(t *testing.T) {
+	for _, c := range []struct {
+		rest, d  float32
+		precise  bool
+		want     int
+		wantRest float32
+	}{
+		{0, 40, false, 1, 0},                             // a notch: one
+		{0, -3, false, -1, 0},                            // either way
+		{0, 0, false, 0, 0},                              // nothing
+		{0, tabWheelRoom - 1, true, 0, tabWheelRoom - 1}, // not yet
+		{tabWheelRoom - 1, 2, true, 1, 1},                // added up
+		{0, -2*tabWheelRoom - 1, true, -2, -1},           // two back
+		{tabWheelRoom - 1, -tabWheelRoom, true, -1, 0},   // turned back
+	} {
+		n, rest := tabWheelStep(c.rest, c.d, c.precise)
+		if n != c.want || rest != c.wantRest {
+			t.Errorf("%+v: %d, %v", c, n, rest)
+		}
+	}
 }
 
 func TestTabsShown(t *testing.T) {

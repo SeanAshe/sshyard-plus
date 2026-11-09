@@ -85,6 +85,9 @@ type aiState struct {
 	scroll     ui.ScrollState
 	copied     string
 	copiedTill time.Time
+	// fullSeen is set once the full access banner is dismissed, until
+	// the pane leaves full access.
+	fullSeen bool
 }
 
 type aiItem struct {
@@ -330,7 +333,7 @@ func (a *App) providerClient(p *settings.AIProvider) (*llm.Client, error) {
 	if err != nil || len(bytes.TrimSpace(b)) == 0 {
 		return nil, errAIKey
 	}
-	return llmClient(*p, string(bytes.TrimSpace(b))), nil
+	return a.llmClient(*p, string(bytes.TrimSpace(b))), nil
 }
 
 func (a *App) ensureAI(c *conn) error {
@@ -695,7 +698,27 @@ func appendChunk(items []aiItem, kind, text string) []aiItem {
 		items[n-1].text += text
 		return items
 	}
+	if kind == "think" && strings.TrimSpace(text) == "" {
+		// Blank lines some models send as thinking, between their text
+		// and their tool calls, start nothing.
+		return items
+	}
 	return append(items, aiItem{kind: kind, text: text})
+}
+
+// dropAIItem removes the pane's error i, which the user dismissed, from
+// the conversation and its history.
+func (a *App) dropAIItem(c *conn, i int) {
+	if i < 0 || i >= len(c.ai.items) || c.ai.items[i].kind != "err" {
+		return
+	}
+	c.ai.items = append(c.ai.items[:i:i], c.ai.items[i+1:]...)
+	if i < c.ai.forgot {
+		c.ai.forgot--
+	}
+	if !c.ai.running && a.unlocked() {
+		a.saveChat(c)
+	}
 }
 
 func trailingText(items []aiItem) string {

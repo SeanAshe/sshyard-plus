@@ -155,6 +155,9 @@ func (c *Client) readResponses(br *bufioReader, emit func(Event)) (Message, erro
 		final *respObject
 		text  strings.Builder
 		done  = map[int]json.RawMessage{}
+		// thought is set while a summary part has text, which a blank
+		// line then ends.
+		thought bool
 	)
 	err := consumeSSE(br.Reader, func(data string) error {
 		var ev respEvent
@@ -185,11 +188,13 @@ func (c *Client) readResponses(br *bufioReader, emit func(Event)) (Message, erro
 		case "response.reasoning_summary_text.delta", "response.reasoning_text.delta":
 			if emit != nil && ev.Delta != "" {
 				emit(Event{Thinking: ev.Delta})
+				thought = true
 			}
 		case "response.reasoning_summary_part.done":
-			if emit != nil {
+			if emit != nil && thought {
 				emit(Event{Thinking: "\n\n"})
 			}
+			thought = false
 		case "response.output_item.done":
 			if len(ev.Item) > 0 {
 				done[ev.OutputIndex] = ev.Item

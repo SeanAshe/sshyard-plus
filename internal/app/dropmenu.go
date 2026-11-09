@@ -426,7 +426,14 @@ type chip struct {
 	CompactMenu bool
 	// FitMenu limits the scroll height to the room above or below this chip.
 	FitMenu bool
+	// Meter shows Level of meterBars lit as signal bars in place of the
+	// icon, so a level reads even on a bare chip.
+	Meter bool
+	Level int
 }
+
+// meterBars is how many bars a chip's meter has.
+const meterBars = 4
 
 // fit is ch at fit, in a pane of controls: bare at aiIcons, its label
 // at most short wide at aiShort when it shows bare otherwise. A bare
@@ -465,9 +472,20 @@ func (ch chip) show(c *ui.Context, key string) ui.Element {
 	}
 	el.Background(tint.Alpha(wash))
 	el.Children(func() {
-		if ch.Brand != nil {
+		switch {
+		case ch.Meter:
+			ui.Row(c).Size(14, 14).Gap(2).AlignItems(ui.End).Padding(1, 0, 1, 0).Shrink(0).Children(func() {
+				for i := range meterBars {
+					bar := tint.Alpha(0.3)
+					if i < ch.Level {
+						bar = tint
+					}
+					ui.Box(c).Size(2, float32(3+3*i)).Radius(1).Background(bar)
+				}
+			})
+		case ch.Brand != nil:
 			brandImage(c, ch.Brand, 14)
-		} else {
+		default:
 			ui.Icon(c, ch.Icon.SVG).Size(14, 14).Shrink(0).TextColor(tint)
 		}
 		if !ch.Bare {

@@ -335,7 +335,7 @@ func TestAIProviderSheetFormatParamsAndModels(t *testing.T) {
 	if g.format != 2 || !g.useTemp || g.useTopP || g.useTokens || !g.advanced || len(g.models) != 2 {
 		t.Fatalf("reopened %+v", g)
 	}
-	cl := llmClient(p, "k")
+	cl := a.llmClient(p, "k")
 	if cl.Format != llm.FormatAnthropic || cl.Temperature == nil || cl.TopP != nil || cl.MaxTokens != 0 {
 		t.Fatalf("client %+v", cl)
 	}

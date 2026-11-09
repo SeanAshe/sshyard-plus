@@ -55,13 +55,41 @@ func tabsShown(n, active, start int, room float32) (int, int) {
 	return min(max(start, 0), n-k), k
 }
 
+// tabWheelRoom is how far a touchpad scrolls the title bar's tabs by one.
+const tabWheelRoom = tabMinWidth / 2
+
+// tabWheelStep is how many tabs a scroll of d DIPs moves the title bar's
+// by, toward the last for a positive d, and what of it is left for the
+// next: a notch of a mouse wheel moves one, a touchpad's small moves
+// (precise) one for each tabWheelRoom they add up to. rest is what the
+// last left.
+func tabWheelStep(rest, d float32, precise bool) (int, float32) {
+	if !precise {
+		switch {
+		case d > 0:
+			return 1, 0
+		case d < 0:
+			return -1, 0
+		}
+		return 0, 0
+	}
+	if rest*d < 0 {
+		rest = 0 // turned back
+	}
+	rest += d
+	n := int(rest / tabWheelRoom)
+	return n, rest - float32(n)*tabWheelRoom
+}
+
 // tabs stand on the title bar's foot as a browser's: the active one in
 // the content's fill, its top rounded and its foot flared into the
 // content it joins; the others flat, muted and apart by short lines, lit
 // on hover in a rounded box clear of the foot. Each shows the host as the sidebar does, its close button
 // while it is active or under the pointer, and at once as the pointer
 // comes, a tip of where its panes are. The tabs that do not fit go in the
-// popover of a button after them, and the button for a new tab follows.
+// popover of a button after them, and the button for a new tab follows;
+// the wheel, or a touchpad either way, moves along them, and the active
+// one comes back into view once another is chosen.
 func (a *App) tabs(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 	area := ui.Row(c.Key("tabarea")).Grow(1).Shrink(1).MinWidth(0).FillHeight().Gap(tabGap).AlignItems(ui.End).ClipX()
 	active := -1
@@ -69,8 +97,33 @@ func (a *App) tabs(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 		active = a.ws.Active
 	}
 	room := area.Bounds().W - tabAddWidth
-	start, k := tabsShown(len(a.ws.Tabs), active, a.tabStart, room)
+	keep := active
+	if active >= 0 && active < len(a.ws.Tabs) {
+		if id := a.ws.Tabs[active].ID; id != a.tabKept {
+			a.tabKept, a.tabWheeled = id, false
+		}
+	}
+	if a.tabWheeled {
+		keep = -1 // scrolled away from the active one
+	}
+	n := len(a.ws.Tabs)
+	start, k := tabsShown(n, keep, a.tabStart, room)
 	a.tabStart = start
+	area.HandleInput(func(ev ui.InputEvent) bool {
+		if ev.Kind != ui.InputScroll || k >= n || ev.Mods&ui.Ctrl != 0 {
+			return false
+		}
+		d := ev.DY
+		if ev.DX*ev.DX > ev.DY*ev.DY {
+			d = ev.DX
+		}
+		step, rest := tabWheelStep(a.tabWheel, d, ev.Precise)
+		a.tabWheel = rest
+		if to := min(max(a.tabStart+step, 0), n-k); to != a.tabStart {
+			a.tabStart, a.tabWheeled = to, true
+		}
+		return true
+	})
 	if room != a.tabRoom {
 		// Measured anew (a resize): lay the tabs out again for it.
 		a.tabRoom = room

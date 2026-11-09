@@ -1096,20 +1096,21 @@ func TestAIProviderRejectsBadURLAndHeader(t *testing.T) {
 	mustClick(t, tt, "Add Provider")
 	tt.Frame()
 	a.prov.name, a.prov.base, a.prov.model, a.prov.key = "fake", "ftp://example.test/v1", "m", "test-key-not-real"
-	mustClick(t, tt, "Save")
+	// The handler: Save may be below the fold of the sheet.
+	a.saveProvider(m)
 	tt.Frame()
 	if a.prov.err != m.AiBadURL() || len(a.Settings().AIProviders) != 0 {
 		t.Fatalf("providers %d error %q", len(a.Settings().AIProviders), a.prov.err)
 	}
 	a.prov.base = "http://example.test/v1"
 	a.prov.headers = "Authorization: Bearer test-key-not-real"
-	mustClick(t, tt, "Save")
+	a.saveProvider(m)
 	tt.Frame()
 	if a.prov.err != m.AiBadHeader() || len(a.Settings().AIProviders) != 0 {
 		t.Fatalf("header accepted, error %q", a.prov.err)
 	}
 	a.prov.headers = ""
-	mustClick(t, tt, "Save")
+	a.saveProvider(m)
 	tt.Frame()
 	if len(a.Settings().AIProviders) != 1 || a.prov == nil || a.prov.warn != m.AiHTTPWarn() {
 		t.Fatalf("warn missing, providers %d form %+v", len(a.Settings().AIProviders), a.prov)
@@ -1243,5 +1244,93 @@ func TestOneAIPanePerTab(t *testing.T) {
 	tt.Frame()
 	if a.conns[second] != nil {
 		t.Fatal("the rail did not close the tab's AI pane")
+	}
+}
+
+// TestAIBlankThinking checks that thinking made only of blank lines starts
+// no item, so text around it stays one, while blank lines inside a thought
+// are kept, and that a saved conversation leaves out blank thinking.
+func TestAIBlankThinking(t *testing.T) {
+	var items []aiItem
+	items = appendChunk(items, "text", "checking:")
+	items = appendChunk(items, "think", "\n\n")
+	items = appendChunk(items, "text", " done")
+	if len(items) != 1 || items[0].text != "checking: done" {
+		t.Fatalf("blank thinking split the text: %+v", items)
+	}
+	items = appendChunk(items, "think", "plan")
+	items = appendChunk(items, "think", "\n\n")
+	items = appendChunk(items, "think", "more")
+	if len(items) != 2 || items[1].kind != "think" || items[1].text != "plan\n\nmore" {
+		t.Fatalf("thought: %+v", items)
+	}
+
+	a, _ := newTestApp(t)
+	h := savedHost(t, a, "web", "10.0.0.8")
+	id, err := a.OpenAI(h.ID, openAt{}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := a.conns[id]
+	a.noteQuestion(c, "disk?", nil)
+	c.ai.items = []aiItem{{kind: "user", text: "disk?"}, {kind: "think", text: "\n\n"}, {kind: "text", text: "full"}}
+	if err := a.saveChat(c); err != nil {
+		t.Fatal(err)
+	}
+	conv, err := a.chatHistory().Load(h.ID, c.ai.conv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(conv.Items) != 2 || conv.Items[0].Kind != "user" || conv.Items[1].Kind != "text" {
+		t.Fatalf("saved items %+v", conv.Items)
+	}
+}
+
+// TestAIDismissError checks that a dismissed error leaves the conversation
+// and its history, keeps the point the agent forgot from in place, and that
+// nothing but an error is dismissed.
+func TestAIDismissError(t *testing.T) {
+	a, _ := newTestApp(t)
+	h := savedHost(t, a, "web", "10.0.0.8")
+	id, err := a.OpenAI(h.ID, openAt{}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := a.conns[id]
+	a.noteQuestion(c, "disk?", nil)
+	c.ai.items = []aiItem{{kind: "err", text: "timeout"}, {kind: "user", text: "disk?"}, {kind: "err", text: "network"}}
+	c.ai.forgot = 2
+	a.dropAIItem(c, 1)
+	if len(c.ai.items) != 3 {
+		t.Fatalf("dropped a question: %+v", c.ai.items)
+	}
+	a.dropAIItem(c, 0)
+	if len(c.ai.items) != 2 || c.ai.items[0].kind != "user" || c.ai.forgot != 1 {
+		t.Fatalf("after dismiss: %+v forgot %d", c.ai.items, c.ai.forgot)
+	}
+	conv, err := a.chatHistory().Load(h.ID, c.ai.conv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(conv.Items) != 2 || conv.Items[0].Kind != "user" || conv.Items[1].Text != "network" {
+		t.Fatalf("saved items %+v", conv.Items)
+	}
+}
+
+// TestAIRequestTimeoutSetting checks that the request timeout set in the
+// settings is the one the model's client waits for.
+func TestAIRequestTimeoutSetting(t *testing.T) {
+	a, _ := newTestApp(t)
+	p := settings.AIProvider{ID: "p1", Model: "m", BaseURL: "https://alpha.test/v1"}
+	if got := a.llmClient(p, "k").Timeout; got != settings.DefaultAIRequestTimeout*time.Second {
+		t.Fatalf("default timeout %v", got)
+	}
+	s := a.Settings()
+	s.AIRequestTimeout = 45
+	if err := a.ApplySettings(s); err != nil {
+		t.Fatal(err)
+	}
+	if got := a.llmClient(p, "k").Timeout; got != 45*time.Second {
+		t.Fatalf("timeout %v", got)
 	}
 }

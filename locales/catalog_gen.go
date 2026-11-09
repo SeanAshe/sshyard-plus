@@ -3129,6 +3129,36 @@ func (msgs Messages) NewProxyChoice() string {
 	return Catalog.Format(msgs.locale, "newProxyChoice", nil)
 }
 
+// ProxySystem says "System proxy"
+// in the language the app shows.
+func ProxySystem() string { return In(i18n.Locale()).ProxySystem() }
+
+// ProxySystem says "System proxy"
+// in the language of msgs.
+func (msgs Messages) ProxySystem() string {
+	return Catalog.Format(msgs.locale, "proxySystem", nil)
+}
+
+// ProxyMissing says "Deleted proxy"
+// in the language the app shows.
+func ProxyMissing() string { return In(i18n.Locale()).ProxyMissing() }
+
+// ProxyMissing says "Deleted proxy"
+// in the language of msgs.
+func (msgs Messages) ProxyMissing() string {
+	return Catalog.Format(msgs.locale, "proxyMissing", nil)
+}
+
+// ProxySystemNote says "System proxy follows the system's network settings, PAC files included."
+// in the language the app shows.
+func ProxySystemNote() string { return In(i18n.Locale()).ProxySystemNote() }
+
+// ProxySystemNote says "System proxy follows the system's network settings, PAC files included."
+// in the language of msgs.
+func (msgs Messages) ProxySystemNote() string {
+	return Catalog.Format(msgs.locale, "proxySystemNote", nil)
+}
+
 // FieldJumpHosts says "Jump hosts, in the order they are dialed (drag to reorder)"
 // in the language the app shows.
 func FieldJumpHosts() string { return In(i18n.Locale()).FieldJumpHosts() }
@@ -6503,6 +6533,36 @@ func AiAuditDays() string { return In(i18n.Locale()).AiAuditDays() }
 // in the language of msgs.
 func (msgs Messages) AiAuditDays() string {
 	return Catalog.Format(msgs.locale, "aiAuditDays", nil)
+}
+
+// AiRequestTimeout says "Request timeout (seconds)"
+// in the language the app shows.
+func AiRequestTimeout() string { return In(i18n.Locale()).AiRequestTimeout() }
+
+// AiRequestTimeout says "Request timeout (seconds)"
+// in the language of msgs.
+func (msgs Messages) AiRequestTimeout() string {
+	return Catalog.Format(msgs.locale, "aiRequestTimeout", nil)
+}
+
+// AiRequestTimeoutNote says "How long to wait for a reply to start, or for its next part, before the request fails"
+// in the language the app shows.
+func AiRequestTimeoutNote() string { return In(i18n.Locale()).AiRequestTimeoutNote() }
+
+// AiRequestTimeoutNote says "How long to wait for a reply to start, or for its next part, before the request fails"
+// in the language of msgs.
+func (msgs Messages) AiRequestTimeoutNote() string {
+	return Catalog.Format(msgs.locale, "aiRequestTimeoutNote", nil)
+}
+
+// AiDismiss says "Dismiss"
+// in the language the app shows.
+func AiDismiss() string { return In(i18n.Locale()).AiDismiss() }
+
+// AiDismiss says "Dismiss"
+// in the language of msgs.
+func (msgs Messages) AiDismiss() string {
+	return Catalog.Format(msgs.locale, "aiDismiss", nil)
 }
 
 // AiRedact says "Redact secrets"
@@ -11477,6 +11537,36 @@ func GitHubRepo() string { return In(i18n.Locale()).GitHubRepo() }
 // in the language of msgs.
 func (msgs Messages) GitHubRepo() string {
 	return Catalog.Format(msgs.locale, "gitHubRepo", nil)
+}
+
+// Feedback says "Feedback / Community"
+// in the language the app shows.
+func Feedback() string { return In(i18n.Locale()).Feedback() }
+
+// Feedback says "Feedback / Community"
+// in the language of msgs.
+func (msgs Messages) Feedback() string {
+	return Catalog.Format(msgs.locale, "feedback", nil)
+}
+
+// FeedbackGitHub says "GitHub Feedback"
+// in the language the app shows.
+func FeedbackGitHub() string { return In(i18n.Locale()).FeedbackGitHub() }
+
+// FeedbackGitHub says "GitHub Feedback"
+// in the language of msgs.
+func (msgs Messages) FeedbackGitHub() string {
+	return Catalog.Format(msgs.locale, "feedbackGitHub", nil)
+}
+
+// FeedbackQQGroup says "QQ Group"
+// in the language the app shows.
+func FeedbackQQGroup() string { return In(i18n.Locale()).FeedbackQQGroup() }
+
+// FeedbackQQGroup says "QQ Group"
+// in the language of msgs.
+func (msgs Messages) FeedbackQQGroup() string {
+	return Catalog.Format(msgs.locale, "feedbackQQGroup", nil)
 }
 
 // CrumbsLabel says "Path"

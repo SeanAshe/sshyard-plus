@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // The wire formats a Client speaks. An empty format is FormatChat.
@@ -78,6 +79,10 @@ type Client struct {
 	// HTTP is optional. Its Transport is reused; a redirect is allowed
 	// only when its scheme, hostname and port all match BaseURL.
 	HTTP *http.Client
+	// Timeout is how long a completion waits for the reply to start, and
+	// then between two pieces of it, before it fails with ErrTimeout.
+	// Zero waits as long as the connection lasts.
+	Timeout time.Duration
 }
 
 // Message is one chat message. ToolCalls is set on an assistant message
@@ -240,21 +245,23 @@ func (c *Client) Stream(ctx context.Context, req Request, emit func(Event)) (Mes
 	if err != nil {
 		return Message{}, err
 	}
+	ctx, w := watch(ctx, c.Timeout)
+	defer w.stop()
 	resp, err := c.do(ctx, http.MethodPost, path, nil, payload)
 	if err != nil {
-		return Message{}, err
+		return Message{}, w.err(err)
 	}
 	defer resp.Body.Close()
-	br, err := c.body(resp.Body)
+	br, err := c.body(w.reader(resp.Body))
 	if err != nil {
-		return Message{}, c.readErr(ctx, err)
+		return Message{}, w.err(c.readErr(ctx, err))
 	}
 	msg, err := read(br, emit)
 	if err == nil && br.r.n > br.r.max {
 		err = ErrTooBig
 	}
 	if err != nil {
-		return Message{}, c.readErr(ctx, err)
+		return Message{}, w.err(c.readErr(ctx, err))
 	}
 	if msg.Opaque != nil {
 		msg.OpaqueFormat, msg.OpaqueModel = c.format(), model

@@ -161,6 +161,8 @@ var (
 	Backup      = load("safe-2-line")
 	Update      = load("download-cloud-2-line")
 	GitHub      = load("github-line")
+	Feedback    = load("feedback-line")
+	QQ          = load("qq-line")
 	Check       = load("check-line")
 	MoveTo      = load("folder-transfer-line")
 	Submenu     = load("arrow-right-s-line")

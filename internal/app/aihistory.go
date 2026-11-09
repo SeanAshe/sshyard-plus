@@ -113,6 +113,9 @@ func (a *App) saveChat(c *conn) (err error) {
 		}
 	}
 	for _, it := range c.ai.items {
+		if it.kind == "think" && strings.TrimSpace(it.text) == "" {
+			continue
+		}
 		item := history.Item{Kind: it.kind, Text: it.text}
 		for _, f := range it.files {
 			item.Files = append(item.Files, history.File{Name: f.name, MIME: f.mime})

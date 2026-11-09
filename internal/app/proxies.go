@@ -1,14 +1,23 @@
 package app
 
 import (
+	"context"
+	"errors"
+	"net"
+	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Licoy/sshyard/internal/assets"
 	"github.com/Licoy/sshyard/internal/icons"
 	"github.com/Licoy/sshyard/internal/keychain"
+	"github.com/Licoy/sshyard/internal/settings"
 	"github.com/Licoy/sshyard/internal/theme"
+	"github.com/Licoy/sshyard/internal/updater"
 	"github.com/Licoy/sshyard/locales"
+	sysproxy "github.com/egoist/mygo/netproxy"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -23,9 +32,18 @@ type proxyForm struct {
 	address, port, user string
 	password, note      string
 	err                 string
-	// back is the host editor that opened the sheet ("New proxy…"),
-	// shown again with the new proxy chosen
-	back *hostForm
+	// back is the sheet whose proxy select opened this one ("New
+	// proxy…"), shown again when it closes; nil from the settings
+	back *proxyBack
+}
+
+// proxyBack is where a proxy select's "New proxy…" goes back to.
+type proxyBack struct {
+	// owner is the form of the sheet the select is on, kept while the
+	// proxy sheet shows; nil for a select on a page
+	owner any
+	// done shows that sheet again, with id the proxy saved, "" none
+	done func(id string)
 }
 
 func (f *proxyForm) proxyKind() assets.ProxyKind {
@@ -35,7 +53,7 @@ func (f *proxyForm) proxyKind() assets.ProxyKind {
 	return assets.ProxySOCKS5
 }
 
-func (a *App) openProxyForm(p *assets.Proxy, back *hostForm) {
+func (a *App) openProxyForm(p *assets.Proxy, back *proxyBack) {
 	f := &proxyForm{isNew: p == nil, back: back, port: "1080"}
 	if p != nil {
 		f.orig = *p
@@ -47,13 +65,20 @@ func (a *App) openProxyForm(p *assets.Proxy, back *hostForm) {
 	a.proxyForm, a.proxyEditing = f, true
 }
 
-// closeProxyForm closes the sheet, back to the host editor that opened it.
-func (a *App) closeProxyForm() {
+// closeProxyForm closes the sheet, back to the sheet that opened it with
+// saved, the ID of the proxy saved ("" none), chosen.
+func (a *App) closeProxyForm(saved string) {
 	f := a.proxyForm
 	a.proxyForm, a.proxyEditing = nil, false
 	if f != nil && f.back != nil {
-		a.form, a.editing = f.back, true
+		f.back.done(saved)
 	}
+}
+
+// proxyKeeps reports whether the proxy sheet showing came from the
+// proxy select of the sheet editing owner, which stays to go back to.
+func (a *App) proxyKeeps(owner any) bool {
+	return a.proxyForm != nil && a.proxyForm.back != nil && a.proxyForm.back.owner == owner
 }
 
 // SaveProxyForm validates the sheet, saves the proxy and puts its
@@ -112,21 +137,142 @@ func (a *App) SaveProxyForm(m locales.Messages) bool {
 	if err != nil {
 		return fail(fieldError(m, err))
 	}
-	if f.back != nil {
-		f.back.proxy = saved.Name
-	}
-	a.closeProxyForm()
+	a.proxiesChanged()
+	a.closeProxyForm(saved.ID)
 	return true
 }
 
-// proxyChoices are the host editor's proxy select: none, then every
-// proxy by name.
-func (a *App) proxyChoices(m locales.Messages) (labels []string, ids []string) {
-	labels, ids = []string{m.ProxyNone()}, []string{""}
-	for _, p := range a.store.Proxies() {
-		labels, ids = append(labels, p.Name), append(ids, p.ID)
+// proxyNew is the proxy select's "New proxy…" choice, never an ID.
+const proxyNew = "+new"
+
+// proxyPick is what a proxy select offers and where its "New proxy…"
+// goes.
+type proxyPick struct {
+	// system offers the system's proxy settings as "", none then being
+	// settings.ProxyDirect; without it none is ""
+	system bool
+	// owner is the form of the sheet the select is on, nil on a page.
+	// leave hides that sheet for the proxy sheet; back shows it again,
+	// with id the proxy saved ("" none)
+	owner any
+	leave func()
+	back  func(id string)
+}
+
+// proxySelect is the one proxy select of everything that goes out
+// through a proxy, bound to its ID: none (or the system's and none),
+// every saved proxy by name, one deleted as such, and "New proxy…",
+// which swaps the sheet for the proxy sheet and comes back with the new
+// proxy chosen.
+func (a *App) proxySelect(c *ui.Context, m locales.Messages, id *string, o proxyPick) ui.Element {
+	names := map[string]string{proxyNew: m.NewProxyChoice()}
+	var opts []string
+	if o.system {
+		opts = append(opts, "", settings.ProxyDirect)
+		names[""], names[settings.ProxyDirect] = m.ProxySystem(), m.ProxyNone()
+	} else {
+		opts = append(opts, "")
+		names[""] = m.ProxyNone()
 	}
-	return
+	for _, p := range a.store.Proxies() {
+		opts = append(opts, p.ID)
+		names[p.ID] = p.Name
+	}
+	if _, ok := names[*id]; !ok {
+		opts = append(opts, *id)
+		names[*id] = m.ProxyMissing()
+	}
+	opts = append(opts, proxyNew)
+	sel := formSelectContent(c, id, opts, func(v string) {
+		ui.Text(c, names[v]).FontSize(theme.Body).TextColor(currentTokens(c).Text).SingleLine().Grow(1).Shrink(1).MinWidth(0)
+	}).Label(m.FieldProxy())
+	// A choice lands between two builds: prev is the one before it.
+	prev := ui.Local(sel, proxyPrevKey{}, func() string { return *id })
+	if *id != proxyNew {
+		*prev = *id
+		return sel
+	}
+	*id = *prev
+	if o.leave != nil {
+		o.leave()
+	}
+	a.openProxyForm(nil, &proxyBack{owner: o.owner, done: o.back})
+	return sel
+}
+
+type proxyPrevKey struct{}
+
+// errProxyMissing is the dial of a route whose proxy was deleted: it
+// goes nowhere rather than around it.
+var errProxyMissing = errors.New("app: the chosen proxy was deleted")
+
+// proxyRoute is how HTTP requests go out for the proxy choice id gives
+// at each one (AIProvider.Proxy, Settings.UpdateProxy): "" through the
+// system's proxy settings, PAC files included, settings.ProxyDirect
+// straight, else through that saved proxy, looked up at each connection
+// so that an edit applies to the next.
+func (a *App) proxyRoute(id func() string) updater.Route {
+	direct := a.p.Dial
+	if direct == nil {
+		direct = (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext
+	}
+	return updater.Route{
+		Proxy: func(req *http.Request) (*url.URL, error) {
+			if id() == "" {
+				return sysproxy.Proxy(req)
+			}
+			return nil, nil
+		},
+		Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			switch v := id(); v {
+			case "", settings.ProxyDirect:
+				return direct(ctx, network, addr)
+			default:
+				px, ok := a.store.Proxy(v)
+				if !ok {
+					return nil, errProxyMissing
+				}
+				return a.proxyDialer(px).DialContext(ctx, network, addr)
+			}
+		},
+	}
+}
+
+// routeUpdates sends the update window's requests through the proxy the
+// settings choose.
+func (a *App) routeUpdates() {
+	id := a.settings.UpdateProxy
+	a.updProxy = id
+	a.upd.SetRoute(a.proxyRoute(func() string { return id }))
+}
+
+// proxiesChanged closes the connections kept through a proxy that was
+// edited or deleted: the next requests dial it anew.
+func (a *App) proxiesChanged() {
+	a.mu.Lock()
+	for _, hc := range a.proxyClients {
+		hc.CloseIdleConnections()
+	}
+	a.mu.Unlock()
+	a.routeUpdates()
+}
+
+// proxyClient is the HTTP client of the proxy choice id, one per choice
+// so that connections are kept between requests.
+func (a *App) proxyClient(id string) *http.Client {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if hc, ok := a.proxyClients[id]; ok {
+		return hc
+	}
+	r := a.proxyRoute(func() string { return id })
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.Proxy, t.DialContext = r.Proxy, r.Dial
+	if a.proxyClients == nil {
+		a.proxyClients = map[string]*http.Client{}
+	}
+	a.proxyClients[id] = &http.Client{Transport: t}
+	return a.proxyClients[id]
 }
 
 func proxyKindText(p assets.Proxy) string {
@@ -226,7 +372,7 @@ func (a *App) proxyView(c *ui.Context, m locales.Messages) {
 		})
 	}), tok)
 	if !a.proxyEditing && a.proxyForm == f {
-		a.closeProxyForm()
+		a.closeProxyForm("")
 	}
 }
 
