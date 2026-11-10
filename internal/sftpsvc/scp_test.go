@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -20,6 +21,13 @@ import (
 // with this computer's shell, in a folder of its own.
 func connectNoSFTP(t *testing.T) (*Client, string) {
 	t.Helper()
+	return connectWithout(t, func(srv *sshtest.Server) { srv.NoSFTP = true })
+}
+
+// connectWithout connects to a server set up by without to have no SFTP
+// and runs commands with this computer's shell, in a folder of its own.
+func connectWithout(t *testing.T, without func(*sshtest.Server)) (*Client, string) {
+	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("the test server runs commands with /bin/sh")
 	}
@@ -34,8 +42,8 @@ func connectNoSFTP(t *testing.T) (*Client, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv.NoSFTP = true
 	srv.Exec = sshtest.ShellExec(root)
+	without(srv)
 	t.Cleanup(srv.Close)
 	kh, _ := session.OpenKnownHosts(filepath.Join(t.TempDir(), "kh"))
 	kh.Add(srv.Addr, srv.HostKey.PublicKey())
@@ -151,5 +159,56 @@ func TestSCPFallback(t *testing.T) {
 	}
 	if c.Exists(RemoteJoin(home, "b c.txt")) {
 		t.Error("removed file still there")
+	}
+}
+
+// A server that takes the sftp subsystem but has no sftp-server to run
+// (dropbear, or OpenSSH without the package) is served by scp too.
+func TestSCPFallbackMissingServer(t *testing.T) {
+	c, root := connectWithout(t, func(srv *sshtest.Server) { srv.SFTPExit = 127 })
+	if !c.SCP() {
+		t.Fatal("a server whose sftp-server is missing is not served by scp")
+	}
+	os.WriteFile(filepath.Join(root, "a.txt"), []byte("ay"), 0o644)
+	es, err := c.List(root)
+	if err != nil || len(es) != 1 || es[0].Name != "a.txt" || es[0].Size != 2 {
+		t.Fatalf("listing %+v %v", es, err)
+	}
+	// The connection remembers it: the next client goes to scp at once.
+	again, err := New(c.conn)
+	if err != nil || !again.SCP() {
+		t.Fatalf("second client scp %v %v", again != nil && again.SCP(), err)
+	}
+	again.Close()
+}
+
+// Without commands either, the failed SFTP handshake is the error.
+func TestMissingServerWithoutShell(t *testing.T) {
+	srv, err := sshtest.Start("127.0.0.1:0", "demo", "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.SFTPExit = 127
+	t.Cleanup(srv.Close)
+	kh, _ := session.OpenKnownHosts(filepath.Join(t.TempDir(), "kh"))
+	kh.Add(srv.Addr, srv.HostKey.PublicKey())
+	conn, err := session.Dial(context.Background(), session.Config{Addr: srv.Addr, User: "demo", HostKey: kh.Callback(),
+		Credentials: func(context.Context) (session.Credentials, error) {
+			return session.Credentials{Password: "secret"}, nil
+		}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	c, err := New(conn)
+	if err == nil {
+		c.Close()
+		t.Fatal("a server with neither SFTP nor commands gave a client")
+	}
+	if !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
+		t.Errorf("error %v, want the handshake's", err)
+	}
+	if withoutSFTP(conn) {
+		t.Error("the connection is marked without SFTP though scp could not stand in")
 	}
 }

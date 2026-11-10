@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 
 	"golang.org/x/crypto/ssh"
@@ -118,6 +119,16 @@ func (c *Client) negotiateOperation(ctx context.Context) (*Client, error) {
 	}
 	sc, err := sftp.NewClientPipe(rd, wr)
 	if err != nil {
+		if ctx.Err() == nil && (errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)) {
+			// The server took the subsystem but ended it unanswered, as
+			// dropbear or OpenSSH does whose sftp-server is missing: its
+			// shell and scp stand in, if it runs commands.
+			session.Close()
+			if sub, scpErr := c.scpOperation(); scpErr == nil {
+				markWithoutSFTP(c.conn)
+				return sub, nil
+			}
+		}
 		return nil, err
 	}
 	complete = true
