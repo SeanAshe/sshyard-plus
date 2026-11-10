@@ -237,7 +237,13 @@ func TestFullScreen(t *testing.T) {
 	if err != nil || res.Status != FullScreen || f.sent() != "" {
 		t.Fatalf("%+v %v typed %q", res, err, f.sent())
 	}
-	res, err = Key(t.Context(), f, "q", fast)
+	// The device's reply runs on another goroutine. On a busy Windows
+	// runner that can start after the short settle, and Key then reports
+	// the program still full-screen. Wait long enough for the reply to
+	// leave the alternate screen.
+	quit := fast
+	quit.Settle = 500 * time.Millisecond
+	res, err = Key(t.Context(), f, "q", quit)
 	if err != nil || res.Status != AtPrompt || f.sent() != "q" {
 		t.Fatalf("%+v %v typed %q", res, err, f.sent())
 	}
