@@ -24,6 +24,17 @@ as separators, are skipped. The preview edits every field and the login of each
 row, alone or for the selected rows at once, and saves only once every
 selected row is valid.
 
+## CSV host table
+
+`CSV` reads a selected `.csv` file whose header row names the columns with the
+text host list's keys, under the same rules: one host per row, each cell a
+`key=value` field under its column name, a blank cell as no field, other columns
+diagnosed only where a row fills them. Columns split on commas, or on semicolons
+or tabs when the header has no comma; quoting follows CSV, a stray quote stays
+literal, and cells other than `password` are trimmed. Rows without a value and
+`#` comments are skipped; a header without a `host` or `ip` column fails as an
+unsupported format. The preview is the text import's.
+
 ## Independently verified source formats
 
 - WindTerm: `user.sessions` JSON array, public `session.target`, `session.label`,

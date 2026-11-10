@@ -30,6 +30,11 @@ func (a *App) migrationSection(c *ui.Context, m locales.Messages, tok theme.Toke
 				a.readMigration(m, migration.Text, false)
 			}
 		})
+		g.row(m.MigrationCSV(), m.MigrationFormat("host,port,user,password,title"), func() {
+			if a.p.PickFiles != nil && (IconButton{Icon: icons.OpenFile, Label: m.MigrationCSVChooseFile()}).Clicked(c, "migration:csv:file") {
+				a.readMigration(m, migration.CSV, false)
+			}
+		})
 	})
 	sources := migration.Sources()
 	groups := []struct {
@@ -61,8 +66,11 @@ func (a *App) migrationView(c *ui.Context, m locales.Messages) {
 	tok := currentTokens(c)
 	width, height := c.Size()
 	source := string(f.source)
-	if f.editable() {
+	switch f.source {
+	case migration.Text:
 		source = m.MigrationText()
+	case migration.CSV:
+		source = m.MigrationCSV()
 	}
 	previewing := !f.reading && !f.saving && !f.composing && f.done == nil
 	var k migrationCheck

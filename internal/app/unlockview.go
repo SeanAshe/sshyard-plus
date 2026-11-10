@@ -36,6 +36,7 @@ func (a *App) unlockView(c *ui.Context) {
 		})
 	})
 	a.unlockModal(c, m, tok)
+	a.masterPasswordView(c, m)
 }
 
 func (a *App) secretsBanner(c *ui.Context, m locales.Messages, tok theme.Tokens) {
@@ -61,6 +62,23 @@ func (a *App) unlockModal(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 			sheetTitle(c, m.SecretsUnlockFailed())
 			ui.Text(c, m.SecretsUnlockSafety()).FontSize(theme.Body)
 			ui.Text(c, unlockErrorText(m, a.unlock.err)).FontSize(theme.Footnote).TextColor(tok.Danger)
+			var linux *keychain.LinuxServiceError
+			diagnose := errors.As(a.unlock.err, &linux)
+			fallback := masterStage(a.unlock.err) && a.kc != nil && a.kc.CanUsePassword()
+			if diagnose || fallback {
+				ui.Row(c).Gap(theme.Space(2)).Children(func() {
+					// The service's own message names no secret, only why it failed.
+					if diagnose && pill(c, m.CopyDiagnostics(), false, false, false) {
+						c.WriteClipboard(linux.Err.Error())
+						c.AddToast(ui.Toast{Title: m.Copied()})
+					}
+					ui.Spacer(c)
+					if fallback && pill(c, m.UseMasterPasswordEllipsis(), false, false, false) {
+						a.unlock.modal = false
+						a.openMasterPassword(masterPwSetup)
+					}
+				})
+			}
 			ui.Row(c).Gap(theme.Space(2)).Children(func() {
 				ui.Spacer(c)
 				if pill(c, m.Cancel(), false, false, false) {
@@ -75,9 +93,23 @@ func (a *App) unlockModal(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 			})
 		})
 	}), tok)
-	if !a.unlock.modal && !a.unlock.busy {
+	if !a.unlock.modal && !a.unlock.busy && !a.masterPwOpen {
 		a.unlock.after = nil
 	}
+}
+
+// masterStage is a failure to read, create or check the system keychain's
+// master key, which a local master password may stand in for.
+func masterStage(err error) bool {
+	var op *keychain.OpError
+	if !errors.As(err, &op) {
+		return false
+	}
+	switch op.Op {
+	case "master-read", "master-write", "master-verify":
+		return !errors.Is(err, keychain.ErrMasterMissing) && !errors.Is(err, keychain.ErrMasterInvalid)
+	}
+	return false
 }
 
 // Only known reasons and operation names enter the interface, never raw errors.
@@ -95,6 +127,10 @@ func unlockErrorText(m locales.Messages, err error) string {
 			stage = m.SecretsStageWriteMaster()
 		case "master-verify":
 			stage = m.SecretsStageVerifyMaster()
+		case "master-password":
+			stage = m.SecretsStageMasterPassword()
+		case "master-password-write":
+			stage = m.SecretsStageWriteMasterPassword()
 		case "file-read":
 			stage = m.SecretsStageReadFile()
 		case "file-decrypt":
@@ -131,6 +167,10 @@ func unlockErrorReason(m locales.Messages, err error) string {
 		reason = m.SecretsReasonVersion()
 	case errors.Is(err, keychain.ErrUnavailable):
 		reason = m.SecretsReasonUnavailable()
+	case errors.Is(err, keychain.ErrPasswordRequired):
+		reason = m.SecretsReasonPasswordRequired()
+	case errors.Is(err, keychain.ErrPasswordSetup):
+		reason = m.SecretsReasonPasswordSetup()
 	}
 	var system *keychain.SystemError
 	if errors.As(err, &system) {
@@ -161,6 +201,10 @@ func linuxServiceReason(m locales.Messages, kind keychain.LinuxServiceErrorKind)
 		return m.SecretsReasonLinuxStartFailed()
 	case keychain.LinuxServiceLocked:
 		return m.SecretsReasonLinuxLocked()
+	case keychain.LinuxServiceMissing:
+		return m.SecretsReasonLinuxMissing()
+	case keychain.LinuxServiceTimeout:
+		return m.SecretsReasonLinuxTimeout()
 	default:
 		return m.SecretsReasonLinuxUnknown()
 	}

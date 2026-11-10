@@ -13,11 +13,23 @@ var (
 	ErrVersion       = errors.New("keychain: unsupported encrypted store version")
 	// ErrInteractionRequired is a silent unlock that needs system authorization.
 	ErrInteractionRequired = errors.New("keychain: system authorization required")
+	// ErrPasswordRequired is an unlock of a store a local master password
+	// protects, which only UnlockPassword opens.
+	ErrPasswordRequired = errors.New("keychain: local master password required")
+	// ErrWrongPassword is a local master password that does not open the
+	// master key.
+	ErrWrongPassword = errors.New("keychain: wrong local master password")
+	// ErrNoPassword is a local master password operation on a store the
+	// system keychain protects.
+	ErrNoPassword = errors.New("keychain: no local master password")
+	// ErrPasswordSetup is a local master password set up for a store that
+	// already has secrets or a master key, which it would orphan.
+	ErrPasswordSetup = errors.New("keychain: local master password needs an empty store")
 )
 
 // OpError identifies the failed stage without requiring UI to render raw errors.
-// Op is lock, master-read, master-write, master-verify, file-read,
-// file-decrypt, file-write, or closed.
+// Op is lock, master-read, master-write, master-verify, master-password,
+// master-password-write, file-read, file-decrypt, file-write, or closed.
 type OpError struct {
 	Op  string
 	Err error

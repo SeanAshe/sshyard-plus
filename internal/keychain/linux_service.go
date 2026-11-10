@@ -13,6 +13,10 @@ const (
 	LinuxServiceAccessDenied
 	LinuxServiceStartFailed
 	LinuxServiceLocked
+	// LinuxServiceMissing is a session bus without a Secret Service.
+	LinuxServiceMissing
+	// LinuxServiceTimeout is a Secret Service that did not answer.
+	LinuxServiceTimeout
 )
 
 // LinuxServiceError preserves the original error for errors.Is and errors.As.
@@ -60,12 +64,45 @@ func linuxServiceKind(message string, noStore bool) LinuxServiceErrorKind {
 	// libsecret may strip this prefix, in which case the cause stays unknown.
 	remote, ok := strings.CutPrefix(message, "secret service: GDBus.Error:")
 	if !ok {
-		return LinuxServiceUnknown
+		// MyGo reports a bus without the Secret Service from the error's
+		// domain and code, which survive libsecret stripping the name.
+		if noStore && strings.HasPrefix(message, "secret service: ") {
+			return LinuxServiceMissing
+		}
+		return startServiceKind(message)
 	}
 	name, _, ok := strings.Cut(remote, ": ")
 	if !ok {
 		return LinuxServiceUnknown
 	}
+	switch name {
+	case "org.freedesktop.DBus.Error.ServiceUnknown", "org.freedesktop.DBus.Error.NameHasNoOwner", "org.freedesktop.DBus.Error.NoServer":
+		if noStore {
+			return LinuxServiceMissing
+		}
+	}
+	return remoteKind(name)
+}
+
+// startServiceKind is a failed activation of the Secret Service: GDBusProxy
+// prefixes its remote error with a translated "Error calling
+// StartServiceByName for org.freedesktop.secrets: ", which names the method.
+func startServiceKind(message string) LinuxServiceErrorKind {
+	i := strings.LastIndex(message, ": GDBus.Error:")
+	if i < 0 || !strings.Contains(message[:i], "StartServiceByName") {
+		return LinuxServiceUnknown
+	}
+	name, _, ok := strings.Cut(message[i+len(": GDBus.Error:"):], ": ")
+	if !ok {
+		return LinuxServiceUnknown
+	}
+	if kind := remoteKind(name); kind == LinuxServiceStartFailed || kind == LinuxServiceTimeout {
+		return kind
+	}
+	return LinuxServiceUnknown
+}
+
+func remoteKind(name string) LinuxServiceErrorKind {
 	switch name {
 	case "org.freedesktop.DBus.Error.AccessDenied", "org.freedesktop.DBus.Error.AuthFailed":
 		return LinuxServiceAccessDenied
@@ -79,6 +116,8 @@ func linuxServiceKind(message string, noStore bool) LinuxServiceErrorKind {
 		"org.freedesktop.DBus.Error.Spawn.ServiceNotFound", "org.freedesktop.DBus.Error.Spawn.PermissionsInvalid",
 		"org.freedesktop.DBus.Error.Spawn.FileInvalid", "org.freedesktop.DBus.Error.Spawn.NoMemory":
 		return LinuxServiceStartFailed
+	case "org.freedesktop.DBus.Error.NoReply", "org.freedesktop.DBus.Error.TimedOut", "org.freedesktop.DBus.Error.Timeout":
+		return LinuxServiceTimeout
 	}
 	return LinuxServiceUnknown
 }

@@ -190,22 +190,22 @@ func (a *App) leadTerminal(items []layout.Item, fc *conn) *conn {
 	return lead
 }
 
-// followButton is the Files pane header's follow switch, shown when the
-// host lets its Files panes follow the terminal.
-func (a *App) followButton(c *ui.Context, t *layout.Tab, n *layout.Node, cn *conn, m locales.Messages) {
+// followAction is the Files pane header's follow switch, there (ok)
+// when the host lets its Files panes follow the terminal.
+func (a *App) followAction(t *layout.Tab, n *layout.Node, cn *conn, m locales.Messages) (act barAction, ok bool) {
 	h, ok := a.host(cn.host.ID)
 	if !ok {
 		h = cn.host
 	}
 	if !h.CwdFollow {
-		return
+		return barAction{}, false
 	}
 	on := !cn.fs.noFollow
-	if (IconButton{Icon: icons.Follow, On: icons.FollowOn, Label: m.FollowTerminal(), Active: on, Toggle: true, Size: Tiny}).Clicked(c, "follow") {
+	return barAction{Key: "follow", Button: IconButton{Icon: icons.Follow, On: icons.FollowOn, Label: m.FollowTerminal(), Active: on, Toggle: true, Size: Tiny}, Do: func() {
 		t.Focus = n.ID
 		cn.fs.noFollow = on
 		cn.fs.followed = ""
-	}
+	}}, true
 }
 
 // noReportView says, in a line, when the pane follows a terminal that

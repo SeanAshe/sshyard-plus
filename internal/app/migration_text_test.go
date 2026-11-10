@@ -152,6 +152,28 @@ func TestMigrationTextFile(t *testing.T) {
 	}
 }
 
+func TestMigrationCSVFile(t *testing.T) {
+	a, tt := newTestApp(t)
+	path := filepath.Join(t.TempDir(), "hosts.csv")
+	if err := os.WriteFile(path, []byte("host,user,password,title\ncsv.example,ops,s3cret,from-csv\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a.p.PickFiles = func(title string) ([]string, error) {
+		if title != en.MigrationCSVChooseFile() {
+			t.Errorf("dialog title %q", title)
+		}
+		return []string{path}, nil
+	}
+	a.openSettings(prefMigration)
+	tt.Frame()
+	mustClick(t, tt, en.MigrationCSVChooseFile())
+	waitFor(t, tt, "csv file preview", func() bool { return a.migration != nil && !a.migration.reading && len(a.migration.rows) == 1 })
+	f := a.migration
+	if r := f.rows[0]; !f.editable() || !f.saveSecrets || r.name != "from-csv" || r.entry.User != "ops" || r.auth != assets.AuthPassword || r.password != "s3cret" || len(r.entry.Password) != 0 {
+		t.Fatalf("row %+v", r)
+	}
+}
+
 func TestMigrationTextOverwriteLogin(t *testing.T) {
 	a, _ := newTestApp(t)
 	pw, err := a.store.Add(assets.Host{Name: "pw", Address: "pw.example", User: "root", Auth: assets.AuthPassword})

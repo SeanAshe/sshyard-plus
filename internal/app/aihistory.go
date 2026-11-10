@@ -340,14 +340,15 @@ func chatTitle(m locales.Messages, s history.Summary) string {
 
 // historyButton opens the pane's host's saved conversations: a search
 // field, then each with its model and when, the one shown checked, and a
-// button to delete it.
-func (a *App) historyButton(c *ui.Context, cn *conn, tok theme.Tokens, m locales.Messages) {
+// button to delete it. It returns the button, none while the host keeps
+// no conversations.
+func (a *App) historyButton(c *ui.Context, cn *conn, tok theme.Tokens, m locales.Messages) (el ui.Element) {
 	if !a.keepsChats(cn) {
 		return
 	}
 	key := "aihist:" + strconv.Itoa(cn.id)
 	b := IconButton{Icon: icons.History, Label: m.AiChatHistory(), Size: Tiny, Disabled: cn.ai.running, Active: a.menu.key == key}
-	el := b.Show(c, key).Role(ui.RoleMenuButton).Expanded(a.menu.key == key)
+	el = b.Show(c, key).Role(ui.RoleMenuButton).Expanded(a.menu.key == key)
 	open := a.menu.key == key
 	if el.Clicked() && !b.Disabled {
 		if open {
@@ -423,6 +424,7 @@ func (a *App) historyButton(c *ui.Context, cn *conn, tok theme.Tokens, m locales
 	if !open && a.menu.key == key {
 		a.menu = dropMenu{}
 	}
+	return el
 }
 
 // chatConfirm asks before the pane's conversation, or one of its

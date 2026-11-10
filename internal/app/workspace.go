@@ -432,8 +432,16 @@ func (a *App) paneView(c *ui.Context, t *layout.Tab, n *layout.Node, tok theme.T
 			headTok := onTokens(tok, bg)
 			ui.Themed(c.Key("headbar"), headTok.Apply(*c.Theme())).Background(ui.Transparent).Shrink(0).FillWidth().Children(func() {
 				tok := headTok
-				head := ui.Row(c.Key("head")).Height(paneHeadHeight).Shrink(0).Padding(0, 6, 0, 10).Gap(8).AlignItems(ui.Center).Drag(dragSession{ID: cn.id}).Label(m.PaneActions())
-				head.Children(func() {
+				title := a.pv(cn.host.Label())
+				switch cn.kind {
+				case layout.Files:
+					title = m.FilesPane(a.pv(cn.host.Label()))
+				}
+				leadMin := paneHeadIcon + 8 + titleRoom(c, title)
+				if cn.s != nil {
+					leadMin += 7 + 8
+				}
+				head := a.paneHead(c, cn, m, func() {
 					// How its session is first; then a terminal shows its host
 					// as the sidebar does, the others what they are, in its
 					// color.
@@ -445,12 +453,7 @@ func (a *App) paneView(c *ui.Context, t *layout.Tab, n *layout.Node, tok theme.T
 					} else {
 						softTile(c, kindIcon(cn.kind, focused), hostTint(tok, a.liveHost(cn.host)), paneHeadIcon)
 					}
-					title := a.pv(cn.host.Label())
-					switch cn.kind {
-					case layout.Files:
-						title = m.FilesPane(a.pv(cn.host.Label()))
-					}
-					tt := ui.Text(c, title).FontWeight(600).FontSize(theme.Footnote).SingleLine()
+					tt := ui.Text(c, title).FontWeight(600).FontSize(theme.Footnote).SingleLine().Shrink(1).MinWidth(0)
 					if !focused && multi {
 						tt.TextColor(tok.TextMuted)
 					}
@@ -475,46 +478,7 @@ func (a *App) paneView(c *ui.Context, t *layout.Tab, n *layout.Node, tok theme.T
 						a.paneForwards(c, m, tok, cn.host.ID)
 					}
 					ui.Text(c, a.pv(cn.host.Target())).FontSize(theme.Caption).TextColor(tok.TextMuted).SingleLine().Shrink(1)
-					ui.Spacer(c)
-					if isTemp(cn.host.ID) {
-						if (IconButton{Icon: icons.Save, Label: m.SaveAsHost(), Size: Tiny}).Clicked(c, "saveas") {
-							t.Focus = n.ID
-							a.SaveTempAs(cn.id)
-						}
-					}
-					if cn.kind == layout.Terminal {
-						if (IconButton{Icon: icons.Search, Label: m.Find(), Size: Tiny, Active: a.finding && focused}).Clicked(c, "find") {
-							t.Focus = n.ID
-							a.finding = !(a.finding && focused)
-						}
-						if (IconButton{Icon: icons.Folder, Label: m.OpenFilesHere(), Size: Tiny, Disabled: !remoteOnly(cn)}).Clicked(c, "files") {
-							t.Focus = n.ID
-							a.OpenFiles(cn.host.ID, openAt{pane: n.ID, edge: a.filesEdge()}, cn)
-						}
-					} else {
-						if (IconButton{Icon: icons.LocalDisk, On: icons.LocalDiskOn, Label: m.ShowLocalFiles(), Toggle: true, Active: a.settings.FilesDual, Size: Tiny}).Clicked(c, "dual") {
-							t.Focus = n.ID
-							a.toggleDual()
-						}
-						a.transfersButton(c, cn, m)
-						a.followButton(c, t, n, cn, m)
-						if (IconButton{Icon: icons.Terminal, Label: m.OpenTerminalBeside(), Size: Tiny}).Clicked(c, "term") {
-							t.Focus = n.ID
-							a.Connect(cn.host.ID, openAt{pane: n.ID, edge: layout.Right})
-						}
-					}
-					if (IconButton{Icon: icons.SplitRight, Label: m.SplitRight(), Size: Tiny}).Clicked(c, "splitright") {
-						t.Focus = n.ID
-						a.SplitFocused(layout.Right)
-					}
-					if (IconButton{Icon: icons.SplitDown, Label: m.SplitDown(), Size: Tiny}).Clicked(c, "splitdown") {
-						t.Focus = n.ID
-						a.SplitFocused(layout.Bottom)
-					}
-					if (IconButton{Icon: icons.Close, Label: m.ClosePane(), Size: Tiny, Danger: true}).Clicked(c, "close") {
-						a.closeSoon(cn.id)
-					}
-				})
+				}, leadMin, a.paneActions(c, t, n, cn, focused, m), nil)
 				if head.Clicked() {
 					t.Focus = n.ID
 					a.focusReq = cn.id
@@ -542,6 +506,48 @@ func (a *App) paneView(c *ui.Context, t *layout.Tab, n *layout.Node, tok theme.T
 		})
 	})
 	a.paneDrops(n, cn, pane, tok)
+}
+
+// paneActions are the actions of a session pane's header, as many as fit
+// shown and the others in its More menu: a terminal finds and opens its
+// host's files, a files pane shows this computer's, its transfers, follows
+// the terminal and opens one; both split.
+func (a *App) paneActions(c *ui.Context, t *layout.Tab, n *layout.Node, cn *conn, focused bool, m locales.Messages) []barAction {
+	// Its action works on the pane it is in.
+	on := func(do func()) func() {
+		return func() {
+			t.Focus = n.ID
+			do()
+		}
+	}
+	var acts []barAction
+	if isTemp(cn.host.ID) {
+		acts = append(acts, barAction{Key: "saveas", Button: IconButton{Icon: icons.Save, Label: m.SaveAsHost(), Size: Tiny},
+			Do: on(func() { a.SaveTempAs(cn.id) })})
+	}
+	if cn.kind == layout.Terminal {
+		finding := a.finding && focused
+		acts = append(acts,
+			barAction{Key: "find", Button: IconButton{Icon: icons.Search, Label: m.Find(), Size: Tiny, Active: finding},
+				Do: on(func() { a.finding = !finding })},
+			barAction{Key: "files", Button: IconButton{Icon: icons.Folder, Label: m.OpenFilesHere(), Size: Tiny, Disabled: !remoteOnly(cn)},
+				Do: on(func() { a.OpenFiles(cn.host.ID, openAt{pane: n.ID, edge: a.filesEdge()}, cn) })})
+	} else {
+		acts = append(acts,
+			barAction{Key: "dual", Button: IconButton{Icon: icons.LocalDisk, On: icons.LocalDiskOn, Label: m.ShowLocalFiles(), Toggle: true, Active: a.settings.FilesDual, Size: Tiny},
+				Do: on(a.toggleDual)},
+			a.transfersAction(c, cn, m))
+		if f, ok := a.followAction(t, n, cn, m); ok {
+			acts = append(acts, f)
+		}
+		acts = append(acts, barAction{Key: "term", Button: IconButton{Icon: icons.Terminal, Label: m.OpenTerminalBeside(), Size: Tiny},
+			Do: on(func() { a.Connect(cn.host.ID, openAt{pane: n.ID, edge: layout.Right}) })})
+	}
+	return append(acts,
+		barAction{Key: "splitright", Button: IconButton{Icon: icons.SplitRight, Label: m.SplitRight(), Size: Tiny},
+			Do: on(func() { a.SplitFocused(layout.Right) })},
+		barAction{Key: "splitdown", Button: IconButton{Icon: icons.SplitDown, Label: m.SplitDown(), Size: Tiny},
+			Do: on(func() { a.SplitFocused(layout.Bottom) })})
 }
 
 func (a *App) paneDrops(n *layout.Node, cn *conn, pane ui.Element, tok theme.Tokens) {

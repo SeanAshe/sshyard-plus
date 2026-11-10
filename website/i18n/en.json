@@ -3,7 +3,7 @@
   "meta": {
     "title": "SSHYard — Free SSH & SFTP Client with AI for Mac, Windows, Linux",
     "description": "SSHYard is a free, open-source native SSH and SFTP client for macOS, Windows and Linux, with split terminals, a file manager and an AI assistant built in.",
-    "keywords": "SSH client, SFTP client, free SSH client, open source SSH client, SSH client for Mac, SSH client for Windows, SSH client for Linux, AI SSH client, terminal, MCP, port forwarding, jump host",
+    "keywords": "SSH client, SFTP client, free SSH client, open source SSH client, SSH client for Mac, SSH client for Windows, SSH client for Linux, AI SSH client, terminal, Telnet client, serial terminal, tmux, Docker, MCP, port forwarding, jump host",
     "og_alt": "SSHYard, a native SSH and SFTP client with an AI assistant",
     "og_title": ["SSH, SFTP and AI,", "in one native app"],
     "download_title": "Download SSHYard for macOS, Windows and Linux",
@@ -64,11 +64,13 @@
       ["License", "Open source, GNU AGPL-3.0"],
       ["Platforms", "macOS 12 or later (Apple Silicon and Intel), Windows and Linux (x64 and Arm64)"],
       ["Interface", "Native, drawn without a web view"],
+      ["Connections", "SSH, SFTP / SCP, Telnet, serial ports and local terminals"],
       ["Download size", "About {size}"],
       ["Languages", "English, 简体中文, 繁體中文, 日本語, 한국어"],
       ["Account", "Not required"],
       ["Credentials", "Encrypted and stored on your device"],
-      ["AI providers", "Any OpenAI-compatible, OpenAI Responses or Anthropic API"],
+      ["Migration", "SSH config, ten popular clients or a pasted list"],
+      ["AI providers", "Any OpenAI-compatible, OpenAI Responses or Anthropic API, or local ACP agents"],
       ["Agent access", "Open API, MCP and Skill, off by default"]
     ]
   },
@@ -79,20 +81,26 @@
       {
         "icon": "terminal-box-line",
         "title": "Terminal",
-        "text": "Tabs, split panes and search, with true colour, wide characters and input methods.",
-        "points": ["Mouse support for tmux, vim and htop", "Panes on one host share a single connection", "Reconnects on its own after a drop"]
+        "text": "Tabs, split panes and search, with true colour, wide characters and input methods, over SSH, Telnet, serial or a local shell.",
+        "points": ["Ten built-in colour schemes, or import .itermcolors", "Keyword highlighting, line numbers and timestamps", "Many output encodings, set per host", "Panes on one host share a connection and reconnect on their own"]
+      },
+      {
+        "icon": "layout-column-line",
+        "title": "Workspace panes",
+        "text": "System monitor, Docker, tmux, snippets, broadcast commands and session logs are panes you dock wherever you like.",
+        "points": ["tmux sessions that come back after a reconnect", "Docker containers and images, started and stopped in place", "Broadcast commands with synchronised typing across hosts", "Command palette and shortcuts you can rebind"]
       },
       {
         "icon": "folder-transfer-line",
         "title": "SFTP file manager",
         "text": "Remote files open beside the terminal and can follow its working directory.",
-        "points": ["Built-in editor for remote files", "Drag and drop, whole folders included", "Transfer queue with pause, resume and retry"]
+        "points": ["Tabbed editor with a folder tree", "File access through sudo when you need it", "Falls back to SCP when the server has no SFTP", "Drag in whole folders; pause, resume and retry transfers"]
       },
       {
         "icon": "robot-2-line",
         "title": "AI assistant",
-        "text": "Every host has its own assistant that can run commands and edit files.",
-        "points": ["Ask, Review and Full access modes", "Optional checks by a review model", "Uses the AI provider you choose"]
+        "text": "Every host has its own assistant that can run commands and edit files, with conversations kept per host.",
+        "points": ["Ask, Review and Full access modes", "Your AI provider, or local agents such as Claude Code and Codex", "Works over SSH, Telnet, serial and local terminals", "Paste images and files as attachments"]
       },
       {
         "icon": "plug-line",
@@ -104,7 +112,13 @@
         "icon": "key-2-line",
         "title": "Hosts and credentials",
         "text": "Import your SSH config, or connect straight away with user@host:port.",
-        "points": ["Passwords, OpenSSH, PEM and PuTTY keys, SSH agent", "Generate keys and install public keys", "Encrypted local credential store"]
+        "points": ["Passwords, OpenSSH, PEM and PuTTY keys, OpenSSH certificates, SSH agent", "Nested groups you drag to rearrange, with multi-select and latency tests", "Provider and renewal dates, with a reminder before renewal", "Changed host keys are checked by fingerprint before you trust them"]
+      },
+      {
+        "icon": "import-line",
+        "title": "Migrate from other clients",
+        "text": "Bring along the sessions you saved in another SSH client.",
+        "points": ["Ten clients, including Xshell, MobaXterm and PuTTY", "Paste a list of hosts as text", "Preview and edit every entry in a table first"]
       },
       {
         "icon": "upload-cloud-2-line",
@@ -116,13 +130,13 @@
         "icon": "route-line",
         "title": "Networking",
         "text": "Reach servers that sit behind bastions and proxies.",
-        "points": ["Multi-hop jump hosts", "HTTP and SOCKS5 proxies", "Local, remote and dynamic port forwarding"]
+        "points": ["Multi-hop jump hosts", "HTTP and SOCKS5 proxies, also for AI providers and update checks", "Local, remote and dynamic port forwarding"]
       },
       {
         "icon": "dashboard-3-line",
         "title": "Everyday comfort",
         "text": "Small things that add up over a working day.",
-        "points": ["CPU, memory, disk, network and latency at a glance", "Light and dark themes that follow the system", "Five interface languages"]
+        "points": ["CPU, memory, disk, network and latency at a glance", "Light and dark themes, background images and interface scaling", "Close to the tray and connect from its popover"]
       }
     ]
   },
@@ -143,7 +157,7 @@
     "modes_label": "Permission mode",
     "modes": [
       {"key": "ask", "label": "Ask", "text": "The assistant asks you before it runs a command or changes a file."},
-      {"key": "review", "label": "Review", "text": "A review model checks every action. Only its explicit approval lets an action run; anything else comes back to you."},
+      {"key": "review", "label": "Review", "text": "Read-only actions run straight away; a review model checks every other step, and anything it doesn't approve comes back to you. Critical actions always ask you."},
       {"key": "full", "label": "Full access", "text": "Every action runs without asking. Turning it on takes a confirmation, and a warning stays visible while it is on."}
     ],
     "card": {
@@ -156,7 +170,7 @@
       "full_bar": "Full access — every action runs without asking"
     },
     "providers_title": "Bring your own model",
-    "providers_text": "Connect any provider that speaks the OpenAI-compatible Chat Completions, OpenAI Responses or Anthropic Messages API, including models you host yourself. Terminal output and file contents go only to the provider you pick, and only after you agree for that host.",
+    "providers_text": "Connect any provider that speaks the OpenAI-compatible Chat Completions, OpenAI Responses or Anthropic Messages API, including models you host yourself. Terminal output and file contents go only to the provider you pick, and only after you agree for that host. You can also use ACP agents detected on this computer, such as Claude Code, Codex, Grok and Gemini CLI; their work stays on the remote host.",
     "agents_title": "Let your local agents in, on your terms",
     "agents_text": "With agent access on, AI agents on this computer can list hosts, open SSH connections and run commands through the open API, MCP or the SSHYard Skill. They sign in with a token; your saved passwords and keys stay inside SSHYard.",
     "agents_points": ["One-click Skill setup for Claude Code and Codex", "Every command lands in the AI audit log", "A new token disconnects every agent at once"]
@@ -226,11 +240,13 @@
       {"q": "Which systems does SSHYard run on?", "a": "macOS 12 or later on Apple Silicon and Intel Macs, Windows on x64 and Arm64, and Linux on x64 and Arm64 as a .deb package or a .tar.gz archive."},
       {"q": "Is SSHYard built with Electron or a web view?", "a": "No. Its whole interface is drawn natively, without a web view or a bundled browser, which keeps the download at about {size}."},
       {"q": "Where are my passwords and keys stored?", "a": "On your device, encrypted. The system keychain holds only a random master key, and passwords, private keys, passphrases and API keys are encrypted with it in a local file. Nothing leaves the device unless you make a backup, and backups are encrypted before they do."},
-      {"q": "How does the AI assistant work, and can I control it?", "a": "Each host has its own assistant that reads the terminal context, runs commands and edits files over the SSH connection. In Ask mode it waits for your approval, in Review mode a review model checks every action, and Full access has to be turned on explicitly. It uses the AI provider and API key you set up."},
+      {"q": "How does the AI assistant work, and can I control it?", "a": "Each host has its own assistant that reads the terminal context, runs commands and edits files over the same connection. In Ask mode it waits for your approval; in Review mode read-only actions run and a review model checks the rest; Full access has to be turned on explicitly. It uses the AI provider and API key you set up, or a local ACP agent such as Claude Code or Codex."},
       {"q": "Can Claude Code or Codex use my SSH hosts?", "a": "Yes, once you turn on agent access. Local agents can then list hosts, connect and run commands through SSHYard's open API, MCP endpoint or Skill, and SSHYard installs the Skill for Claude Code and Codex in one click. Agents sign in with a token and never receive your saved credentials."},
       {"q": "Does SSHYard support jump hosts, proxies and port forwarding?", "a": "Yes. A host can connect through several jump hosts and an HTTP or SOCKS5 proxy, and you can set up local, remote and dynamic port forwards."},
+      {"q": "What can SSHYard connect to besides SSH?", "a": "Telnet, serial (COM) ports and local terminals; on Windows the local terminal can be PowerShell, CMD, Git Bash or WSL. When a server has no SFTP, the file pane falls back to SCP."},
+      {"q": "Can I run a command on several servers at once?", "a": "Yes. Broadcast commands sends the same command to the terminals you pick, and with synchronised typing on, what you type in one of them reaches the others too. Session logs record terminal output to a local file as text or raw output."},
       {"q": "How do backup and restore work?", "a": "SSHYard compresses hosts, credentials, snippets and settings into one file and encrypts it with your backup password on your device. You can keep it locally or send it to WebDAV, S3-compatible storage or a private GitHub Gist, by hand or on a schedule, and restore it on another device with the same password."},
-      {"q": "Can I import my existing SSH config?", "a": "Yes. SSHYard imports hosts from your SSH config file, and you can also connect straight away by typing user@host:port."},
+      {"q": "Can I move over from another SSH client?", "a": "Yes. SSHYard imports hosts from your SSH config file, reads the exports of ten clients including Xshell, MobaXterm and PuTTY, and turns a pasted list into hosts. You can preview and edit every entry in a table before importing, and credentials go only into the local encrypted store. You can also connect straight away by typing user@host:port."},
       {"q": "Which languages does SSHYard support?", "a": "English, Simplified Chinese, Traditional Chinese, Japanese and Korean, in the app and on this website."}
     ]
   },

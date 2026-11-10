@@ -267,8 +267,9 @@ func TestAIDefaultProvider(t *testing.T) {
 }
 
 // TestAIPaneNarrow: in a narrow AI pane the choices show as their icons,
-// each naming what is chosen in its tooltip, and the split buttons go
-// into a menu; a wide one labels them.
+// each naming what is chosen in its tooltip, and the header's actions
+// that do not fit, the split buttons, go into its More menu; a wide one
+// labels them.
 func TestAIPaneNarrow(t *testing.T) {
 	a, tt := newTestApp(t)
 	s := a.Settings()
@@ -288,10 +289,10 @@ func TestAIPaneNarrow(t *testing.T) {
 			t.Errorf("wide pane misses %q: %q", s, tt.Texts())
 		}
 	}
-	tt.SetSize(540, 600) // a pane under aiHeadMenuWidth
+	tt.SetSize(540, 600) // a pane under aiHeadWidth
 	tt.Frame()
 	tt.Frame()
-	if w := a.paneBounds[a.focused().id].W; w >= aiHeadMenuWidth {
+	if w := a.paneBounds[a.focused().id].W; w >= aiHeadWidth {
 		t.Fatalf("pane %v wide", w)
 	}
 	for _, s := range []string{"Review", "lab-model", "Built-in", "Split Right"} {

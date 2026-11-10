@@ -92,6 +92,11 @@ func (a *App) retryUnlock() {
 		a.unlock.mu.Unlock()
 		return
 	}
+	if a.ready() && a.kc.PasswordProtected() {
+		a.unlock.mu.Unlock()
+		a.openMasterPassword(masterPwUnlock)
+		return
+	}
 	a.unlock.busy = true
 	a.unlock.completed = false
 	a.unlock.err = nil
@@ -158,7 +163,7 @@ func (a *App) openSecrets() (*keychain.Keychain, error) {
 	if scope == "" {
 		scope = "sshyard"
 	}
-	return keychain.OpenLocked(keychain.OpenOptions{Path: filepath.Join(a.p.DataDir, "secrets.enc"), LockPath: lock, Scope: scope, System: a.p.Secrets})
+	return keychain.OpenLocked(keychain.OpenOptions{Path: filepath.Join(a.p.DataDir, "secrets.enc"), LockPath: lock, Scope: scope, System: a.p.Secrets, KDF: a.kdf})
 }
 
 func (a *App) acceptUnlock(err error) {

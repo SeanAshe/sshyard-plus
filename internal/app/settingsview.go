@@ -852,7 +852,18 @@ func (a *App) aboutPage(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 				}
 			}
 		})
-		g.row(m.AboutSecrets(), "", value(m.SecretsKeychain()))
+		if !a.kc.PasswordProtected() {
+			g.row(m.AboutSecrets(), "", value(m.SecretsKeychain()))
+			return
+		}
+		g.row(m.AboutSecrets(), m.SecretsMasterPassword(), func() {
+			if pill(c, m.UseSystemKeychainEllipsis(), false, false, false) {
+				a.withSecrets(func() { a.openMasterPassword(masterPwSystem) })
+			}
+			if pill(c, m.ChangePasswordEllipsis(), false, false, false) {
+				a.withSecrets(func() { a.openMasterPassword(masterPwChange) })
+			}
+		})
 	})
 	a.settingsSection(c, tok, icons.OpenWith, tok.TintAt(2), m.AboutLinks(), func(g *settingsGroup) {
 		link := func(key, url string) func() {

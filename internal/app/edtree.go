@@ -5,6 +5,7 @@ import (
 	"maps"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/Licoy/sshyard/internal/icons"
@@ -220,24 +221,26 @@ func (a *App) treeView(c *ui.Context, cn *conn, tok theme.Tokens, m locales.Mess
 	}
 	top := t.dirs[t.root]
 	ui.Column(c.Key("edtree")).Fill().MinWidth(0).Children(func() {
-		ui.Row(c.Key("edtreebar")).Height(32).Shrink(0).FillWidth().Padding(0, theme.Space(1), 0, theme.Space(3)).Gap(theme.Space(1)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, shownName(sideBase(remote, t.root))).FontSize(theme.Footnote).FontWeight(600).SingleLine().Shrink(1).MinWidth(0).Tooltip(shownName(a.editorWhere(cn, t.root)))
+		var acts []barAction
+		if len(fs.transfers.List()) > 0 {
+			acts = append(acts, a.transfersAction(c, cn, m))
+		}
+		acts = append(acts,
+			barAction{Key: "treeup", Button: IconButton{Icon: icons.GoUp, Label: m.EditorUpFolder(), Size: Tiny, Disabled: off || sideDir(remote, t.root) == t.root},
+				Do: func() { a.treeUp(cn) }},
+			barAction{Key: "treefile", Button: IconButton{Icon: icons.NewFile, Label: m.NewFileItem(), Size: Tiny, Disabled: off},
+				Do: func() { fs.ask, fs.askOpen = &nameAsk{kind: askNewFile, remote: remote, dir: t.root}, true }},
+			barAction{Key: "treedir", Button: IconButton{Icon: icons.NewFolder, Label: m.NewFolderItem(), Size: Tiny, Disabled: off},
+				Do: func() { fs.ask, fs.askOpen = &nameAsk{kind: askMkdir, remote: remote, dir: t.root}, true }},
+			barAction{Key: "treerefresh", Button: IconButton{Icon: icons.Refresh, Label: m.Refresh(), Size: Tiny, Disabled: off},
+				Do: func() { a.treeReload(cn) }})
+		name := shownName(sideBase(remote, t.root))
+		bar := ui.Row(c.Key("edtreebar")).Height(32).Shrink(0).FillWidth().Padding(0, theme.Space(1), 0, theme.Space(3)).Gap(theme.Space(1)).AlignItems(ui.Center)
+		reserve := theme.Space(1) + theme.Space(3) + theme.Space(1) + titleRoom(c, name)
+		bar.Children(func() {
+			ui.Text(c, name).FontSize(theme.Footnote).FontWeight(600).SingleLine().Shrink(1).MinWidth(0).Tooltip(shownName(a.editorWhere(cn, t.root)))
 			ui.Spacer(c)
-			if len(fs.transfers.List()) > 0 {
-				a.transfersButton(c, cn, m)
-			}
-			if (IconButton{Icon: icons.GoUp, Label: m.EditorUpFolder(), Size: Tiny, Disabled: off || sideDir(remote, t.root) == t.root}).Clicked(c, "treeup") {
-				a.treeUp(cn)
-			}
-			if (IconButton{Icon: icons.NewFile, Label: m.NewFileItem(), Size: Tiny, Disabled: off}).Clicked(c, "treefile") {
-				fs.ask, fs.askOpen = &nameAsk{kind: askNewFile, remote: remote, dir: t.root}, true
-			}
-			if (IconButton{Icon: icons.NewFolder, Label: m.NewFolderItem(), Size: Tiny, Disabled: off}).Clicked(c, "treedir") {
-				fs.ask, fs.askOpen = &nameAsk{kind: askMkdir, remote: remote, dir: t.root}, true
-			}
-			if (IconButton{Icon: icons.Refresh, Label: m.Refresh(), Size: Tiny, Disabled: off}).Clicked(c, "treerefresh") {
-				a.treeReload(cn)
-			}
+			a.actionBar(c, "edtree:"+strconv.Itoa(cn.id), bar.Bounds().W, reserve, theme.Space(1), acts, nil, m)
 		})
 		ui.Box(c).Height(1).Shrink(0).FillWidth().Background(tok.Line)
 

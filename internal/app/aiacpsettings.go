@@ -352,7 +352,7 @@ func acpChoiceRow(c *ui.Context, tok theme.Tokens, key, name, version, detail st
 	}
 }
 
-func (a *App) agentChip(c *ui.Context, cn *conn, tok theme.Tokens, m locales.Messages, fit aiFit) {
+func (a *App) agentChip(c *ui.Context, cn *conn, tok theme.Tokens, m locales.Messages, fit aiFit) ui.Element {
 	ch := chip{Icon: icons.Robot, Tip: m.AiBackend(), Label: m.AiBackendUnavailable(), Tint: tok.Warning}
 	cur, curOK := a.settings.ACP(cn.ai.agent)
 	switch {
@@ -362,7 +362,7 @@ func (a *App) agentChip(c *ui.Context, cn *conn, tok theme.Tokens, m locales.Mes
 		ch.Label, ch.Tint = acpName(cur), ui.Color{}
 		ch.Brand = aibrands.Agent(cur.Agent)
 	}
-	a.menuChip(c, "aiagent:"+strconv.Itoa(cn.id), ch.fit(m, fit, 0), func() []menuEntry {
+	return a.menuChip(c, "aiagent:"+strconv.Itoa(cn.id), ch.fit(m, fit, 0), func() []menuEntry {
 		out := []menuEntry{{Icon: icons.Robot, Label: m.AiBuiltin(), Checked: cn.ai.agent == "builtin", Do: func() { a.setAIAgent(cn, "builtin") }}}
 		names := acpNames(a.settings.AIACPAgents)
 		for i, cfg := range a.settings.AIACPAgents {

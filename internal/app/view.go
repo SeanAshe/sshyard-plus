@@ -153,6 +153,7 @@ func (a *App) View(c *ui.Context) {
 	a.aiAttachmentPreviewView(c, m, tok)
 	a.contextMenuView(c)
 	a.unlockModal(c, m, tok)
+	a.masterPasswordView(c, m)
 	a.observeLayout(c)
 }
 

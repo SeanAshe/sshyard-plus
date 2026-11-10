@@ -100,7 +100,7 @@
     </header>
     <div class="feat-grid">
       {% for f in t.features["items"] %}
-      <article class="card feat spot reveal{% if loop.index <= 4 %} feat-lg{% endif %}" style="--i: {{ loop.index0 % 4 }}">
+      <article class="card feat spot reveal{% if loop.index <= 6 %} feat-lg{% endif %}" style="--i: {{ loop.index0 % 4 }}">
         <span class="feat-icon">{{ icon(f.icon) }}</span>
         <h3>{{ f.title }}</h3>
         <p>{{ f.text }}</p>

@@ -51,22 +51,33 @@ const (
 	Tiny  = 12
 )
 
-// Show builds the button under key and returns it, for Clicked.
-func (b IconButton) Show(c *ui.Context, key string) ui.Element {
-	th := c.Theme()
-	size := b.Size
+// metrics are the size of b's icon and the padding round it: 28 DIPs
+// round for the 16 icon, 24 for the small one, 20 for the tiny one, a
+// circle.
+func (b IconButton) metrics() (size, pad float32) {
+	size = b.Size
 	if size == 0 {
 		size = 16
 	}
-	// 28 DIPs round for the 16 icon, 24 for the small one, 20 for the
-	// tiny one: a circle.
-	pad := float32(6)
 	switch {
 	case size <= Tiny:
-		pad = 4
+		return size, 4
 	case size <= Small:
-		pad = 5
+		return size, 5
 	}
+	return size, 6
+}
+
+// width is how wide b is.
+func (b IconButton) width() float32 {
+	size, pad := b.metrics()
+	return size + 2*pad
+}
+
+// Show builds the button under key and returns it, for Clicked.
+func (b IconButton) Show(c *ui.Context, key string) ui.Element {
+	th := c.Theme()
+	size, pad := b.metrics()
 	el := ui.ButtonBase(c.Key("ib:" + key)).Label(b.Label).Padding(pad).Radius(theme.Capsule).Disabled(b.Disabled)
 	if !b.InstantTooltip {
 		el.Tooltip(b.Label)

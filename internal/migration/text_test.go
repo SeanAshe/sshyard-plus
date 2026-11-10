@@ -85,3 +85,62 @@ func TestTextImportBounds(t *testing.T) {
 		t.Fatalf("read %+v %v", r, err)
 	}
 }
+
+func TestCSVImportFields(t *testing.T) {
+	text := "\xef\xbb\xbfHost, Port ,USERNAME,password,authType,title,zone\r\n" +
+		"192.168.31.22,2222,root,,password,31.22,\r\n" +
+		"# comment\n" +
+		",,,,,,\n" +
+		"db.example.com,,admin, a \"b\" ,,\"生产, 数据库\",cn\n" +
+		"bad,http,,,,broken\n"
+	r, err := parseData(CSV, []byte(text), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range r.Entries {
+		validateEntry(&r.Entries[i])
+	}
+	if len(r.Entries) != 3 {
+		t.Fatalf("entries %+v", r.Entries)
+	}
+	want := []struct {
+		name, address, user, password string
+		port                          int
+	}{
+		{"31.22", "192.168.31.22", "root", "", 2222},
+		{"生产, 数据库", "db.example.com", "admin", ` a "b" `, 22},
+		{"broken", "bad", "", "", -1},
+	}
+	for i, w := range want {
+		e := r.Entries[i]
+		if e.Name != w.name || e.Address != w.address || e.User != w.user || string(e.Password) != w.password || e.Port != w.port {
+			t.Fatalf("entry %d = %+v (password %q), want %+v", i, e, e.Password, w)
+		}
+	}
+	if len(r.Entries[0].Issues) != 0 {
+		t.Fatalf("authType or blank cells reported: %v", r.Entries[0].Issues)
+	}
+	if issues := r.Entries[1].Issues; len(issues) != 1 || !hasIssue(issues, "unsupported-field", "zone") {
+		t.Fatalf("unknown column %v", issues)
+	}
+	if !hasIssue(r.Entries[2].Issues, "invalid-entry", "port") {
+		t.Fatalf("invalid port %v", r.Entries[2].Issues)
+	}
+
+	semi, err := parseData(CSV, []byte("ip;user;label\n10.0.0.5;ops;a,b\n"), "")
+	if err != nil || len(semi.Entries) != 1 || semi.Entries[0].Address != "10.0.0.5" || semi.Entries[0].Name != "a,b" {
+		t.Fatalf("semicolons %+v %v", semi, err)
+	}
+	for _, bad := range []string{"", "user,title\nroot,x\n"} {
+		if _, err := parseData(CSV, []byte(bad), ""); err != ErrFormat {
+			t.Fatalf("%q: %v", bad, err)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "hosts.csv")
+	if err := os.WriteFile(path, []byte("host\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Read(CSV, []string{path}); err != ErrNoEntries {
+		t.Fatalf("header only: %v", err)
+	}
+}

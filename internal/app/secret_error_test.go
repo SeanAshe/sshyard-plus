@@ -77,5 +77,7 @@ func linuxSecretReasons(m locales.Messages) []struct {
 		{keychain.LinuxServiceAccessDenied, m.SecretsReasonLinuxAccessDenied()},
 		{keychain.LinuxServiceStartFailed, m.SecretsReasonLinuxStartFailed()},
 		{keychain.LinuxServiceLocked, m.SecretsReasonLinuxLocked()},
+		{keychain.LinuxServiceMissing, m.SecretsReasonLinuxMissing()},
+		{keychain.LinuxServiceTimeout, m.SecretsReasonLinuxTimeout()},
 	}
 }

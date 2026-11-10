@@ -462,9 +462,9 @@ func countTransfers(ts []sftpsvc.Transfer) transferCounts {
 	return n
 }
 
-// transfersButton is the Files pane header's button for its transfer
+// transfersAction is the Files pane header's button for its transfer
 // queue, with how many are still to go on it.
-func (a *App) transfersButton(c *ui.Context, cn *conn, m locales.Messages) {
+func (a *App) transfersAction(c *ui.Context, cn *conn, m locales.Messages) barAction {
 	n := countTransfers(cn.fs.transfers.List())
 	b := IconButton{Icon: icons.Transfers, Label: m.Transfers(), Active: cn.fs.queueOpen, Size: Tiny}
 	if n.active > 0 {
@@ -472,12 +472,10 @@ func (a *App) transfersButton(c *ui.Context, cn *conn, m locales.Messages) {
 	} else if n.failed > 0 {
 		b.Badge, b.BadgeDanger = strconv.Itoa(n.failed), true
 	}
-	if b.Clicked(c, "transfers") {
-		cn.fs.queueOpen = true
-	}
 	if n.running > 0 {
 		c.After(250 * time.Millisecond)
 	}
+	return barAction{Key: "transfers", Button: b, Do: func() { cn.fs.queueOpen = true }}
 }
 
 // transfersSheet is the transfer queue of a files pane: what is going

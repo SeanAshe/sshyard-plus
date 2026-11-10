@@ -151,6 +151,8 @@ func acceptFile(s Source, name string) bool {
 		return ext == ".json" || ext == ".csv"
 	case Text:
 		return ext == ".txt"
+	case CSV:
+		return ext == ".csv"
 	}
 	return false
 }
@@ -179,6 +181,8 @@ func parseData(s Source, data []byte, name string) (Result, error) {
 		return parseNetcatty(data, name)
 	case Text:
 		return parseText(data, name)
+	case CSV:
+		return parseCSV(data, name)
 	}
 	return Result{}, ErrFormat
 }

@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
+	"github.com/Licoy/sshyard/internal/vault"
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
@@ -23,6 +25,9 @@ type OpenOptions struct {
 	LockPath string
 	Scope    string
 	System   Backend
+	// KDF is what a new local master password derives with, vault's
+	// default when zero.
+	KDF vault.Params
 }
 
 type encryptedStore struct {
@@ -33,6 +38,12 @@ type encryptedStore struct {
 	lock   io.Closer
 	system Backend
 	exists bool
+	// masterPath is the local master key sealed under a password, the
+	// fallback for a system keychain SSHYard cannot use; protected is
+	// that it exists, in place of the system's master key.
+	masterPath string
+	protected  bool
+	kdf        vault.Params
 }
 
 // Open acquires the lifetime lock and immediately unlocks the store.
@@ -58,7 +69,10 @@ func OpenLocked(o OpenOptions) (_ *Keychain, err error) {
 	if err != nil {
 		return nil, &OpError{Op: "lock", Err: err}
 	}
-	b := &encryptedStore{path: o.Path, lock: lock, system: o.System, aad: append([]byte(fileMagic), fileVersion)}
+	b := &encryptedStore{path: o.Path, lock: lock, system: o.System, aad: append([]byte(fileMagic), fileVersion), masterPath: filepath.Join(filepath.Dir(o.Path), masterFile), kdf: o.KDF}
+	if b.kdf == (vault.Params{}) {
+		b.kdf = vault.DefaultParams
+	}
 	b.aad = append(b.aad, []byte(o.Scope)...)
 	defer func() {
 		if err != nil {
@@ -71,6 +85,11 @@ func OpenLocked(o OpenOptions) (_ *Keychain, err error) {
 		return nil, &OpError{Op: "file-read", Err: rerr}
 	}
 	b.sealed = sealed
+	_, serr := os.Stat(b.masterPath)
+	if serr != nil && !errors.Is(serr, os.ErrNotExist) {
+		return nil, &OpError{Op: "file-read", Err: serr}
+	}
+	b.protected = serr == nil
 	return New(b), nil
 }
 

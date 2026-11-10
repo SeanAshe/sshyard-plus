@@ -1,7 +1,6 @@
 package app
 
 import (
-	"github.com/Licoy/sshyard/internal/icons"
 	"github.com/Licoy/sshyard/internal/layout"
 	"github.com/Licoy/sshyard/internal/settings"
 	"github.com/Licoy/sshyard/internal/theme"
@@ -192,23 +191,20 @@ func (a *App) toolPaneView(c *ui.Context, cn *conn, tok theme.Tokens, m locales.
 	if focus {
 		a.focusReq = 0
 	}
-	head := ui.Row(c.Key("head")).Height(paneHeadHeight).Shrink(0).Padding(0, 6, 0, 10).Gap(8).AlignItems(ui.Center).
-		Drag(dragSession{ID: cn.id}).Label(m.PaneActions())
-	head.Children(func() {
+	lead := func() {}
+	var acts []barAction
+	switch cn.kind {
+	case layout.Snippets:
+		lead, acts = a.snippetsHead(c, m, tok)
+	case layout.History:
+		lead, acts = a.historyHead(c, m, tok)
+	}
+	title := a.connLabel(cn)
+	a.paneHead(c, cn, m, func() {
 		softTile(c, kindIcon(cn.kind, true), tok.Accent, paneHeadIcon)
-		ui.Text(c, a.connLabel(cn)).FontWeight(600).FontSize(theme.Footnote).SingleLine().Shrink(1).MinWidth(0)
-		switch cn.kind {
-		case layout.Snippets:
-			a.snippetsHead(c, m, tok)
-		case layout.History:
-			a.historyHead(c, m, tok)
-		default:
-			ui.Spacer(c)
-		}
-		if (IconButton{Icon: icons.Close, Label: m.ClosePane(), Size: Tiny, Danger: true}).Clicked(c, "close") {
-			a.closeSoon(cn.id)
-		}
-	})
+		ui.Text(c, title).FontWeight(600).FontSize(theme.Footnote).SingleLine().Shrink(1).MinWidth(0)
+		lead()
+	}, paneHeadIcon+8+titleRoom(c, title), acts, nil)
 	ui.Box(c).Height(1).Shrink(0).FillWidth().Background(tok.Line)
 	ui.Column(c.Key("body")).Grow(1).Shrink(1).MinHeight(0).FillWidth().Children(func() {
 		switch cn.kind {

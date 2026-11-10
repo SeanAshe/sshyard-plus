@@ -450,6 +450,9 @@ type App struct {
 	hlHold    focusHold
 	// paneBounds are where the panes were last frame, by session
 	paneBounds map[int]ui.Rect
+	// barWidths are how wide the actions an actionBar keeps drew last
+	// frame, by bar and action
+	barWidths map[string]float32
 	// dropPreview is where a drag in progress would land, nil for none
 	dropPreview *dropTarget
 	// temps are the temporary hosts of quick connect, by ID, kept while a
@@ -581,6 +584,11 @@ type App struct {
 	defaultPw        *passwordForm
 	settingDefaultPw bool
 	defaultPwHold    focusHold
+	// masterPw is the local master password sheet: to unlock, set it up
+	// in place of an unusable system keychain, change it or leave it
+	masterPw     *masterPwForm
+	masterPwOpen bool
+	masterPwHold focusHold
 	// cloud is what this device knows of the places it backs up to, read
 	// once; cloudCtx ends their requests when the app closes. target is
 	// the backup location sheet open, remotes the sheet of a place's

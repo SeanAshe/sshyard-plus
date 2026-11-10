@@ -36,19 +36,32 @@ SSHYard is a native desktop SSH / SFTP client for macOS, Windows and Linux, brin
 ## Features
 
 - **Terminal**
-  - Tabs, split panes and terminal search
+  - Tabs, split panes and terminal search, with tabs you can reorder and rename
   - True colour, wide characters, input methods and mouse support for tmux, vim and htop
+  - Ten built-in colour schemes plus `.itermcolors` import, keyword highlighting, line numbers and timestamps, and adjustable cursor, line height and character width
+  - Many output encodings, set per host; ⌘ / Ctrl-click to open links in the terminal
+  - Telnet, serial ports and local terminals besides SSH (PowerShell, CMD, Git Bash and WSL on Windows)
   - Shared connections across panes on the same host, with automatic reconnection
 
+- **Workspace**
+  - System monitor, process usage, host details, Docker, tmux, snippets, command history, broadcast commands and session logs are draggable panes that dock beside any pane or in another tab
+  - tmux session manager that returns to your session after a reconnect
+  - Docker container and image details with resource usage, plus starting and stopping containers
+  - Broadcast commands with synchronised typing, and session logs recorded as text or raw output
+  - Command palette and customisable shortcuts, with optional memory of window and split layouts
+
 - **File management**
-  - SFTP alongside the terminal, with directory following and a built-in editor
-  - Drag-and-drop support and folder transfers
+  - SFTP alongside the terminal with directory following, falling back to SCP when the server has no SFTP
+  - Tabbed built-in editor with a folder tree
+  - File access through sudo when you need it
+  - Drag-and-drop support and folder transfers; uploads keep permissions and modification times
   - Transfer queue with pause, resume and retry
 
 - **AI assistant**
-  - Run commands and edit files through a dedicated assistant for each host
+  - Run commands and edit files through a dedicated assistant for each host, over SSH, Telnet, serial or a local terminal, with conversations saved per host
   - Connect AI providers, or use ACP agents detected on this computer (Claude Code, Codex, Grok, Gemini CLI and more), several at once, each with the models and thinking levels it offers; their work stays on the remote host
-  - Choose Ask, Review or Full access mode, with configurable AI review
+  - Paste images and files as attachments
+  - Choose Ask, Review or Full access mode, with a configurable review model, tool-call limit per turn and request timeout
 
 - **Agent integrations**
   - Connect local AI agents through the open API, MCP and Skill
@@ -56,9 +69,11 @@ SSHYard is a native desktop SSH / SFTP client for macOS, Windows and Linux, brin
   - One-click Skill setup for Claude Code and Codex; agent access is off by default
 
 - **Hosts and credentials**
-  - Import from SSH config or connect quickly with `user@host:port`
-  - Passwords, OpenSSH / PEM / PuTTY keys and SSH agent support
-  - Local encrypted credential storage, key generation and public-key installation
+  - Import from SSH config, migrate from ten clients such as Xshell, MobaXterm and PuTTY, or paste a list of hosts as text; or connect quickly with `user@host:port`
+  - Passwords, OpenSSH / PEM / PuTTY keys, OpenSSH certificates and SSH agent support
+  - Nested groups you can rearrange by dragging, with multi-select and latency tests
+  - Provider, renewal schedule and notes for each host, with a reminder before renewal
+  - Local encrypted credential storage, key generation and public-key installation; changed host keys are checked by fingerprint, and known hosts can be managed
 
 - **Backup and restore**
   - Password-encrypted backups of hosts, credentials, snippets and settings, with restore on another device
@@ -66,12 +81,14 @@ SSHYard is a native desktop SSH / SFTP client for macOS, Windows and Linux, brin
   - Manual or scheduled backups, with configurable retention
 
 - **Networking**
-  - Multi-hop jump hosts and HTTP / SOCKS5 proxies
+  - Multi-hop jump hosts and HTTP / SOCKS5 proxies, which AI providers and update checks can use too
   - Local, remote and dynamic port forwarding
 
 - **Everyday use**
   - Server metrics at a glance
-  - Light and dark themes, with English, Simplified Chinese, Traditional Chinese, Korean and Japanese
+  - Light and dark themes, with background images, translucency and interface scaling
+  - Close to the tray and connect to hosts from the tray popover
+  - English, Simplified Chinese, Traditional Chinese, Korean and Japanese
 
 ## Linux credentials and dependencies
 
@@ -82,6 +99,8 @@ Run SSHYard as your normal desktop user, without root or `sudo`. Saving and unlo
 - **Archive / `install.sh`:** installation is per-user under `~/.local` and does not automatically install libsecret, GTK or a Secret Service provider; arrange these dependencies first, and do not run the script as root
 
 Missing system packages or a tenant policy disabling session D-Bus / Secret Service may require an administrator to resolve. Use your desktop's existing keyring manager to unlock its collection when needed. SSHYard uses native UI and does not require WebKitGTK.
+
+Without a usable Secret Service, for example on a tenant account without administrator rights, SSHYard can protect the master key with a local master password instead: when unlocking fails and nothing is saved yet, choose **Use local master password…** in the error dialog. The master key is then sealed under that password (Argon2id) in `master.enc` beside `secrets.enc`, nothing is written to the system keychain, and you enter the password the first time saved secrets are needed after each launch. SSHYard never stores the password; if you forget it, saved secrets can only be recovered from a backup. **Settings → About → Secret storage** changes it, or moves the master key back to the system keychain once one is available. **Copy diagnostics** in the same dialog copies the credential service's own error message for a bug report; it contains no secrets.
 
 For a read-only connectivity check, run this from a terminal in the **same desktop login session** as SSHYard, without `sudo` (requires `gdbus`):
 

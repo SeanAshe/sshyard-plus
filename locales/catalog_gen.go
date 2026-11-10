@@ -13635,6 +13635,228 @@ func (msgs Messages) SecretsReasonLinuxLocked() string {
 	return Catalog.Format(msgs.locale, "secretsReasonLinuxLocked", nil)
 }
 
+// SecretsReasonLinuxMissing says "No Secret Service credential service is available in this session."
+// in the language the app shows.
+func SecretsReasonLinuxMissing() string { return In(i18n.Locale()).SecretsReasonLinuxMissing() }
+
+// SecretsReasonLinuxMissing says "No Secret Service credential service is available in this session."
+// in the language of msgs.
+func (msgs Messages) SecretsReasonLinuxMissing() string {
+	return Catalog.Format(msgs.locale, "secretsReasonLinuxMissing", nil)
+}
+
+// SecretsReasonLinuxTimeout says "The credential service did not respond; try again later."
+// in the language the app shows.
+func SecretsReasonLinuxTimeout() string { return In(i18n.Locale()).SecretsReasonLinuxTimeout() }
+
+// SecretsReasonLinuxTimeout says "The credential service did not respond; try again later."
+// in the language of msgs.
+func (msgs Messages) SecretsReasonLinuxTimeout() string {
+	return Catalog.Format(msgs.locale, "secretsReasonLinuxTimeout", nil)
+}
+
+// SecretsReasonPasswordRequired says "The local master password is required."
+// in the language the app shows.
+func SecretsReasonPasswordRequired() string { return In(i18n.Locale()).SecretsReasonPasswordRequired() }
+
+// SecretsReasonPasswordRequired says "The local master password is required."
+// in the language of msgs.
+func (msgs Messages) SecretsReasonPasswordRequired() string {
+	return Catalog.Format(msgs.locale, "secretsReasonPasswordRequired", nil)
+}
+
+// SecretsReasonPasswordSetup says "Encrypted secrets already exist, so a local master password cannot be set up; restore access to the system keychain f…"
+// in the language the app shows.
+func SecretsReasonPasswordSetup() string { return In(i18n.Locale()).SecretsReasonPasswordSetup() }
+
+// SecretsReasonPasswordSetup says "Encrypted secrets already exist, so a local master password cannot be set up; restore access to the system keychain f…"
+// in the language of msgs.
+func (msgs Messages) SecretsReasonPasswordSetup() string {
+	return Catalog.Format(msgs.locale, "secretsReasonPasswordSetup", nil)
+}
+
+// SecretsStageMasterPassword says "Reading the local master key"
+// in the language the app shows.
+func SecretsStageMasterPassword() string { return In(i18n.Locale()).SecretsStageMasterPassword() }
+
+// SecretsStageMasterPassword says "Reading the local master key"
+// in the language of msgs.
+func (msgs Messages) SecretsStageMasterPassword() string {
+	return Catalog.Format(msgs.locale, "secretsStageMasterPassword", nil)
+}
+
+// SecretsStageWriteMasterPassword says "Saving the local master key"
+// in the language the app shows.
+func SecretsStageWriteMasterPassword() string {
+	return In(i18n.Locale()).SecretsStageWriteMasterPassword()
+}
+
+// SecretsStageWriteMasterPassword says "Saving the local master key"
+// in the language of msgs.
+func (msgs Messages) SecretsStageWriteMasterPassword() string {
+	return Catalog.Format(msgs.locale, "secretsStageWriteMasterPassword", nil)
+}
+
+// SecretsMasterPassword says "Encrypted local store; master key protected by a local master password"
+// in the language the app shows.
+func SecretsMasterPassword() string { return In(i18n.Locale()).SecretsMasterPassword() }
+
+// SecretsMasterPassword says "Encrypted local store; master key protected by a local master password"
+// in the language of msgs.
+func (msgs Messages) SecretsMasterPassword() string {
+	return Catalog.Format(msgs.locale, "secretsMasterPassword", nil)
+}
+
+// CopyDiagnostics says "Copy diagnostics"
+// in the language the app shows.
+func CopyDiagnostics() string { return In(i18n.Locale()).CopyDiagnostics() }
+
+// CopyDiagnostics says "Copy diagnostics"
+// in the language of msgs.
+func (msgs Messages) CopyDiagnostics() string {
+	return Catalog.Format(msgs.locale, "copyDiagnostics", nil)
+}
+
+// MasterPassword says "Local master password"
+// in the language the app shows.
+func MasterPassword() string { return In(i18n.Locale()).MasterPassword() }
+
+// MasterPassword says "Local master password"
+// in the language of msgs.
+func (msgs Messages) MasterPassword() string {
+	return Catalog.Format(msgs.locale, "masterPassword", nil)
+}
+
+// CurrentMasterPassword says "Current master password"
+// in the language the app shows.
+func CurrentMasterPassword() string { return In(i18n.Locale()).CurrentMasterPassword() }
+
+// CurrentMasterPassword says "Current master password"
+// in the language of msgs.
+func (msgs Messages) CurrentMasterPassword() string {
+	return Catalog.Format(msgs.locale, "currentMasterPassword", nil)
+}
+
+// NewMasterPassword says "New master password"
+// in the language the app shows.
+func NewMasterPassword() string { return In(i18n.Locale()).NewMasterPassword() }
+
+// NewMasterPassword says "New master password"
+// in the language of msgs.
+func (msgs Messages) NewMasterPassword() string {
+	return Catalog.Format(msgs.locale, "newMasterPassword", nil)
+}
+
+// MasterPasswordWrong says "The master password is incorrect."
+// in the language the app shows.
+func MasterPasswordWrong() string { return In(i18n.Locale()).MasterPasswordWrong() }
+
+// MasterPasswordWrong says "The master password is incorrect."
+// in the language of msgs.
+func (msgs Messages) MasterPasswordWrong() string {
+	return Catalog.Format(msgs.locale, "masterPasswordWrong", nil)
+}
+
+// MasterPasswordUnlock says "Unlock"
+// in the language the app shows.
+func MasterPasswordUnlock() string { return In(i18n.Locale()).MasterPasswordUnlock() }
+
+// MasterPasswordUnlock says "Unlock"
+// in the language of msgs.
+func (msgs Messages) MasterPasswordUnlock() string {
+	return Catalog.Format(msgs.locale, "masterPasswordUnlock", nil)
+}
+
+// MasterPasswordUnlockTitle says "Enter local master password"
+// in the language the app shows.
+func MasterPasswordUnlockTitle() string { return In(i18n.Locale()).MasterPasswordUnlockTitle() }
+
+// MasterPasswordUnlockTitle says "Enter local master password"
+// in the language of msgs.
+func (msgs Messages) MasterPasswordUnlockTitle() string {
+	return Catalog.Format(msgs.locale, "masterPasswordUnlockTitle", nil)
+}
+
+// MasterPasswordUnlockNote says "A local master password protects your saved secrets. Enter it to unlock them."
+// in the language the app shows.
+func MasterPasswordUnlockNote() string { return In(i18n.Locale()).MasterPasswordUnlockNote() }
+
+// MasterPasswordUnlockNote says "A local master password protects your saved secrets. Enter it to unlock them."
+// in the language of msgs.
+func (msgs Messages) MasterPasswordUnlockNote() string {
+	return Catalog.Format(msgs.locale, "masterPasswordUnlockNote", nil)
+}
+
+// UseMasterPasswordEllipsis says "Use local master password…"
+// in the language the app shows.
+func UseMasterPasswordEllipsis() string { return In(i18n.Locale()).UseMasterPasswordEllipsis() }
+
+// UseMasterPasswordEllipsis says "Use local master password…"
+// in the language of msgs.
+func (msgs Messages) UseMasterPasswordEllipsis() string {
+	return Catalog.Format(msgs.locale, "useMasterPasswordEllipsis", nil)
+}
+
+// MasterPasswordSetupTitle says "Use a local master password"
+// in the language the app shows.
+func MasterPasswordSetupTitle() string { return In(i18n.Locale()).MasterPasswordSetupTitle() }
+
+// MasterPasswordSetupTitle says "Use a local master password"
+// in the language of msgs.
+func (msgs Messages) MasterPasswordSetupTitle() string {
+	return Catalog.Format(msgs.locale, "masterPasswordSetupTitle", nil)
+}
+
+// MasterPasswordSetupNote says "When the system keychain is unavailable, a local master password can protect the master key instead, with no administ…"
+// in the language the app shows.
+func MasterPasswordSetupNote() string { return In(i18n.Locale()).MasterPasswordSetupNote() }
+
+// MasterPasswordSetupNote says "When the system keychain is unavailable, a local master password can protect the master key instead, with no administ…"
+// in the language of msgs.
+func (msgs Messages) MasterPasswordSetupNote() string {
+	return Catalog.Format(msgs.locale, "masterPasswordSetupNote", nil)
+}
+
+// MasterPasswordChangeTitle says "Change local master password"
+// in the language the app shows.
+func MasterPasswordChangeTitle() string { return In(i18n.Locale()).MasterPasswordChangeTitle() }
+
+// MasterPasswordChangeTitle says "Change local master password"
+// in the language of msgs.
+func (msgs Messages) MasterPasswordChangeTitle() string {
+	return Catalog.Format(msgs.locale, "masterPasswordChangeTitle", nil)
+}
+
+// UseSystemKeychainEllipsis says "Use system keychain…"
+// in the language the app shows.
+func UseSystemKeychainEllipsis() string { return In(i18n.Locale()).UseSystemKeychainEllipsis() }
+
+// UseSystemKeychainEllipsis says "Use system keychain…"
+// in the language of msgs.
+func (msgs Messages) UseSystemKeychainEllipsis() string {
+	return Catalog.Format(msgs.locale, "useSystemKeychainEllipsis", nil)
+}
+
+// MasterPasswordSystemTitle says "Use the system keychain"
+// in the language the app shows.
+func MasterPasswordSystemTitle() string { return In(i18n.Locale()).MasterPasswordSystemTitle() }
+
+// MasterPasswordSystemTitle says "Use the system keychain"
+// in the language of msgs.
+func (msgs Messages) MasterPasswordSystemTitle() string {
+	return Catalog.Format(msgs.locale, "masterPasswordSystemTitle", nil)
+}
+
+// MasterPasswordSystemNote says "Enter the current master password to move the master key to the system keychain. You will no longer need the local ma…"
+// in the language the app shows.
+func MasterPasswordSystemNote() string { return In(i18n.Locale()).MasterPasswordSystemNote() }
+
+// MasterPasswordSystemNote says "Enter the current master password to move the master key to the system keychain. You will no longer need the local ma…"
+// in the language of msgs.
+func (msgs Messages) MasterPasswordSystemNote() string {
+	return Catalog.Format(msgs.locale, "masterPasswordSystemNote", nil)
+}
+
 // SecretsReasonCancelled says "System authorization was cancelled."
 // in the language the app shows.
 func SecretsReasonCancelled() string { return In(i18n.Locale()).SecretsReasonCancelled() }
@@ -16529,6 +16751,26 @@ func MigrationTextChooseFile() string { return In(i18n.Locale()).MigrationTextCh
 // in the language of msgs.
 func (msgs Messages) MigrationTextChooseFile() string {
 	return Catalog.Format(msgs.locale, "migrationTextChooseFile", nil)
+}
+
+// MigrationCSV says "CSV import"
+// in the language the app shows.
+func MigrationCSV() string { return In(i18n.Locale()).MigrationCSV() }
+
+// MigrationCSV says "CSV import"
+// in the language of msgs.
+func (msgs Messages) MigrationCSV() string {
+	return Catalog.Format(msgs.locale, "migrationCSV", nil)
+}
+
+// MigrationCSVChooseFile says "Choose CSV file"
+// in the language the app shows.
+func MigrationCSVChooseFile() string { return In(i18n.Locale()).MigrationCSVChooseFile() }
+
+// MigrationCSVChooseFile says "Choose CSV file"
+// in the language of msgs.
+func (msgs Messages) MigrationCSVChooseFile() string {
+	return Catalog.Format(msgs.locale, "migrationCSVChooseFile", nil)
 }
 
 // MigrationTextHelp says "One host per line, as key=value fields separated by spaces: host or ip, port, user or username, password, and title, …"

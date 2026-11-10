@@ -57,8 +57,10 @@ type migrationForm struct {
 // migrationOutcome counts what a text import did with its rows.
 type migrationOutcome struct{ added, updated, skipped int }
 
-// editable reports a text import, whose rows edit every field.
-func (f *migrationForm) editable() bool { return f.source == migration.Text }
+// editable reports a text or CSV import, whose rows edit every field.
+func (f *migrationForm) editable() bool {
+	return f.source == migration.Text || f.source == migration.CSV
+}
 
 func migrationTarget(address string, port int, user string) string {
 	address = strings.Trim(strings.TrimSpace(address), "[]")
@@ -245,8 +247,11 @@ func (a *App) readMigration(m locales.Messages, source migration.Source, directo
 			}
 		} else {
 			title := m.MigrationChooseFiles()
-			if source == migration.Text {
+			switch source {
+			case migration.Text:
 				title = m.MigrationTextChooseFile()
+			case migration.CSV:
+				title = m.MigrationCSVChooseFile()
 			}
 			paths, err = a.p.PickFiles(title)
 		}

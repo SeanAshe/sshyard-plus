@@ -19,28 +19,7 @@ func parseText(data []byte, _ string) (Result, error) {
 		if len(fields) == 0 {
 			continue
 		}
-		var e Entry
-		var unknown []string
-		for _, f := range fields {
-			switch strings.ToLower(f.key) {
-			case "host", "ip":
-				e.Address = f.value
-			case "port":
-				e.Port = iniPort(f.value)
-			case "user", "username":
-				e.User = f.value
-			case "password":
-				e.Password = []byte(f.value)
-			case "title", "name", "label":
-				e.Name = f.value
-			case "authtype":
-			default:
-				unknown = append(unknown, f.key)
-			}
-		}
-		for _, key := range unknown {
-			iniIssue(&e, "unsupported-field", key)
-		}
+		e := textEntry(fields)
 		if unclosed != "" {
 			iniIssue(&e, "unclosed-quote", unclosed)
 		}
@@ -50,6 +29,36 @@ func parseText(data []byte, _ string) (Result, error) {
 }
 
 type textField struct{ key, value string }
+
+// textEntry is the session a line's fields, or a CSV row's cells under
+// their column names, describe: host / ip, port, user / username,
+// password and title / name / label, keys ignoring case; authType is
+// ignored and other keys reported.
+func textEntry(fields []textField) Entry {
+	var e Entry
+	var unknown []string
+	for _, f := range fields {
+		switch strings.ToLower(f.key) {
+		case "host", "ip":
+			e.Address = f.value
+		case "port":
+			e.Port = iniPort(f.value)
+		case "user", "username":
+			e.User = f.value
+		case "password":
+			e.Password = []byte(f.value)
+		case "title", "name", "label":
+			e.Name = f.value
+		case "authtype":
+		default:
+			unknown = append(unknown, f.key)
+		}
+	}
+	for _, key := range unknown {
+		iniIssue(&e, "unsupported-field", key)
+	}
+	return e
+}
 
 // textFields splits a line into key=value fields; words without = are
 // skipped. unclosed is the key whose quoted value runs to the line's end.

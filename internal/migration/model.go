@@ -19,6 +19,9 @@ const (
 	// Text is a host list of key=value lines, typed, pasted or read
 	// from a file; it is not one of the clients Sources lists.
 	Text Source = "Text"
+	// CSV is a host table whose header names the columns with the keys
+	// of a Text host list; it is not one of the clients Sources lists.
+	CSV Source = "CSV"
 )
 
 func Sources() []Source {

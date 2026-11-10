@@ -35,8 +35,14 @@ func (k *Keychain) unlock(silent bool) error {
 		k.mu.Unlock()
 		return nil
 	}
-	system, exists := b.system, b.exists
+	system, exists, protected := b.system, b.exists, b.protected
 	k.mu.Unlock()
+	if protected {
+		if silent {
+			return &OpError{Op: "master-read", Err: ErrInteractionRequired}
+		}
+		return &OpError{Op: "master-password", Err: ErrPasswordRequired}
+	}
 	if system == nil {
 		return &OpError{Op: "master-read", Err: ErrUnavailable}
 	}

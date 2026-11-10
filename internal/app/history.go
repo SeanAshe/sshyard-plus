@@ -250,28 +250,30 @@ func (a *App) history() *historyState {
 	return a.hist
 }
 
-// historyHead is what the history pane's header holds after its name:
-// how many commands there are, the read going on, the tip on bash and
-// the button reading them again.
-func (a *App) historyHead(c *ui.Context, m locales.Messages, tok theme.Tokens) {
+// historyHead is what the history pane's header holds after its name,
+// how many commands there are, and its actions: the read going on, the
+// tip on bash and the button reading them again.
+func (a *App) historyHead(c *ui.Context, m locales.Messages, tok theme.Tokens) (lead func(), acts []barAction) {
 	d := a.history()
 	src, _ := a.historySource(m, a.focused())
-	if src != nil && d.read && len(d.hist.Entries) > 0 {
-		ui.Text(c, strconv.Itoa(len(d.hist.Entries))).FontSize(theme.Caption).TextColor(tok.TextMuted).SingleLine()
-	}
-	ui.Spacer(c)
-	if src != nil && d.running {
-		ui.Spinner(c)
-	}
-	if src != nil && d.read && historyTipShows(d.hist) {
-		if (IconButton{Icon: icons.Warning, Label: m.HistoryBashTipTitle(), Prominent: true, Size: Tiny}).Clicked(c, "hist:tip") {
-			d.tipOpen = true
+	lead = func() {
+		if src != nil && d.read && len(d.hist.Entries) > 0 {
+			ui.Text(c, strconv.Itoa(len(d.hist.Entries))).FontSize(theme.Caption).TextColor(tok.TextMuted).SingleLine().Shrink(0)
 		}
 	}
-	if (IconButton{Icon: icons.Refresh, Label: m.Refresh(), Disabled: src == nil || d.running, Size: Tiny}).Clicked(c, "hist:refresh") {
-		d.err = nil
-		a.readHistory(c, src, true)
+	if src != nil && d.running {
+		acts = append(acts, barAction{Key: "hist:reading", Show: func() ui.Element { return ui.Spinner(c) }})
 	}
+	if src != nil && d.read && historyTipShows(d.hist) {
+		acts = append(acts, barAction{Key: "hist:tip", Button: IconButton{Icon: icons.Warning, Label: m.HistoryBashTipTitle(), Prominent: true, Size: Tiny},
+			Do: func() { d.tipOpen = true }})
+	}
+	acts = append(acts, barAction{Key: "hist:refresh", Button: IconButton{Icon: icons.Refresh, Label: m.Refresh(), Disabled: src == nil || d.running, Size: Tiny},
+		Do: func() {
+			d.err = nil
+			a.readHistory(c, src, true)
+		}})
+	return lead, acts
 }
 
 // historyPanel is the command history pane under its header: the search

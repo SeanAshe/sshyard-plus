@@ -59,16 +59,16 @@ func (a *App) snippetTarget() *conn {
 	return cn
 }
 
-// snippetsHead is what the snippets pane's header holds after its name:
-// how many there are and the button adding one.
-func (a *App) snippetsHead(c *ui.Context, m locales.Messages, tok theme.Tokens) {
-	if n := len(a.store.Snippets()); n > 0 {
-		ui.Text(c, strconv.Itoa(n)).FontSize(theme.Caption).TextColor(tok.TextMuted).SingleLine()
+// snippetsHead is what the snippets pane's header holds after its name,
+// how many there are, and its action, adding one.
+func (a *App) snippetsHead(c *ui.Context, m locales.Messages, tok theme.Tokens) (lead func(), acts []barAction) {
+	lead = func() {
+		if n := len(a.store.Snippets()); n > 0 {
+			ui.Text(c, strconv.Itoa(n)).FontSize(theme.Caption).TextColor(tok.TextMuted).SingleLine().Shrink(0)
+		}
 	}
-	ui.Spacer(c)
-	if (IconButton{Icon: icons.Add, Label: m.SnippetNew(), Size: Tiny}).Clicked(c, "snippet:new") {
-		a.openSnippet(m, assets.Snippet{Group: a.snippets.group}, false)
-	}
+	return lead, []barAction{{Key: "snippet:new", Button: IconButton{Icon: icons.Add, Label: m.SnippetNew(), Size: Tiny},
+		Do: func() { a.openSnippet(m, assets.Snippet{Group: a.snippets.group}, false) }}}
 }
 
 // snippetsPanel is the snippets pane under its header: the search and
