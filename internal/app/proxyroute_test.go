@@ -150,8 +150,8 @@ func TestUpdateProxyRoute(t *testing.T) {
 		t.Errorf("updates through the proxy: dialed %v", got)
 	}
 
-	// "New proxy…" on the About page saves the new one as the choice.
-	a.openSettings(prefAbout)
+	// "New proxy…" on the General page saves the new one as the choice.
+	a.openSettings(prefGeneral)
 	tt.Frame()
 	a.updProxy = proxyNew
 	tt.Frame()

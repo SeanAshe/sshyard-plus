@@ -69,7 +69,7 @@ func (t *Terminal) SnapshotInto(s *Snapshot, offset int) {
 		for len(cells) < t.cols {
 			cells = append(cells, blank(Cell{}))
 		}
-		s.Lines[y] = Line{Cells: cells, Wrapped: src.Wrapped, widePad: src.widePad}
+		s.Lines[y] = Line{Cells: cells, Wrapped: src.Wrapped, widePad: src.widePad, Time: src.Time}
 	}
 	s.CursorX, s.CursorY = t.cur.x, t.cur.y+offset
 	s.CursorVisible = t.modes.CursorVisible && s.CursorY < t.rows

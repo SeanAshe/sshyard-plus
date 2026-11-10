@@ -483,9 +483,9 @@ func TestOSC52Pause(t *testing.T) {
 
 func TestOSC52Settings(t *testing.T) {
 	a, tt := newTestApp(t)
-	tt.SetSize(1200, 3200)
 	a.openSettings(prefTerminal)
 	tt.Frame()
+	scrollToSetting(t, tt, "Deny")
 	mustClick(t, tt, "Deny")
 	if a.Settings().OSC52Write != settings.OSC52Deny {
 		t.Fatalf("policy %q", a.Settings().OSC52Write)

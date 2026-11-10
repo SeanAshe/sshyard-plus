@@ -15,7 +15,7 @@ import (
 func TestFormSettingsSelectHitAreaAndPersistence(t *testing.T) {
 	a, tt := newTestApp(t)
 	tt.SetSize(1200, 1100)
-	a.openSettings(prefAppearance)
+	a.openSettings(prefGeneral)
 	tt.Frame()
 	m := locales.In("en")
 	for _, region := range []string{"text", "middle", "arrow"} {
@@ -102,7 +102,7 @@ func TestFormFontComboboxRemainsSearchable(t *testing.T) {
 	tt.Frame()
 	m := locales.In("en")
 	field := mustFind(t, tt, m.InterfaceFont())
-	selectValue := mustFind(t, tt, m.CloseToTray())
+	selectValue := mustFind(t, tt, zoomLabel(m, a.settings.UIZoom))
 	tt.ClickAt(selectValue.X+80, field.Y+field.H/2)
 	if !tt.Focused(m.InterfaceFont()) {
 		t.Fatal("font combobox body did not focus its editable input")

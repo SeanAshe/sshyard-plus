@@ -100,26 +100,34 @@ func (a *App) reuse(ex *conn, hostID string, link int) (int, error) {
 }
 
 // ToggleFiles closes the active tab's files pane, or opens one beside the
-// focused pane when it has none.
+// focused pane when it has none, or, with the rail's panes as tabs, in
+// the place of the one the tab shows.
 func (a *App) ToggleFiles() {
-	if c := a.tabPane(a.ws.ActiveTab(), layout.Files); c != nil {
+	t := a.ws.ActiveTab()
+	if c := a.tabPane(t, layout.Files); c != nil {
 		a.CloseSession(c.id)
 		return
 	}
 	if remoteOnly(a.focused()) {
+		old := a.railOld(t, layout.Files)
 		a.OpenFilesBeside()
+		a.replaceRail(a.tabPane(t, layout.Files), old)
 	}
 }
 
 // ToggleAI closes the active tab's AI pane, or opens one beside the
-// focused pane when it has none.
+// focused pane when it has none, or, with the rail's panes as tabs, in
+// the place of the one the tab shows.
 func (a *App) ToggleAI() {
-	if c := a.tabPane(a.ws.ActiveTab(), layout.AI); c != nil {
+	t := a.ws.ActiveTab()
+	if c := a.tabPane(t, layout.AI); c != nil {
 		a.CloseSession(c.id)
 		return
 	}
 	if canAI(a.focused()) {
+		old := a.railOld(t, layout.AI)
 		a.OpenAIBeside()
+		a.replaceRail(a.tabPane(t, layout.AI), old)
 	}
 }
 

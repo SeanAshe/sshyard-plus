@@ -7,12 +7,12 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-func TestRememberLayoutAppearanceSwitch(t *testing.T) {
+func TestRememberLayoutGeneralSwitch(t *testing.T) {
 	a, _ := newTestApp(t)
 	s, changed := a.Settings(), false
 	m := locales.In("en")
 	tt := ui.NewTester(func(c *ui.Context) {
-		a.prefAppearance(c, m, currentTokens(c), &s, &changed)
+		a.prefGeneral(c, m, currentTokens(c), &s, &changed)
 	}, 900, 1400)
 	tt.SetLocale("en")
 	tt.Frame()

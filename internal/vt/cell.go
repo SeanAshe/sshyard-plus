@@ -134,6 +134,9 @@ type Line struct {
 	// widePad is set on a wrapped line whose last cell is the blank left
 	// where a wide character did not fit: it is not part of the text.
 	widePad bool
+	// Time is when output first reached the line, in Unix seconds; 0 for
+	// a line it never did.
+	Time int64
 }
 
 func newLine(cols int, pen Cell) Line {

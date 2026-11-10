@@ -236,7 +236,7 @@ func TestSettingsLanguageAndTheme(t *testing.T) {
 	var locs []string
 	a.p.SetTheme = func(m theme.Mode) { themes = append(themes, string(m)) }
 	a.p.SetLocale = func(l string) { locs = append(locs, l); tt.SetLocale(l) }
-	a.page = pageSettings
+	a.openSettings(prefAppearance)
 	tt.Frame()
 	mustClick(t, tt, "Dark")
 	if a.Settings().Theme != "dark" || len(themes) == 0 {
@@ -461,7 +461,7 @@ func TestFilesPaneFromHost(t *testing.T) {
 func TestSettingsToggle(t *testing.T) {
 	a, tt := newTestApp(t)
 	mustClick(t, tt, "Settings")
-	if a.page != pageSettings || a.prefNow() != prefAppearance {
+	if a.page != pageSettings || a.prefNow() != prefGeneral {
 		t.Fatal("settings did not open")
 	}
 	mustClick(t, tt, "Close Settings")

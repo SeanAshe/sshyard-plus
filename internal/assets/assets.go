@@ -101,6 +101,9 @@ type Host struct {
 	TerminalDir string `json:"terminalDir,omitempty"`
 	RemoteDir   string `json:"remoteDir,omitempty"`
 	LocalDir    string `json:"localDir,omitempty"`
+	// SFTPSudo runs the SFTP server of an SSH host's Files panes as root
+	// through sudo, which the login password, or one typed, answers.
+	SFTPSudo bool `json:"sftpSudo,omitempty"`
 	// Tmux is the tmux session an SSH host's terminals attach to each
 	// time their shell starts, created when there is none; empty is
 	// none.

@@ -2057,6 +2057,46 @@ func (msgs Messages) TerminalStripeNote() string {
 	return Catalog.Format(msgs.locale, "terminalStripeNote", nil)
 }
 
+// TerminalLineNumbers says "Line numbers"
+// in the language the app shows.
+func TerminalLineNumbers() string { return In(i18n.Locale()).TerminalLineNumbers() }
+
+// TerminalLineNumbers says "Line numbers"
+// in the language of msgs.
+func (msgs Messages) TerminalLineNumbers() string {
+	return Catalog.Format(msgs.locale, "terminalLineNumbers", nil)
+}
+
+// TerminalLineNumbersNote says "Show each line's number left of the terminal"
+// in the language the app shows.
+func TerminalLineNumbersNote() string { return In(i18n.Locale()).TerminalLineNumbersNote() }
+
+// TerminalLineNumbersNote says "Show each line's number left of the terminal"
+// in the language of msgs.
+func (msgs Messages) TerminalLineNumbersNote() string {
+	return Catalog.Format(msgs.locale, "terminalLineNumbersNote", nil)
+}
+
+// TerminalTimestamps says "Timestamps"
+// in the language the app shows.
+func TerminalTimestamps() string { return In(i18n.Locale()).TerminalTimestamps() }
+
+// TerminalTimestamps says "Timestamps"
+// in the language of msgs.
+func (msgs Messages) TerminalTimestamps() string {
+	return Catalog.Format(msgs.locale, "terminalTimestamps", nil)
+}
+
+// TerminalTimestampsNote says "Show when output reached each line, left of the terminal"
+// in the language the app shows.
+func TerminalTimestampsNote() string { return In(i18n.Locale()).TerminalTimestampsNote() }
+
+// TerminalTimestampsNote says "Show when output reached each line, left of the terminal"
+// in the language of msgs.
+func (msgs Messages) TerminalTimestampsNote() string {
+	return Catalog.Format(msgs.locale, "terminalTimestampsNote", nil)
+}
+
 // CursorBlock says "Block"
 // in the language the app shows.
 func CursorBlock() string { return In(i18n.Locale()).CursorBlock() }
@@ -7065,14 +7105,34 @@ func (msgs Messages) AboutSection() string {
 	return Catalog.Format(msgs.locale, "aboutSection", nil)
 }
 
-// AppearanceDesc says "How SSHYard looks: theme, language, translucency, zoom and the interface font."
+// AppearanceDesc says "How SSHYard looks: theme, zoom, background, translucency and the interface font."
 // in the language the app shows.
 func AppearanceDesc() string { return In(i18n.Locale()).AppearanceDesc() }
 
-// AppearanceDesc says "How SSHYard looks: theme, language, translucency, zoom and the interface font."
+// AppearanceDesc says "How SSHYard looks: theme, zoom, background, translucency and the interface font."
 // in the language of msgs.
 func (msgs Messages) AppearanceDesc() string {
 	return Catalog.Format(msgs.locale, "appearanceDesc", nil)
+}
+
+// GeneralDesc says "What applies to all of SSHYard: language, layout, reminders, the window and tray, and updates."
+// in the language the app shows.
+func GeneralDesc() string { return In(i18n.Locale()).GeneralDesc() }
+
+// GeneralDesc says "What applies to all of SSHYard: language, layout, reminders, the window and tray, and updates."
+// in the language of msgs.
+func (msgs Messages) GeneralDesc() string {
+	return Catalog.Format(msgs.locale, "generalDesc", nil)
+}
+
+// WindowTraySection says "Window & Tray"
+// in the language the app shows.
+func WindowTraySection() string { return In(i18n.Locale()).WindowTraySection() }
+
+// WindowTraySection says "Window & Tray"
+// in the language of msgs.
+func (msgs Messages) WindowTraySection() string {
+	return Catalog.Format(msgs.locale, "windowTraySection", nil)
 }
 
 // TerminalDesc says "Fonts, keyword highlighting, connection behaviour and the remote clipboard of terminal panes."
@@ -15805,6 +15865,46 @@ func (msgs Messages) OpenFilesSplit() string {
 	return Catalog.Format(msgs.locale, "openFilesSplit", nil)
 }
 
+// ToolPanes says "Rail tools"
+// in the language the app shows.
+func ToolPanes() string { return In(i18n.Locale()).ToolPanes() }
+
+// ToolPanes says "Rail tools"
+// in the language of msgs.
+func (msgs Messages) ToolPanes() string {
+	return Catalog.Format(msgs.locale, "toolPanes", nil)
+}
+
+// ToolPanesNote says "Side by side keeps every tool you open; Replace shows one at a time in its place"
+// in the language the app shows.
+func ToolPanesNote() string { return In(i18n.Locale()).ToolPanesNote() }
+
+// ToolPanesNote says "Side by side keeps every tool you open; Replace shows one at a time in its place"
+// in the language of msgs.
+func (msgs Messages) ToolPanesNote() string {
+	return Catalog.Format(msgs.locale, "toolPanesNote", nil)
+}
+
+// ToolPanesSplit says "Side by side"
+// in the language the app shows.
+func ToolPanesSplit() string { return In(i18n.Locale()).ToolPanesSplit() }
+
+// ToolPanesSplit says "Side by side"
+// in the language of msgs.
+func (msgs Messages) ToolPanesSplit() string {
+	return Catalog.Format(msgs.locale, "toolPanesSplit", nil)
+}
+
+// ToolPanesTabs says "Replace"
+// in the language the app shows.
+func ToolPanesTabs() string { return In(i18n.Locale()).ToolPanesTabs() }
+
+// ToolPanesTabs says "Replace"
+// in the language of msgs.
+func (msgs Messages) ToolPanesTabs() string {
+	return Catalog.Format(msgs.locale, "toolPanesTabs", nil)
+}
+
 // FilesEdge says "Open files from a terminal"
 // in the language the app shows.
 func FilesEdge() string { return In(i18n.Locale()).FilesEdge() }
@@ -17949,4 +18049,134 @@ func HistoryBashTipTitle() string { return In(i18n.Locale()).HistoryBashTipTitle
 // in the language of msgs.
 func (msgs Messages) HistoryBashTipTitle() string {
 	return Catalog.Format(msgs.locale, "historyBashTipTitle", nil)
+}
+
+// FilesZoom says "Files zoom"
+// in the language the app shows.
+func FilesZoom() string { return In(i18n.Locale()).FilesZoom() }
+
+// FilesZoom says "Files zoom"
+// in the language of msgs.
+func (msgs Messages) FilesZoom() string {
+	return Catalog.Format(msgs.locale, "filesZoom", nil)
+}
+
+// FilesZoomNote says "How large the names and rows of files panes show"
+// in the language the app shows.
+func FilesZoomNote() string { return In(i18n.Locale()).FilesZoomNote() }
+
+// FilesZoomNote says "How large the names and rows of files panes show"
+// in the language of msgs.
+func (msgs Messages) FilesZoomNote() string {
+	return Catalog.Format(msgs.locale, "filesZoomNote", nil)
+}
+
+// SftpSudo says "Files (SFTP)"
+// in the language the app shows.
+func SftpSudo() string { return In(i18n.Locale()).SftpSudo() }
+
+// SftpSudo says "Files (SFTP)"
+// in the language of msgs.
+func (msgs Messages) SftpSudo() string {
+	return Catalog.Format(msgs.locale, "sftpSudo", nil)
+}
+
+// SftpSudoOn says "Open files as root with sudo"
+// in the language the app shows.
+func SftpSudoOn() string { return In(i18n.Locale()).SftpSudoOn() }
+
+// SftpSudoOn says "Open files as root with sudo"
+// in the language of msgs.
+func (msgs Messages) SftpSudoOn() string {
+	return Catalog.Format(msgs.locale, "sftpSudoOn", nil)
+}
+
+// SftpSudoHint says "Files panes run the server's sftp-server through sudo and can change any file. sudo gets the login password, or asks …"
+// in the language the app shows.
+func SftpSudoHint() string { return In(i18n.Locale()).SftpSudoHint() }
+
+// SftpSudoHint says "Files panes run the server's sftp-server through sudo and can change any file. sudo gets the login password, or asks …"
+// in the language of msgs.
+func (msgs Messages) SftpSudoHint() string {
+	return Catalog.Format(msgs.locale, "sftpSudoHint", nil)
+}
+
+// SudoPromptTitle says "sudo password for {host}"
+// in the language the app shows.
+func SudoPromptTitle(host string) string { return In(i18n.Locale()).SudoPromptTitle(host) }
+
+// SudoPromptTitle says "sudo password for {host}"
+// in the language of msgs.
+func (msgs Messages) SudoPromptTitle(host string) string {
+	return Catalog.Format(msgs.locale, "sudoPromptTitle", map[string]any{"host": host})
+}
+
+// SudoPasswordRefused says "sudo refused the password."
+// in the language the app shows.
+func SudoPasswordRefused() string { return In(i18n.Locale()).SudoPasswordRefused() }
+
+// SudoPasswordRefused says "sudo refused the password."
+// in the language of msgs.
+func (msgs Messages) SudoPasswordRefused() string {
+	return Catalog.Format(msgs.locale, "sudoPasswordRefused", nil)
+}
+
+// SudoPasswordNeeded says "sudo needs a password to open the files as root."
+// in the language the app shows.
+func SudoPasswordNeeded() string { return In(i18n.Locale()).SudoPasswordNeeded() }
+
+// SudoPasswordNeeded says "sudo needs a password to open the files as root."
+// in the language of msgs.
+func (msgs Messages) SudoPasswordNeeded() string {
+	return Catalog.Format(msgs.locale, "sudoPasswordNeeded", nil)
+}
+
+// SudoEnterPassword says "Enter sudo password"
+// in the language the app shows.
+func SudoEnterPassword() string { return In(i18n.Locale()).SudoEnterPassword() }
+
+// SudoEnterPassword says "Enter sudo password"
+// in the language of msgs.
+func (msgs Messages) SudoEnterPassword() string {
+	return Catalog.Format(msgs.locale, "sudoEnterPassword", nil)
+}
+
+// SudoSubmit says "Open files"
+// in the language the app shows.
+func SudoSubmit() string { return In(i18n.Locale()).SudoSubmit() }
+
+// SudoSubmit says "Open files"
+// in the language of msgs.
+func (msgs Messages) SudoSubmit() string {
+	return Catalog.Format(msgs.locale, "sudoSubmit", nil)
+}
+
+// SudoFailed says "sudo could not start SFTP: {reason}"
+// in the language the app shows.
+func SudoFailed(reason string) string { return In(i18n.Locale()).SudoFailed(reason) }
+
+// SudoFailed says "sudo could not start SFTP: {reason}"
+// in the language of msgs.
+func (msgs Messages) SudoFailed(reason string) string {
+	return Catalog.Format(msgs.locale, "sudoFailed", map[string]any{"reason": reason})
+}
+
+// SudoNoServer says "no sftp-server found on the server"
+// in the language the app shows.
+func SudoNoServer() string { return In(i18n.Locale()).SudoNoServer() }
+
+// SudoNoServer says "no sftp-server found on the server"
+// in the language of msgs.
+func (msgs Messages) SudoNoServer() string {
+	return Catalog.Format(msgs.locale, "sudoNoServer", nil)
+}
+
+// SudoRetry says "Try sudo again"
+// in the language the app shows.
+func SudoRetry() string { return In(i18n.Locale()).SudoRetry() }
+
+// SudoRetry says "Try sudo again"
+// in the language of msgs.
+func (msgs Messages) SudoRetry() string {
+	return Catalog.Format(msgs.locale, "sudoRetry", nil)
 }

@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/Licoy/sshyard/internal/icons"
 	"github.com/Licoy/sshyard/internal/layout"
+	"github.com/Licoy/sshyard/internal/settings"
 	"github.com/Licoy/sshyard/internal/theme"
 	"github.com/Licoy/sshyard/locales"
 	"github.com/egoist/mygo/ui"
@@ -13,8 +14,8 @@ import (
 // system monitor, the process usage, the host's details, Docker and
 // tmux), work on the sessions, not on one of their own. They are panes as the others are, dragged by their
 // header to any edge of a pane or another tab, but on no host, and one of
-// each in the whole workspace, which the rail opens and closes. They are
-// not saved with the layout. A tool pane never keeps a tab's focus: the
+// each in the whole workspace, which the rail opens and closes. The layout
+// saves where they are, never what they show. A tool pane never keeps a tab's focus: the
 // focused pane stays the session the panels and the shortcuts work on.
 
 // isTool reports a tool pane's kind.
@@ -81,17 +82,20 @@ func (a *App) ShowTool(k layout.Kind) {
 
 // ToggleTool closes the tool pane of kind k when it is in the active tab;
 // else it opens it, or brings it from the tab it is in, beside the
-// focused pane.
+// focused pane, or, with the rail's panes as tabs, in the place of the
+// one the tab shows (see railOld).
 func (a *App) ToggleTool(k layout.Kind) {
 	t := a.ws.ActiveTab()
 	a.settleFocus(t)
 	defer func() { a.settleFocus(a.ws.ActiveTab()) }()
+	old := a.railOld(t, k)
 	if c := a.toolPane(k); c != nil {
 		if ct, _ := a.ws.Locate(c.id); ct == t || t == nil {
 			a.CloseSession(c.id)
 			return
 		}
 		a.ws.Move(c.id, t.Focus, layout.Right)
+		a.replaceRail(c, old)
 		a.focusReq = c.id
 		a.page = pageWorkspace
 		a.saveLayout()
@@ -106,9 +110,51 @@ func (a *App) ToggleTool(k layout.Kind) {
 	if t == nil || !a.ws.Place(c.item(), t.Focus, layout.Right) {
 		a.ws.Open(c.item())
 	}
+	a.replaceRail(c, old)
 	a.focusReq = c.id
 	a.page = pageWorkspace
 	a.saveLayout()
+}
+
+// railPane reports whether the rail opens panes of kind k: the tool
+// panes, the files pane and the AI pane.
+func railPane(k layout.Kind) bool { return isTool(k) || single(k) }
+
+// railOld is, with the rail's panes as tabs, the one in tab t the rail
+// opening kind k replaces: of another kind, opened last, and not busy.
+// There is none while the tab has no pane but the rail's, which keeps
+// its session.
+func (a *App) railOld(t *layout.Tab, k layout.Kind) *conn {
+	if t == nil || a.settings.ToolPanes != settings.ToolPanesTabs {
+		return nil
+	}
+	var last *conn
+	session := false
+	for _, it := range t.Items() {
+		c := a.conns[it.ID]
+		switch {
+		case c == nil:
+		case !railPane(c.kind):
+			session = true
+		case c.kind != k && !paneBusy(c) && (last == nil || c.id > last.id):
+			last = c
+		}
+	}
+	if !session {
+		return nil
+	}
+	return last
+}
+
+// replaceRail puts c, just opened beside, in old's place, and closes old;
+// nothing when old is nil.
+func (a *App) replaceRail(c, old *conn) {
+	if c == nil || old == nil {
+		return
+	}
+	if _, p := a.ws.Locate(old.id); p != nil && a.ws.Move(c.id, p.ID, layout.Center) {
+		a.CloseSession(old.id)
+	}
 }
 
 // settleFocus keeps tab t's focus off its tool panes: on the pane it

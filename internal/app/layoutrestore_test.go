@@ -9,6 +9,7 @@ import (
 	"github.com/Licoy/sshyard/internal/keychain"
 	"github.com/Licoy/sshyard/internal/layout"
 	"github.com/Licoy/sshyard/internal/session"
+	"github.com/Licoy/sshyard/locales"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -73,9 +74,16 @@ func TestLayoutWorkspaceRoundTrip(t *testing.T) {
 	if r.Leaf() || r.Axis != layout.Row || r.Ratio != 0.3 || r.B.Leaf() || r.B.Axis != layout.Column || r.B.Ratio != 0.65 {
 		t.Fatalf("split tree changed: %+v", r)
 	}
-	terminal, filePane, assistant := again.conns[r.A.Item.ID], again.conns[r.B.A.Item.ID], again.conns[r.B.B.Item.ID]
+	// The tool pane opened beside the focused files pane comes back there.
+	if r.B.A.Leaf() || r.B.A.Axis != layout.Row || !r.B.A.B.Leaf() {
+		t.Fatalf("tool pane not restored beside the files: %+v", r.B.A)
+	}
+	terminal, filePane, assistant := again.conns[r.A.Item.ID], again.conns[r.B.A.A.Item.ID], again.conns[r.B.B.Item.ID]
 	if terminal.kind != layout.Terminal || filePane.kind != layout.Files || assistant.kind != layout.AI || assistant.ai.link != terminal.id {
 		t.Fatal("mixed pane order or AI terminal association changed")
+	}
+	if tool := again.toolPane(layout.HostInfo); tool == nil || tool.id != r.B.A.B.Item.ID || tool.s != nil {
+		t.Fatal("tool pane not restored as a pane on no host")
 	}
 	if terminal.cwd != "" || startOnce(terminal) != "" || assistant.ai.input != "" || assistant.ai.task != "" || len(assistant.ai.items) != 0 {
 		t.Fatal("restored session content")
@@ -85,9 +93,6 @@ func TestLayoutWorkspaceRoundTrip(t *testing.T) {
 	}
 	if again.sections["none"] == nil || *again.sections["none"] {
 		t.Fatal("sidebar layout changed")
-	}
-	if again.toolPane(layout.HostInfo) != nil {
-		t.Fatal("restored a tool pane")
 	}
 	if again.prompting {
 		t.Fatalf("restoration asked for a password; texts %q", tt.Texts())
@@ -176,7 +181,7 @@ func TestLayoutSilentUnlockStartsSavedConnection(t *testing.T) {
 }
 
 // A layout saved while the rail opened panels beside the panes still
-// restores, without them: they are tool panes now, not saved.
+// restores, without them: they are tool panes now, saved in the tree.
 func TestLayoutDropsPanelsNowPanes(t *testing.T) {
 	dir := t.TempDir()
 	rememberLayoutIn(t, dir)
@@ -192,5 +197,37 @@ func TestLayoutDropsPanelsNowPanes(t *testing.T) {
 		if a.toolPane(k) != nil {
 			t.Fatalf("restored the %v pane", k)
 		}
+	}
+}
+
+// Tool panes are saved without a host and stay one of each: a duplicate,
+// or a tool kind saved with a host, is not restored.
+func TestLayoutToolPanesRestoreOnce(t *testing.T) {
+	dir := t.TempDir()
+	rememberLayoutIn(t, dir)
+	raw := []byte(`{"version":1,"active":1,"tabs":[
+		{"focus":1,"root":{"id":1,"kind":"snippets"}},
+		{"focus":2,"root":{"split":"row","ratio":0.4,"a":{"id":2,"kind":"history"},"b":{"id":3,"kind":"snippets"}}}]}`)
+	if err := os.WriteFile(filepath.Join(dir, "layout.json"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a, tt := appIn(t, dir, nil)
+	if a.layoutBlocked || len(a.ws.Tabs) != 2 || a.ws.Active != 1 {
+		t.Fatalf("blocked=%v tabs=%d active=%d", a.layoutBlocked, len(a.ws.Tabs), a.ws.Active)
+	}
+	if n := a.ws.Tabs[1].Root; !n.Leaf() || n.Item.Kind != layout.History {
+		t.Fatalf("duplicate snippets pane restored: %+v", n)
+	}
+	if c := a.toolPane(layout.Snippets); c == nil || a.ws.Tabs[0].Root.Item.ID != c.id {
+		t.Fatal("first snippets pane not restored")
+	}
+	if !tt.HasText(locales.In("en").LayoutRestoreSkipped()) {
+		t.Fatalf("skipped pane was not reported: %q", tt.Texts())
+	}
+	if validLayout(layoutSnap{Version: 1, Tabs: []tabSnap{{Root: &nodeSnap{ID: 1, Kind: "monitor", Host: "h"}}}}) {
+		t.Fatal("accepted a tool pane on a host")
+	}
+	if validLayout(layoutSnap{Version: 1, Tabs: []tabSnap{{Root: &nodeSnap{ID: 1, Kind: "terminal"}}}}) {
+		t.Fatal("accepted a session pane on no host")
 	}
 }

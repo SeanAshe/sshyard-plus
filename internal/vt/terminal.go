@@ -2,6 +2,7 @@ package vt
 
 import (
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"golang.org/x/text/encoding"
@@ -138,6 +139,10 @@ type Terminal struct {
 
 	// osc52Max is the largest decoded OSC 52, or 0 for the default.
 	osc52Max int
+
+	// now is the clock lines are stamped with (Line.Time), nil for the
+	// system's.
+	now func() time.Time
 
 	gen uint64
 }
@@ -396,6 +401,7 @@ func reflow(old []Line, cols, top, y, x int, pending bool) (out []Line, ntop, ny
 			continue
 		}
 		var cells []Cell
+		tm := old[i].Time
 		for k := i; k <= j; k++ {
 			cs := old[k].Cells
 			if k == y {
@@ -414,7 +420,7 @@ func reflow(old []Line, cols, top, y, x int, pending bool) (out []Line, ntop, ny
 		for len(cells) < n {
 			cells = append(cells, blank(Cell{}))
 		}
-		line := Line{Cells: make([]Cell, 0, cols)}
+		line := Line{Cells: make([]Cell, 0, cols), Time: tm}
 		for k := 0; k < n; {
 			w := 1
 			if cells[k].Width == 2 && k+1 < n && cells[k+1].Width == 0 {
@@ -437,7 +443,7 @@ func reflow(old []Line, cols, top, y, x int, pending bool) (out []Line, ntop, ny
 				}
 				line.Wrapped = true
 				out = append(out, line)
-				line = Line{Cells: make([]Cell, 0, cols)}
+				line = Line{Cells: make([]Cell, 0, cols), Time: tm}
 			}
 			if cur >= k && cur < k+w {
 				ny, nx = len(out), len(line.Cells)+min(cur-k, len(c)-1)
@@ -551,6 +557,19 @@ func (t *Terminal) CursorLine() string {
 		return ""
 	}
 	return t.primary.lines[t.cur.y].text(true)
+}
+
+// stamp notes when output first reaches the cursor's line.
+func (t *Terminal) stamp() {
+	l := &t.lines()[t.cur.y]
+	if l.Time != 0 {
+		return
+	}
+	now := time.Now
+	if t.now != nil {
+		now = t.now
+	}
+	l.Time = now().Unix()
 }
 
 // leaveLine tells the line hook of the cursor's line, as the cursor

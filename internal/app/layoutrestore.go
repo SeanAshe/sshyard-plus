@@ -142,11 +142,14 @@ func validLayout(s layoutSnap) bool {
 		if n.Split != "" {
 			return (n.Split == "row" || n.Split == "column") && n.Kind == "" && n.Ratio > 0 && n.Ratio < 1 && valid(n.A, depth+1) && valid(n.B, depth+1)
 		}
-		if n.A != nil || n.B != nil || n.Host == "" || n.ID <= 0 || ids[n.ID] {
+		if n.A != nil || n.B != nil || n.ID <= 0 || ids[n.ID] {
 			return false
 		}
 		ids[n.ID] = true
-		return n.Kind == "terminal" || n.Kind == "files" || n.Kind == "ai" || n.Kind == "editor"
+		if _, ok := toolKind(n.Kind); ok {
+			return n.Host == ""
+		}
+		return n.Host != "" && (n.Kind == "terminal" || n.Kind == "files" || n.Kind == "ai" || n.Kind == "editor")
 	}
 	for _, t := range s.Tabs {
 		if !valid(t.Root, 0) {
@@ -170,6 +173,22 @@ func (a *App) restoreLayoutNode(n *nodeSnap, mapping map[int]*layout.Node, links
 			axis = layout.Column
 		}
 		return &layout.Node{ID: a.ws.FreshID(), Axis: axis, Ratio: n.Ratio, A: left, B: right}
+	}
+	if k, ok := toolKind(n.Kind); ok {
+		// One of each in the whole workspace, as the rail opens them.
+		if a.toolPane(k) != nil {
+			*skipped = true
+			return nil
+		}
+		if k == layout.Logs {
+			a.listLogs()
+		}
+		a.nextConn++
+		c := &conn{id: a.nextConn, kind: k}
+		a.conns[c.id] = c
+		p := &layout.Node{ID: a.ws.FreshID(), Item: c.item()}
+		mapping[n.ID] = p
+		return p
 	}
 	if n.Kind == "editor" || isTemp(n.Host) || isLocal(n.Host) && !a.layoutShellExists(n.Host) || (n.Kind == "ai" || n.Kind == "files") && seen[n.Kind] {
 		*skipped = true
@@ -202,6 +221,17 @@ func (a *App) restoreLayoutNode(n *nodeSnap, mapping map[int]*layout.Node, links
 	mapping[n.ID] = p
 	return p
 }
+
+// toolKind is the tool pane kind saved as s.
+func toolKind(s string) (layout.Kind, bool) {
+	for k := layout.Broadcast; k <= layout.Tmux; k++ {
+		if isTool(k) && k.String() == s {
+			return k, true
+		}
+	}
+	return 0, false
+}
+
 func (a *App) layoutShellExists(id string) bool {
 	for _, sh := range a.shells {
 		if localID+sh.ID == id {

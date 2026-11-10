@@ -29,6 +29,10 @@ type Settings struct {
 	CloseBehavior string `json:"closeBehavior"`
 	// RememberLayout restores window geometry and the workspace on next launch.
 	RememberLayout bool `json:"rememberLayout"`
+	// ToolPanes is how the right rail opens its tools: "", the default,
+	// beside the ones already open, or ToolPanesTabs in the place of the
+	// one open in the tab, one at a time.
+	ToolPanes string `json:"toolPanes,omitempty"`
 	// TrayIcon selects the monochrome or colorful application logo.
 	TrayIcon string `json:"trayIcon"`
 	// TrayClick selects the popup or the main window on a tray click.
@@ -77,6 +81,11 @@ type Settings struct {
 	// TerminalStripe paints every other terminal row a step from the
 	// background. On by default; false is stored so turning it off lasts.
 	TerminalStripe bool `json:"terminalStripe"`
+	// TerminalLineNumbers and TerminalTimestamps show, left of the
+	// terminal's lines, their number and the time output reached them;
+	// both off by default.
+	TerminalLineNumbers bool `json:"terminalLineNumbers,omitempty"`
+	TerminalTimestamps  bool `json:"terminalTimestamps,omitempty"`
 	// TerminalFont is the terminal's font family, "" for the system's
 	// monospaced font.
 	TerminalFont string `json:"terminalFont,omitempty"`
@@ -119,6 +128,9 @@ type Settings struct {
 	// FilesEdge is where a files pane opened from a terminal goes:
 	// FilesRight, the default, or FilesBelow.
 	FilesEdge string `json:"filesEdge,omitempty"`
+	// FilesZoom is how large the rows of files panes show, in percent,
+	// one of FilesZooms; 0 is 100.
+	FilesZoom int `json:"filesZoom,omitempty"`
 	// EditorTreeWidth is the width, in DIPs, of the folders beside the
 	// text in an editor window, 140 to 600; EditorTreeHidden hides them.
 	EditorTreeWidth  float32 `json:"editorTreeWidth,omitempty"`
@@ -607,6 +619,10 @@ const (
 	FilesBelow = "below"
 )
 
+// ToolPanesTabs opens a rail tool in the place of the one already open in
+// the tab, rather than beside it.
+const ToolPanesTabs = "tabs"
+
 // MCPPortDefault is the MCP endpoint's port unless the user picks one.
 const MCPPortDefault = 47320
 
@@ -617,6 +633,18 @@ var UpdateIntervals = []int{1, 2, 6, 12, 24}
 // UIZooms are the interface zooms, in percent, the user can choose
 // besides following the system, smallest first.
 var UIZooms = []int{80, 90, 100, 110, 125, 150, 175, 200}
+
+// FilesZooms are the zooms of files panes' rows, in percent, the user
+// can choose, smallest first.
+var FilesZooms = []int{80, 90, 100, 110, 125, 150, 175, 200}
+
+// FilesScale is FilesZoom as a factor, 1 for 100%.
+func (s Settings) FilesScale() float32 {
+	if s.FilesZoom == 0 {
+		return 1
+	}
+	return float32(s.FilesZoom) / 100
+}
 
 // Languages are the languages SSHYard ships, besides following the system.
 var Languages = []string{"en", "zh-Hans", "zh-Hant", "ko", "ja"}
@@ -751,8 +779,14 @@ func (s *Settings) Normalize() {
 	if s.FilesSplit < 10 || s.FilesSplit > 90 {
 		s.FilesSplit = d.FilesSplit
 	}
+	if s.ToolPanes != ToolPanesTabs {
+		s.ToolPanes = ""
+	}
 	if s.FilesEdge != FilesBelow {
 		s.FilesEdge = FilesRight
+	}
+	if s.FilesZoom == 100 || !slices.Contains(FilesZooms, s.FilesZoom) {
+		s.FilesZoom = 0
 	}
 	if s.EditorTreeWidth < 140 || s.EditorTreeWidth > 600 {
 		s.EditorTreeWidth = d.EditorTreeWidth

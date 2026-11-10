@@ -30,6 +30,7 @@ const (
 type prefPage string
 
 const (
+	prefGeneral     prefPage = "general"
 	prefAppearance  prefPage = "appearance"
 	prefTerminal    prefPage = "terminal"
 	prefMonitoring  prefPage = "monitoring"
@@ -63,6 +64,7 @@ type prefGroup struct {
 func prefGroups(m locales.Messages, tok theme.Tokens) []prefGroup {
 	return []prefGroup{
 		{m.SettingsGroupPreferences(), []prefItem{
+			{prefGeneral, icons.Settings, tok.TextMuted, m.General(), m.GeneralDesc()},
 			{prefAppearance, icons.Appearance, theme.Brand, m.Appearance(), m.AppearanceDesc()},
 			{prefTerminal, icons.Terminal, tok.TintAt(0), m.TerminalSection(), m.TerminalDesc()},
 			{prefMonitoring, icons.Monitor, tok.TintAt(5), m.MonitoringSection(), m.MonitoringDesc()},
@@ -88,7 +90,7 @@ func prefGroups(m locales.Messages, tok theme.Tokens) []prefGroup {
 // chosen.
 func (a *App) prefNow() prefPage {
 	if a.pref == "" {
-		return prefAppearance
+		return prefGeneral
 	}
 	return a.pref
 }
@@ -249,6 +251,8 @@ func (a *App) settingsPage(c *ui.Context, m locales.Messages, tok theme.Tokens) 
 				})
 			})
 			switch cur {
+			case prefGeneral:
+				a.prefGeneral(c, m, tok, &s, &changed)
 			case prefAppearance:
 				a.prefAppearance(c, m, tok, &s, &changed)
 			case prefTerminal:
@@ -275,7 +279,7 @@ func (a *App) settingsPage(c *ui.Context, m locales.Messages, tok theme.Tokens) 
 			case prefShortcuts:
 				a.shortcutsPage(c, m, tok)
 			case prefAbout:
-				a.aboutPage(c, m, tok, &s, &changed)
+				a.aboutPage(c, m, tok)
 			}
 		})
 	})
@@ -307,13 +311,10 @@ func (a *App) themeSwitch(c *ui.Context, m locales.Messages) (theme.Mode, bool) 
 	return theme.Modes[a.themeIdx], true
 }
 
-func (a *App) prefAppearance(c *ui.Context, m locales.Messages, tok theme.Tokens, s *settings.Settings, changed *bool) {
+// prefGeneral is what applies to all of SSHYard rather than to how it
+// looks: the language, the window and the tray, reminders and updates.
+func (a *App) prefGeneral(c *ui.Context, m locales.Messages, tok theme.Tokens, s *settings.Settings, changed *bool) {
 	a.settingsSection(c, tok, nil, ui.Color{}, "", func(g *settingsGroup) {
-		g.row(m.Theme(), "", func() {
-			if md, ok := a.themeSwitch(c, m); ok {
-				s.Theme, *changed = md, true
-			}
-		})
 		g.row(m.Language(), "", func() {
 			opts := []string{m.LanguageAuto()}
 			for _, l := range settings.Languages {
@@ -333,6 +334,27 @@ func (a *App) prefAppearance(c *ui.Context, m locales.Messages, tok theme.Tokens
 				*changed = true
 			}
 		})
+		g.row(m.RememberLayout(), m.RememberLayoutNote(), func() {
+			if formSwitch(c.Key("rememberlayout"), &s.RememberLayout).Label(m.RememberLayout()).Changed() {
+				*changed = true
+			}
+		})
+		g.row(m.ToolPanes(), m.ToolPanesNote(), func() {
+			modes := []string{"", settings.ToolPanesTabs}
+			a.toolPanesChoice = max(slices.Index(modes, s.ToolPanes), 0)
+			if formSegmented(c.Key("toolpanes"), &a.toolPanesChoice, false, m.ToolPanesSplit(), m.ToolPanesTabs()).Label(m.ToolPanes()).Changed() {
+				if a.toolPanesChoice < len(modes) {
+					s.ToolPanes, *changed = modes[a.toolPanesChoice], true
+				}
+			}
+		})
+		g.row(m.RenewalNotify(), m.RenewalNotifyNote(), func() {
+			if formSwitch(c.Key("renewalnotify"), &s.RenewalNotify).Label(m.RenewalNotify()).Changed() {
+				*changed = true
+			}
+		})
+	})
+	a.settingsSection(c, tok, icons.AppWindow, tok.TintAt(4), m.WindowTraySection(), func(g *settingsGroup) {
 		g.row(m.CloseBehavior(), m.CloseBehaviorNote(), func() {
 			cur := m.CloseToTray()
 			if s.CloseBehavior == settings.CloseQuit {
@@ -343,16 +365,6 @@ func (a *App) prefAppearance(c *ui.Context, m locales.Messages, tok theme.Tokens
 				if cur == m.CloseQuit() {
 					s.CloseBehavior = settings.CloseQuit
 				}
-				*changed = true
-			}
-		})
-		g.row(m.RememberLayout(), m.RememberLayoutNote(), func() {
-			if formSwitch(c.Key("rememberlayout"), &s.RememberLayout).Label(m.RememberLayout()).Changed() {
-				*changed = true
-			}
-		})
-		g.row(m.RenewalNotify(), m.RenewalNotifyNote(), func() {
-			if formSwitch(c.Key("renewalnotify"), &s.RenewalNotify).Label(m.RenewalNotify()).Changed() {
 				*changed = true
 			}
 		})
@@ -370,6 +382,17 @@ func (a *App) prefAppearance(c *ui.Context, m locales.Messages, tok theme.Tokens
 			}
 		})
 		a.trayPreferences(c, m, g, s, changed)
+	})
+	a.updatesSection(c, m, tok, s, changed)
+}
+
+func (a *App) prefAppearance(c *ui.Context, m locales.Messages, tok theme.Tokens, s *settings.Settings, changed *bool) {
+	a.settingsSection(c, tok, nil, ui.Color{}, "", func(g *settingsGroup) {
+		g.row(m.Theme(), "", func() {
+			if md, ok := a.themeSwitch(c, m); ok {
+				s.Theme, *changed = md, true
+			}
+		})
 		g.row(m.UiZoom(), m.UiZoomDesc(), func() {
 			opts := []string{m.ZoomSystem()}
 			for _, z := range settings.UIZooms {
@@ -442,6 +465,16 @@ func (a *App) prefTerminal(c *ui.Context, m locales.Messages, tok theme.Tokens, 
 		})
 		g.row(m.TerminalCursorBlink(), m.TerminalCursorBlinkNote(), func() {
 			if formSwitch(c.Key("cursorblink"), &s.TerminalCursorBlink).Label(m.TerminalCursorBlink()).Changed() {
+				*changed = true
+			}
+		})
+		g.row(m.TerminalLineNumbers(), m.TerminalLineNumbersNote(), func() {
+			if formSwitch(c.Key("linenumbers"), &s.TerminalLineNumbers).Label(m.TerminalLineNumbers()).Changed() {
+				*changed = true
+			}
+		})
+		g.row(m.TerminalTimestamps(), m.TerminalTimestampsNote(), func() {
+			if formSwitch(c.Key("timestamps"), &s.TerminalTimestamps).Label(m.TerminalTimestamps()).Changed() {
 				*changed = true
 			}
 		})
@@ -618,6 +651,18 @@ func (a *App) prefFiles(c *ui.Context, m locales.Messages, tok theme.Tokens, s *
 				}
 			}
 		})
+		g.row(m.FilesZoom(), m.FilesZoomNote(), func() {
+			opts := make([]string, len(settings.FilesZooms))
+			for i, z := range settings.FilesZooms {
+				opts[i] = zoomLabel(m, z)
+			}
+			cur := zoomLabel(m, int(s.FilesScale()*100+0.5))
+			if formSelect(c.Key("fileszoom"), &cur, opts).Label(m.FilesZoom()).Width(180).Changed() {
+				if i := slices.Index(opts, cur); i >= 0 {
+					s.FilesZoom, *changed = settings.FilesZooms[i], true
+				}
+			}
+		})
 	})
 }
 
@@ -764,7 +809,7 @@ func keyCap(c *ui.Context, tok theme.Tokens, s string) {
 	})
 }
 
-func (a *App) aboutPage(c *ui.Context, m locales.Messages, tok theme.Tokens, s *settings.Settings, changed *bool) {
+func (a *App) aboutPage(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 	v := a.p.Version
 	if v == "" {
 		v = "dev"
@@ -783,6 +828,39 @@ func (a *App) aboutPage(c *ui.Context, m locales.Messages, tok theme.Tokens, s *
 			}
 		})
 	})
+	a.settingsSection(c, tok, icons.Info, tok.TintAt(7), m.AboutInfo(), func(g *settingsGroup) {
+		value := func(s string) func() {
+			return func() { ui.Text(c, s).FontSize(theme.Body).TextColor(tok.TextMuted).SingleLine() }
+		}
+		g.row(m.AboutVersion(), "", value(v))
+		g.row(m.AboutPlatform(), "", value(runtime.GOOS+" / "+runtime.GOARCH))
+		dir := a.p.DataDir
+		note := dir
+		if dir == "" {
+			note = m.AboutDataInMemory()
+		}
+		g.row(m.AboutDataFolder(), note, func() {
+			if dir != "" && a.p.OpenPath != nil && iconButton(c, "datadir", icons.OpenFile, m.OpenDataFolder()) {
+				if err := a.p.OpenPath(dir); err != nil {
+					c.AddToast(ui.Toast{Title: m.ErrGeneric(err.Error()), Type: "error"})
+				}
+			}
+		})
+		g.row(m.AboutSecrets(), "", value(m.SecretsKeychain()))
+	})
+	a.settingsSection(c, tok, icons.OpenWith, tok.TintAt(2), m.AboutLinks(), func(g *settingsGroup) {
+		link := func(key, url string) func() {
+			return func() { ui.Link(c.Key(key), url[len("https://"):], url).FontSize(theme.Body) }
+		}
+		g.row(m.SourceCode(), "", link("repo", repoURL))
+		g.row(m.License(), "", link("license", repoURL+"/blob/main/LICENSE"))
+		g.row(m.ReportIssue(), "", link("issues", repoURL+"/issues"))
+	})
+}
+
+// updatesSection is how SSHYard looks for updates: on its own or not, how
+// often and through which proxy, with the update found.
+func (a *App) updatesSection(c *ui.Context, m locales.Messages, tok theme.Tokens, s *settings.Settings, changed *bool) {
 	a.settingsSection(c, tok, icons.Download, tok.TintAt(1), m.Updates(), func(g *settingsGroup) {
 		g.row(m.CheckAutomatically(), "", func() {
 			a.updateCheck = s.CheckUpdates
@@ -830,33 +908,5 @@ func (a *App) aboutPage(c *ui.Context, m locales.Messages, tok theme.Tokens, s *
 				}
 			})
 		}
-	})
-	a.settingsSection(c, tok, icons.Info, tok.TintAt(7), m.AboutInfo(), func(g *settingsGroup) {
-		value := func(s string) func() {
-			return func() { ui.Text(c, s).FontSize(theme.Body).TextColor(tok.TextMuted).SingleLine() }
-		}
-		g.row(m.AboutVersion(), "", value(v))
-		g.row(m.AboutPlatform(), "", value(runtime.GOOS+" / "+runtime.GOARCH))
-		dir := a.p.DataDir
-		note := dir
-		if dir == "" {
-			note = m.AboutDataInMemory()
-		}
-		g.row(m.AboutDataFolder(), note, func() {
-			if dir != "" && a.p.OpenPath != nil && iconButton(c, "datadir", icons.OpenFile, m.OpenDataFolder()) {
-				if err := a.p.OpenPath(dir); err != nil {
-					c.AddToast(ui.Toast{Title: m.ErrGeneric(err.Error()), Type: "error"})
-				}
-			}
-		})
-		g.row(m.AboutSecrets(), "", value(m.SecretsKeychain()))
-	})
-	a.settingsSection(c, tok, icons.OpenWith, tok.TintAt(2), m.AboutLinks(), func(g *settingsGroup) {
-		link := func(key, url string) func() {
-			return func() { ui.Link(c.Key(key), url[len("https://"):], url).FontSize(theme.Body) }
-		}
-		g.row(m.SourceCode(), "", link("repo", repoURL))
-		g.row(m.License(), "", link("license", repoURL+"/blob/main/LICENSE"))
-		g.row(m.ReportIssue(), "", link("issues", repoURL+"/issues"))
 	})
 }

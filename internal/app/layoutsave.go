@@ -17,7 +17,7 @@ import (
 
 // Version 1 keeps workspace structure only, never session content or directories.
 // The "panels" and "stackPct" an older build saved are ignored: those panels
-// are tool panes now, which are not saved.
+// are tool panes now, saved as panes on no host.
 type layoutSnap struct {
 	Version  int             `json:"version"`
 	Active   int             `json:"active"`
@@ -94,8 +94,11 @@ func (a *App) snapNode(n *layout.Node) *nodeSnap {
 		return &nodeSnap{Split: split, Ratio: n.Ratio, A: left, B: right}
 	}
 	c := a.conns[n.Item.ID]
-	if c == nil || isTemp(c.host.ID) || c.kind == layout.Editor || isTool(c.kind) {
+	if c == nil || isTemp(c.host.ID) || c.kind == layout.Editor {
 		return nil
+	}
+	if isTool(c.kind) {
+		return &nodeSnap{ID: n.ID, Kind: c.kind.String()}
 	}
 	host := c.host.ID
 	if host == localID {

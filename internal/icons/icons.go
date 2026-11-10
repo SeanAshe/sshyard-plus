@@ -156,6 +156,7 @@ var (
 	Compose     = Tmux // a Compose project; the glyph is the stack
 	Detach      = load("logout-box-r-line")
 	OpenInTab   = load("window-line")
+	AppWindow   = OpenInTab
 	Halt        = load("stop-line")
 	Logs        = load("file-list-3-line")
 	Backup      = load("safe-2-line")

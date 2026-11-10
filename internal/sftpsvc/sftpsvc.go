@@ -65,6 +65,8 @@ type Client struct {
 	// scp is set when the server has no SFTP and its shell and scp
 	// stand in (scpfs).
 	scp bool
+	// sudo is set when each channel runs the SFTP server through sudo.
+	sudo *sudoAuth
 }
 
 // SCP reports a server without SFTP, whose files move with scp.

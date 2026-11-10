@@ -18,10 +18,10 @@ func fieldIs(err error, field, reason string) bool {
 func TestStreamHostNormalize(t *testing.T) {
 	tn := Host{Protocol: ProtoTelnet, Address: " switch.lan ", User: "admin", JumpChain: []string{"x"}, CwdFollow: true,
 		Metrics: MetricsOn, AskPassphrase: true, Serial: &SerialLine{Device: "COM1"}, AIPolicy: AIPolicy{Mode: "full"},
-		TerminalDir: "/srv", RemoteDir: "/srv", LocalDir: "/tmp", Tmux: "main"}
+		TerminalDir: "/srv", RemoteDir: "/srv", LocalDir: "/tmp", Tmux: "main", SFTPSudo: true}
 	tn.Normalize()
 	if tn.Port != 23 || tn.Auth != AuthNone || tn.JumpChain != nil || tn.CwdFollow || tn.Metrics != MetricsFollow ||
-		tn.AskPassphrase || tn.Serial != nil || tn.AIPolicy.Mode != "" || tn.TerminalDir != "" || tn.RemoteDir != "" || tn.LocalDir != "" || tn.Tmux != "" {
+		tn.AskPassphrase || tn.Serial != nil || tn.AIPolicy.Mode != "" || tn.TerminalDir != "" || tn.RemoteDir != "" || tn.LocalDir != "" || tn.Tmux != "" || tn.SFTPSudo {
 		t.Fatalf("telnet %+v", tn)
 	}
 	if err := tn.Validate(); err != nil {

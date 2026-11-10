@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -68,6 +69,10 @@ type termView struct {
 	// hlFullScreen those of a full-screen program.
 	hl                       *highlight.Highlighter
 	hlOverride, hlFullScreen bool
+	// lineNumbers and timestamps show, in a gutter left of the grid,
+	// each line's number and the time output reached it
+	// (settings.TerminalLineNumbers, TerminalTimestamps).
+	lineNumbers, timestamps bool
 
 	// font
 	fontSize            float32
@@ -110,6 +115,7 @@ type termView struct {
 	colOf  []int
 	placed []ui.Glyph
 	marks  []uint8 // the matches on a row, as rowMatches marks them
+	label  []byte  // a gutter label being written
 
 	// find
 	query      string
@@ -181,10 +187,50 @@ func (v *termView) gridSize(w, h float32) (int, int) {
 	if v.cellW == 0 {
 		return 80, 24
 	}
-	cols := int((w - 2*termPad) / v.cellW)
+	cols := int((w - 2*termPad - v.gutterW()) / v.cellW)
 	rows := int((h - 2*termPad) / v.cellH)
 	return max(cols, 2), max(rows, 1)
 }
+
+// gutterDigits is the least room line numbers take, so that the grid
+// does not narrow, and the program get a resize, each time they grow.
+const gutterDigits = 5
+
+// timeLayout is how the gutter shows the time output reached a line.
+const timeLayout = "15:04:05"
+
+// gutterCells is how many cells the gutter left of the grid takes: the
+// time and the line number, and a cell each side of the line between it
+// and the grid; 0 when it shows neither.
+func (v *termView) gutterCells() int {
+	n := 0
+	if v.timestamps {
+		n += len(timeLayout)
+	}
+	if v.lineNumbers {
+		if n > 0 {
+			n++
+		}
+		n += v.numberCells()
+	}
+	if n > 0 {
+		n += 2
+	}
+	return n
+}
+
+// numberCells is how many cells the line numbers take: room for the
+// newest line's, as last drawn.
+func (v *termView) numberCells() int {
+	n, d := v.snap.First+v.snap.Offset+v.snap.Rows, 1
+	for ; n >= 10; n /= 10 {
+		d++
+	}
+	return max(d, gutterDigits)
+}
+
+// gutterW is the gutter's width in DIPs.
+func (v *termView) gutterW() float32 { return float32(v.gutterCells()) * v.cellW }
 
 // The scrollbar is drawn in the right padding: thin at rest, wide under
 // the pointer, and its thumb never shorter than barMinThumb.
@@ -242,7 +288,7 @@ func (v *termView) cellAt(x, y float32) vt.Pos {
 	if v.cellW == 0 {
 		return vt.Pos{Line: v.first}
 	}
-	col := int(math.Floor(float64((x - termPad) / v.cellW)))
+	col := int(math.Floor(float64((x - termPad - v.gutterW()) / v.cellW)))
 	row := int(math.Floor(float64((y - termPad) / v.cellH)))
 	col = max(0, min(col, v.cols-1))
 	row = max(0, min(row, v.rows-1))
@@ -387,6 +433,7 @@ func (v *termView) rowMatches(line, cols int) []uint8 {
 // composition.
 func (v *termView) paint(p *ui.Painter, r ui.Rect, pal *theme.Terminal, focused bool) {
 	v.metrics(p.Scale())
+	gutter := v.gutterCells()
 	cols, rows := v.gridSize(r.W, r.H)
 	if !v.sized || cols != v.cols || rows != v.rows {
 		if v.sized && cols != v.cols {
@@ -408,7 +455,8 @@ func (v *termView) paint(p *ui.Painter, r ui.Rect, pal *theme.Terminal, focused 
 		p.Fill(r, pal.Background, 0)
 	}
 	s := v.scale
-	ox := float32(math.Round(float64((r.X+termPad)*s))) / s
+	gx := float32(math.Round(float64((r.X+termPad)*s))) / s
+	ox := float32(math.Round(float64((r.X+termPad+float32(gutter)*v.cellW)*s))) / s
 	oy := float32(math.Round(float64((r.Y+termPad)*s))) / s
 	cw, ch := v.cellW, v.cellH
 	if v.stripe && !v.clear {
@@ -419,6 +467,9 @@ func (v *termView) paint(p *ui.Painter, r ui.Rect, pal *theme.Terminal, focused 
 			}
 			p.Fill(ui.Rect{X: r.X, Y: oy + float32(y)*ch, W: r.W, H: ch}, band, 0)
 		}
+	}
+	if gutter > 0 {
+		v.paintGutter(p, r, snap, gx, oy, gutter, pal)
 	}
 
 	for y, line := range snap.Lines {
@@ -582,6 +633,47 @@ func (v *termView) paint(p *ui.Painter, r ui.Rect, pal *theme.Terminal, focused 
 	}
 }
 
+// paintGutter draws, left of each row of the grid, the time output
+// reached it and its line number, in cells columns from x, and a line
+// between them and the grid. A row output never reached has neither,
+// unless it is above the cursor: those are numbered.
+func (v *termView) paintGutter(p *ui.Painter, r ui.Rect, snap *vt.Snapshot, x, y float32, cells int, pal *theme.Terminal) {
+	cw, ch, s := v.cellW, v.cellH, v.scale
+	numAt := 0
+	if v.timestamps {
+		numAt = len(timeLayout) + 1
+	}
+	numEnd := cells - 2
+	cursor := snap.First + snap.CursorY
+	for row, line := range snap.Lines {
+		ry := y + float32(row)*ch + v.base
+		if v.timestamps && line.Time != 0 {
+			v.label = time.Unix(line.Time, 0).AppendFormat(v.label[:0], timeLayout)
+			v.gutterText(p, v.label, x, ry, pal.Foreground.Alpha(0.4))
+		}
+		if abs := snap.First + row; v.lineNumbers && (line.Time != 0 || abs <= cursor) {
+			v.label = strconv.AppendInt(v.label[:0], int64(abs+1), 10)
+			v.gutterText(p, v.label, x+float32(max(numEnd-len(v.label), numAt))*cw, ry, pal.Foreground.Alpha(0.55))
+		}
+	}
+	lx := float32(math.Round(float64((x+float32(cells-1)*cw)*s))) / s
+	p.Fill(ui.Rect{X: lx, Y: r.Y, W: max(1/s, 1), H: r.H}, pal.Foreground.Alpha(0.12), 0)
+}
+
+// gutterText draws text, ASCII, one character a cell from x, its
+// baseline at y.
+func (v *termView) gutterText(p *ui.Painter, text []byte, x, y float32, c ui.Color) {
+	placed := v.placed[:0]
+	for i := range text {
+		for _, g := range v.shapeBytes(text[i:i+1], 0) {
+			g.X = float32(i)*v.cellW + max((v.cellW-g.Advance)/2, 0)
+			placed = append(placed, g)
+		}
+	}
+	v.placed = placed
+	p.Glyphs(placed, x, y, c)
+}
+
 // placeGlyphs puts the glyphs g of a run of cells in their cells:
 // colOf is the column of each rune of the run. Each cluster is centered
 // in its cell(s), as monospace fallback fonts are often narrower or
@@ -614,7 +706,7 @@ func placeGlyphs(placed, g []ui.Glyph, colOf []int, cells []vt.Cell, cw float32)
 // method's window goes.
 func (v *termView) caret() ui.Rect {
 	x, y := v.target.Terminal().Cursor(v.offset)
-	return ui.Rect{X: termPad + float32(x)*v.cellW, Y: termPad + float32(y)*v.cellH, W: max(v.cellW, 1), H: max(v.cellH, 1)}
+	return ui.Rect{X: termPad + v.gutterW() + float32(x)*v.cellW, Y: termPad + float32(y)*v.cellH, W: max(v.cellW, 1), H: max(v.cellH, 1)}
 }
 
 func (v *termView) send(b []byte) {

@@ -10,7 +10,7 @@ import (
 
 func TestCloseBehaviorSettings(t *testing.T) {
 	a, tt := newTestApp(t)
-	a.openSettings(prefAppearance)
+	a.openSettings(prefGeneral)
 	tt.Frame()
 	m := locales.In("en")
 	for _, choice := range []struct{ label, behavior string }{{m.CloseQuit(), settings.CloseQuit}, {m.CloseToTray(), settings.CloseToTray}} {

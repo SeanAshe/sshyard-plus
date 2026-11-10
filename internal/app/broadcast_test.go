@@ -8,6 +8,7 @@ import (
 	"github.com/Licoy/sshyard/internal/assets"
 	"github.com/Licoy/sshyard/internal/layout"
 	"github.com/Licoy/sshyard/internal/session"
+	"github.com/Licoy/sshyard/internal/settings"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -323,12 +324,13 @@ func TestToolPanes(t *testing.T) {
 	if a.focused() != cs[0] {
 		t.Fatalf("focused %v once the tool pane was clicked", a.focused())
 	}
-	// None is saved with the layout, nor takes the focus.
+	// None takes the focus; the layout saves where each is, on no host.
 	a.ToggleTool(layout.Snippets)
 	a.ToggleTool(layout.History)
 	if a.focused() != cs[0] || a.snippetTarget() != cs[0] {
 		t.Fatalf("focused %v once the snippets and history opened", a.focused())
 	}
+	saved := map[string]int{}
 	for _, tb := range a.layoutSnapshot().Tabs {
 		var walk func(n *nodeSnap)
 		walk = func(n *nodeSnap) {
@@ -336,15 +338,77 @@ func TestToolPanes(t *testing.T) {
 				return
 			}
 			if n.Kind == "logs" || n.Kind == "broadcast" || n.Kind == "snippets" || n.Kind == "history" {
-				t.Fatalf("tool pane saved: %+v", n)
+				if n.Host != "" {
+					t.Fatalf("tool pane saved with a host: %+v", n)
+				}
+				saved[n.Kind]++
 			}
 			walk(n.A)
 			walk(n.B)
 		}
 		walk(tb.Root)
 	}
+	if saved["logs"] != 1 || saved["snippets"] != 1 || saved["history"] != 1 {
+		t.Fatalf("tool panes saved %v, want logs, snippets and history once", saved)
+	}
 	a.ToggleTool(layout.Logs)
 	if a.toolPane(layout.Logs) != nil {
 		t.Fatal("the logs pane stayed open")
+	}
+}
+
+// TestToolPanesAsTabs: with the rail's panes as tabs, a tool, files or
+// AI pane the rail opens, or brings from another tab, takes the place of
+// the one the tab shows, which closes; the focus stays on the session.
+func TestToolPanesAsTabs(t *testing.T) {
+	a, _, cs, _ := broadcastPair(t)
+	s := a.Settings()
+	s.ToolPanes = settings.ToolPanesTabs
+	if err := a.ApplySettings(s); err != nil {
+		t.Fatal(err)
+	}
+	a.ToggleTool(layout.Snippets)
+	tab := a.ws.ActiveTab()
+	panes := len(tab.Panes())
+	a.ToggleTool(layout.History)
+	if a.toolPane(layout.Snippets) != nil || tab.Count(layout.History) != 1 || len(tab.Panes()) != panes {
+		t.Fatalf("history did not replace the snippets: %v", tab.Items())
+	}
+	if a.focused() != cs[2] {
+		t.Fatalf("focused %v, want the terminal", a.focused())
+	}
+	// From another tab, the logs come in the place of its history.
+	a.ws.Activate(cs[2].id)
+	a.ToggleTool(layout.Logs)
+	logs := a.toolPane(layout.Logs)
+	a.ws.Activate(cs[0].id)
+	other := a.ws.ActiveTab()
+	a.ToggleTool(layout.Snippets)
+	n := len(other.Panes())
+	a.ToggleTool(layout.Logs)
+	if lt, _ := a.ws.Locate(logs.id); lt != other || a.toolPane(layout.Snippets) != nil || len(other.Panes()) != n {
+		t.Fatalf("the logs did not replace the snippets: %v", other.Items())
+	}
+	if a.toolPane(layout.Logs) != logs || a.focused() != cs[0] {
+		t.Fatalf("logs %v, focused %v", a.toolPane(layout.Logs), a.focused())
+	}
+	// The tool the tab shows still closes on its own.
+	a.ToggleTool(layout.Logs)
+	if a.toolPane(layout.Logs) != nil || len(other.Panes()) != n-1 {
+		t.Fatalf("the logs stayed open: %v", other.Items())
+	}
+	// The AI pane is one of the rail's as the tools are.
+	a.ToggleTool(layout.Tmux)
+	n = len(other.Panes())
+	a.ToggleAI()
+	if a.toolPane(layout.Tmux) != nil || other.Count(layout.AI) != 1 || len(other.Panes()) != n {
+		t.Fatalf("the assistant did not replace tmux: %v", other.Items())
+	}
+	a.ToggleTool(layout.Monitor)
+	if other.Count(layout.AI) != 0 || other.Count(layout.Monitor) != 1 || len(other.Panes()) != n {
+		t.Fatalf("the monitor did not replace the assistant: %v", other.Items())
+	}
+	if a.focused() != cs[0] {
+		t.Fatalf("focused %v, want the terminal", a.focused())
 	}
 }

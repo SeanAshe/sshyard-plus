@@ -91,5 +91,5 @@ func compact(l Line) Line {
 			n--
 		}
 	}
-	return Line{Cells: append([]Cell(nil), l.Cells[:n]...), Wrapped: l.Wrapped, widePad: l.widePad}
+	return Line{Cells: append([]Cell(nil), l.Cells[:n]...), Wrapped: l.Wrapped, widePad: l.widePad, Time: l.Time}
 }

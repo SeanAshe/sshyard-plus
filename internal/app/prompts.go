@@ -460,6 +460,7 @@ func (a *App) TrustHostKey() error {
 
 func (a *App) promptsView(c *ui.Context, m locales.Messages) {
 	a.checkFailures(m)
+	a.sudoPromptView(c, m)
 	if p := a.prompt; p != nil {
 		title := m.PasswordPromptTitle(a.pv(p.host.Target()))
 		switch {

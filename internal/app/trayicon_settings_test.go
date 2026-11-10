@@ -16,7 +16,7 @@ func TestTrayIconSettings(t *testing.T) {
 	a, tt := newTestApp(t)
 	var styles []string
 	a.p.SetTrayIcon = func(style string) error { styles = append(styles, style); return nil }
-	a.openSettings(prefAppearance)
+	a.openSettings(prefGeneral)
 	tt.Frame()
 	m := locales.In("en")
 	for _, choice := range []struct{ label, style string }{{m.TrayIconMono(), settings.TrayIconMono}, {m.TrayIconColor(), settings.TrayIconColor}} {

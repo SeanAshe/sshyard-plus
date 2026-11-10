@@ -110,6 +110,7 @@ func (h *Host) normalizeStream() {
 	h.JumpChain = nil
 	h.CwdFollow = false
 	h.TerminalDir, h.RemoteDir, h.LocalDir, h.Tmux = "", "", "", ""
+	h.SFTPSudo = false
 	h.Metrics = MetricsFollow
 	h.AIPolicy = AIPolicy{}
 	if h.Protocol == ProtoSerial {

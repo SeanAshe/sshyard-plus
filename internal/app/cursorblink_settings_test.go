@@ -18,7 +18,7 @@ func TestTerminalCursorBlinkSettings(t *testing.T) {
 	}
 	tt.Frame()
 	m := locales.In("en")
-	scrollToCursorChoice(t, tt, m.CursorBlock())
+	scrollToSetting(t, tt, m.CursorBlock())
 	for _, on := range []bool{false, true} {
 		r := cursorBlinkSwitchBounds(t, tt, m)
 		tt.ClickAt(r.X+r.W/2, r.Y+r.H/2)

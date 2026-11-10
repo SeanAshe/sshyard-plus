@@ -20,7 +20,7 @@ func TestTerminalCursorStyleSettings(t *testing.T) {
 	codes := []string{settings.CursorBlock, settings.CursorBar, settings.CursorUnderline}
 	for _, next := range []int{1, 2, 0} {
 		current := names[slices.Index(codes, a.Settings().TerminalCursorStyle)]
-		scrollToCursorChoice(t, tt, current)
+		scrollToSetting(t, tt, current)
 		mustClick(t, tt, current)
 		tt.Frame()
 		mustClick(t, tt, names[next])
@@ -35,9 +35,9 @@ func TestTerminalCursorStyleSettings(t *testing.T) {
 	}
 }
 
-// scrollToCursorChoice scrolls the settings so the control labelled label,
+// scrollToSetting scrolls the settings so the control labelled label,
 // and the popup it opens, sit inside the 1200 x 760 window for clicking.
-func scrollToCursorChoice(t *testing.T, tt *ui.Tester, label string) {
+func scrollToSetting(t *testing.T, tt *ui.Tester, label string) {
 	t.Helper()
 	r := mustFind(t, tt, label)
 	if r.Y < 160 || r.Y+r.H > 560 {

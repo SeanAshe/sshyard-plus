@@ -87,6 +87,7 @@ func (t *Terminal) print(r rune) {
 	if t.cols < 2 {
 		w = 1
 	}
+	t.stamp()
 	line := ls[t.cur.y].Cells
 	if t.modes.Insert {
 		copy(line[t.cur.x+w:], line[t.cur.x:])
@@ -221,6 +222,8 @@ func (t *Terminal) tab(n int) {
 // index moves the cursor down a line, scrolling at the bottom margin.
 func (t *Terminal) index() {
 	t.leaveLine()
+	// An empty line is stamped as it is left: printing stamps the others.
+	t.stamp()
 	t.cur.wrapPending = false
 	if t.cur.y == t.bot {
 		t.scrollUp(1)

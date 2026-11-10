@@ -63,10 +63,16 @@ type paletteSetting struct {
 
 // paletteSettings are the settings the palette finds beside the pages.
 var paletteSettings = []paletteSetting{
+	{prefGeneral, locales.Messages.Language},
+	{prefGeneral, locales.Messages.RememberLayout},
+	{prefGeneral, locales.Messages.RenewalNotify},
+	{prefGeneral, locales.Messages.CloseBehavior},
+	{prefGeneral, locales.Messages.TrayIconStyle},
+	{prefGeneral, locales.Messages.TrayClick},
+	{prefGeneral, locales.Messages.CheckAutomatically},
+	{prefGeneral, locales.Messages.UpdateInterval},
 	{prefAppearance, locales.Messages.Theme},
-	{prefAppearance, locales.Messages.Language},
-	{prefAppearance, locales.Messages.CloseBehavior},
-	{prefAppearance, locales.Messages.TrayIconStyle},
+	{prefAppearance, locales.Messages.UiZoom},
 	{prefAppearance, locales.Messages.MaterialChrome},
 	{prefAppearance, locales.Messages.MaterialContent},
 	{prefAppearance, locales.Messages.InterfaceFont},
@@ -85,6 +91,7 @@ var paletteSettings = []paletteSetting{
 	{prefMonitoring, locales.Messages.MetricsMount},
 	{prefFiles, locales.Messages.TransferConcurrency},
 	{prefFiles, locales.Messages.OpenConfirmMB},
+	{prefFiles, locales.Messages.FilesZoom},
 	{prefAI, locales.Messages.AiContextLines},
 	{prefAI, locales.Messages.AiAuditDays},
 	{prefAI, locales.Messages.AiRedact},
@@ -102,8 +109,6 @@ var paletteSettings = []paletteSetting{
 	{prefBackup, locales.Messages.RestoreBackup},
 	{prefBackup, locales.Messages.DefaultBackupPassword},
 	{prefBackup, locales.Messages.CloudBackupSection},
-	{prefAbout, locales.Messages.CheckAutomatically},
-	{prefAbout, locales.Messages.UpdateInterval},
 	{prefAbout, locales.Messages.AboutDataFolder},
 	{prefAbout, locales.Messages.ReportIssue},
 }

@@ -42,7 +42,7 @@ Global rules for anyone (human or agent) changing SSHYard. Read this before you 
 
 - Unless a task explicitly says otherwise, every window the right rail opens (system monitor, process usage, host details, Docker, tmux, snippets, command history, broadcast, session logs and any new one) is a workspace pane, like the files pane: never a fixed column, drawer or stacked panel beside the panes.
 - Such a tool is a `layout.Kind` listed in `isTool` (`internal/app/toolpane.go`), named in `nameTools`, with icons in `kindIcon`, and drawn by `toolPaneView`. Its header drags it onto any pane's edge or another tab, and split dividers resize it. The header holds its name, its own actions and the close button; the body has no title bar of its own.
-- The rail toggles it with `ToggleTool` and lights it with `toolHere`; code that must only show it (a notification, a link) uses `ShowTool`. There is one of each per workspace: toggling it from another tab brings it beside the focused pane. It never keeps the tab's focus, so it works on `a.focused()`, and it is not saved with the layout.
+- The rail toggles it with `ToggleTool` and lights it with `toolHere`; code that must only show it (a notification, a link) uses `ShowTool`. There is one of each per workspace: toggling it from another tab brings it beside the focused pane. It never keeps the tab's focus, so it works on `a.focused()`. The layout saves where it is (a pane on no host, one of each), never what it shows.
 
 ## Design system
 

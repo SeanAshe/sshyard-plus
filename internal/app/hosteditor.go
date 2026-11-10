@@ -58,6 +58,8 @@ type hostForm struct {
 	// sessionLog logs the host's terminals as they connect
 	// (Host.SessionLog)
 	sessionLog bool
+	// sftpSudo runs the host's SFTP through sudo (Host.SFTPSudo)
+	sftpSudo bool
 	// osc52 is the override's label once Advanced is open; osc52Code is
 	// the saved policy ("", allow, ask, deny), so a save before that
 	// keeps it. advOpen shows Advanced.
@@ -144,6 +146,7 @@ func (a *App) openEditor(h *assets.Host) {
 		f.termDir, f.remoteDir, f.localDir = h.TerminalDir, h.RemoteDir, h.LocalDir
 		f.tmux = h.Tmux
 		f.sessionLog = h.SessionLog
+		f.sftpSudo = h.SFTPSudo
 		if e := vt.OutputEncoding(h.Encoding); slices.Contains(vt.OutputEncodings(), e) {
 			f.encoding = e
 		}
@@ -278,6 +281,7 @@ func (a *App) SaveForm(m locales.Messages) bool {
 	h.Tmux = strings.TrimSpace(f.tmux)
 	h.Encoding = string(f.encoding)
 	h.SessionLog = f.sessionLog
+	h.SFTPSudo = f.sftpSudo
 	if h.SSH() && h.Tmux != "" && !session.TmuxNameOK(h.Tmux) {
 		f.err = m.TmuxNameInvalid()
 		return false
@@ -467,6 +471,7 @@ func (a *App) editorView(c *ui.Context, m locales.Messages) {
 									a.dirFields(c, m, tok, f)
 								})
 							})
+							sftpSudoField(c, m, tok, f)
 							ui.Field(c, m.TmuxAutoAttach(), func() {
 								ui.Column(c).Gap(4).FillWidth().Children(func() {
 									formTextInput(c.Key("f:tmux"), &f.tmux).Placeholder(m.TmuxAutoAttachPlaceholder()).Label(m.TmuxAutoAttach()).FillWidth()
@@ -653,6 +658,17 @@ func encodingField(c *ui.Context, m locales.Messages, tok theme.Tokens, f *hostF
 				}
 			}
 			ui.Text(c, m.TerminalEncodingHint()).FontSize(theme.Caption).TextColor(tok.TextMuted)
+		})
+	})
+}
+
+// sftpSudoField is whether the host's files panes open the files as
+// root, through sudo.
+func sftpSudoField(c *ui.Context, m locales.Messages, tok theme.Tokens, f *hostForm) {
+	ui.Field(c, m.SftpSudo(), func() {
+		ui.Column(c).Gap(4).FillWidth().Children(func() {
+			formCheckbox(c.Key("f:sudo"), &f.sftpSudo, m.SftpSudoOn())
+			ui.Text(c, m.SftpSudoHint()).FontSize(theme.Caption).TextColor(tok.TextMuted)
 		})
 	})
 }

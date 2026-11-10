@@ -81,6 +81,9 @@ func (c *Client) negotiateOperation(ctx context.Context) (*Client, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if c.sudo != nil {
+		return c.sudoOperation(ctx)
+	}
 	if withoutSFTP(c.conn) {
 		return c.scpOperation()
 	}

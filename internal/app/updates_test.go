@@ -49,7 +49,7 @@ func TestUpdateSettings(t *testing.T) {
 	if !slices.Equal(upd.automatic, []bool{true}) {
 		t.Fatalf("automatic checks %v, want the settings' on", upd.automatic)
 	}
-	a.openSettings(prefAbout)
+	a.openSettings(prefGeneral)
 	tt.Frame()
 	mustClick(t, tt, "6 h")
 	tt.Frame()
@@ -70,14 +70,17 @@ func TestUpdateSettings(t *testing.T) {
 		t.Fatalf("automatic checks %v after turning them off", upd.automatic)
 	}
 
+	a.openSettings(prefAbout)
+	tt.Frame()
 	mustClick(t, tt, "Check for Updates")
 	if upd.checks != 1 || a.page != pageSettings {
 		t.Fatalf("about check: %d checks, page %v", upd.checks, a.page)
 	}
 
-	// A newer version is offered in the about page and the status bar;
+	// A newer version is offered in the general page and the status bar;
 	// each opens the update window with its notes.
 	upd.available = "9.9.9"
+	a.openSettings(prefGeneral)
 	tt.Frame()
 	mustClick(t, tt, "View Update")
 	a.closeSettings()
