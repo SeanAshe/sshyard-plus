@@ -42,6 +42,8 @@ ps) echo '{"ID":"abc123","Names":"web","Image":"nginx:1.27","State":"running","S
     echo '{"ID":"def456","Names":"job","Image":"busybox","State":"exited","Status":"Exited (0) 1 day ago"}';;
 images) echo '{"ID":"sha1","Repository":"nginx","Tag":"1.27","Size":"192MB","CreatedSince":"3 weeks ago"}'
     echo '{"ID":"sha2","Repository":"<none>","Tag":"<none>","Size":"5MB"}';;
+network) echo '{"ID":"net1","Name":"bridge","Driver":"bridge","Scope":"local"}';;
+volume) echo '{"Name":"data","Driver":"local","Scope":"local","Mountpoint":"/var/lib/docker/volumes/data/_data"}';;
 esac`)
 	cmd := exec.Command("sh", "-c", dockerListScript)
 	cmd.Env = env
@@ -53,7 +55,7 @@ esac`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.Version != "27.1.0" || len(d.Containers) != 2 || len(d.Images) != 2 {
+	if d.Version != "27.1.0" || len(d.Containers) != 2 || len(d.Images) != 2 || len(d.Networks) != 1 || len(d.Volumes) != 1 {
 		t.Fatalf("%+v", d)
 	}
 	if c := d.Containers[0]; c.Name != "web" || c.Image != "nginx:1.27" || !c.Running() || c.Ports == "" {
@@ -64,6 +66,36 @@ esac`)
 	}
 	if d.Images[0].Ref() != "nginx:1.27" || d.Images[1].Ref() != "sha2" {
 		t.Errorf("refs %q %q", d.Images[0].Ref(), d.Images[1].Ref())
+	}
+	if d.Images[0].PullRef() != "nginx:1.27" || d.Images[1].PullRef() != "" {
+		t.Errorf("pull %q %q", d.Images[0].PullRef(), d.Images[1].PullRef())
+	}
+	if d.Networks[0].Name != "bridge" || d.Networks[0].Driver != "bridge" || d.Volumes[0].Name != "data" {
+		t.Errorf("net %+v vol %+v", d.Networks[0], d.Volumes[0])
+	}
+}
+
+func TestParseDockerList(t *testing.T) {
+	d, err := ParseDockerList([]byte(`@V 27.1.0
+@D sudo -n docker
+@C
+{"ID":"abc","Names":"web","State":"running"}
+@I
+{"ID":"sha1","Repository":"nginx","Tag":"1.27","Size":"1MB","CreatedSince":"1 day ago"}
+@N
+{"ID":"n1","Name":"bridge","Driver":"bridge","Scope":"local"}
+{"Name":""}
+@U
+{"Name":"pg","Driver":"local","Mountpoint":"/var/lib/docker/volumes/pg/_data"}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.Sudo || d.Version != "27.1.0" || len(d.Containers) != 1 || len(d.Images) != 1 || len(d.Networks) != 1 || len(d.Volumes) != 1 {
+		t.Fatalf("%+v", d)
+	}
+	if _, err := ParseDockerList([]byte("not docker\n")); err == nil {
+		t.Fatal("unreadable output accepted")
 	}
 }
 
@@ -105,6 +137,24 @@ func TestDockerCommand(t *testing.T) {
 	}
 	if !DockerRefOK("registry.example.com:5000/team/app:1.2@sha256:abcd") {
 		t.Error("a full image reference refused")
+	}
+	if !strings.HasSuffix(DockerCommand(DockerPull, "nginx:1.27"), `$D pull "$1"`) {
+		t.Fatal("pull")
+	}
+	if DockerPruneCommand(PruneImages) == "" || !strings.Contains(DockerPruneCommand(PruneNetworks), "$D network prune -f") || !strings.Contains(DockerPruneCommand(PruneVolumes), "$D volume prune -f") {
+		t.Fatal("prune")
+	}
+	if DockerPruneCommand("system prune") != "" {
+		t.Fatal("an unknown prune let through")
+	}
+	if !strings.Contains(DockerInspectCommand(InspectNetwork, "bridge"), `$D network inspect "$1"`) || DockerInspectCommand(InspectVolume, "a b") != "" {
+		t.Fatal("inspect")
+	}
+	if got := ReclaimedSpace("Deleted Images:\n\nTotal reclaimed space: 12.4MB\n"); got != "12.4MB" {
+		t.Fatalf("reclaimed %q", got)
+	}
+	if ReclaimedSpace("nothing") != "" {
+		t.Fatal("reclaimed from nothing")
 	}
 }
 

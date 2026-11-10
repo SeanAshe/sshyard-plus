@@ -151,6 +151,9 @@ var (
 	UsageOn     = load("bar-chart-horizontal-fill")
 	Docker      = load("ship-2-line")
 	DockerOn    = load("ship-2-fill")
+	Prune       = load("filter-3-line")
+	Services    = load("list-settings-line")
+	ServicesOn  = load("list-settings-fill")
 	Tmux        = load("stack-line")
 	TmuxOn      = load("stack-fill")
 	Compose     = Tmux // a Compose project; the glyph is the stack

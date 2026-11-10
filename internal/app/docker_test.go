@@ -50,16 +50,11 @@ func (d *dockerExec) run(ch ssh.Channel, cmd string) int {
 {"ID":"c0ffee000002","Names":"db","Image":"postgres:16","State":"exited","Status":"Exited (0) 3 days ago","Ports":"","RunningFor":"3 days ago"}
 @I
 {"ID":"sha256:5ca1ab1e0000","Repository":"nginx","Tag":"1.27","Size":"187MB","CreatedSince":"3 weeks ago"}
+@N
+{"ID":"net1","Name":"bridge","Driver":"bridge","Scope":"local"}
+@U
+{"Name":"pgdata","Driver":"local","Mountpoint":"/var/lib/docker/volumes/pgdata/_data","Scope":"local"}
 `)
-	case strings.Contains(cmd, "$D compose"):
-		d.mu.Lock()
-		d.actions = append(d.actions, cmd)
-		d.mu.Unlock()
-		if strings.Contains(cmd, "logs --tail") {
-			io.WriteString(ch, "shop is up\n")
-		}
-	case strings.Contains(cmd, "logs --tail"):
-		io.WriteString(ch, "listening on :80\n")
 	case strings.Contains(cmd, "inspect --type container"):
 		io.WriteString(ch, `@J
 [{"Id":"c0ffee000001","Name":"/web","Path":"nginx","Args":["-g","daemon off;"],"State":{"Status":"running","Pid":42},
@@ -70,6 +65,22 @@ func (d *dockerExec) run(ch ssh.Channel, cmd string) int {
 PID USER %CPU %MEM ELAPSED COMMAND
 42 root 0.0 0.1 01:02 nginx: master process nginx -g daemon off;
 `)
+	case strings.Contains(cmd, "network inspect"), strings.Contains(cmd, "volume inspect"):
+		io.WriteString(ch, "[{\"Name\":\"bridge\",\"Driver\":\"bridge\"}]\n")
+	case strings.Contains(cmd, "prune"):
+		d.mu.Lock()
+		d.actions = append(d.actions, cmd)
+		d.mu.Unlock()
+		io.WriteString(ch, "Total reclaimed space: 12MB\n")
+	case strings.Contains(cmd, "$D compose"):
+		d.mu.Lock()
+		d.actions = append(d.actions, cmd)
+		d.mu.Unlock()
+		if strings.Contains(cmd, "logs --tail") {
+			io.WriteString(ch, "shop is up\n")
+		}
+	case strings.Contains(cmd, "logs --tail"):
+		io.WriteString(ch, "listening on :80\n")
 	default:
 		d.mu.Lock()
 		d.actions = append(d.actions, cmd)
@@ -188,7 +199,7 @@ func TestDockerPanel(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if got := menuOf(a); !slices.Equal(got, []string{"Details", "-", "Remove Image"}) {
+	if got := menuOf(a); !slices.Equal(got, []string{"Details", "Pull", "-", "Remove Image"}) {
 		t.Fatalf("image menu %q", got)
 	}
 	if err := chooseMenu(a, tt, "Details"); err != nil {
@@ -210,6 +221,58 @@ func TestDockerPanel(t *testing.T) {
 	tt.Frame()
 	mustClick(t, tt, "Delete")
 	waitFor(t, tt, "rmi", func() bool { return ex.did("rmi", "sha256:5ca1ab1e0000") })
+}
+
+// TestDockerNetVol: a network or a volume opens its inspect on a click,
+// an image can be pulled, and prune asks before it removes unused objects.
+func TestDockerNetVol(t *testing.T) {
+	ex := &dockerExec{}
+	srv := startMetricSrv(t, ex.run)
+	a, tt := newTestApp(t)
+	tt.SetSize(1400, 900)
+	connected(t, a, tt, srv)
+	a.ShowTool(layout.Docker)
+	tt.Frame()
+	waitFor(t, tt, "the lists", func() bool { return tt.HasText("Networks (1)") && tt.HasText("Volumes (1)") })
+
+	a.docker.view = 2
+	tt.Frame()
+	if !tt.HasText("bridge") || !tt.HasText("local") {
+		t.Fatalf("networks: %q", tt.Texts())
+	}
+	mustClick(t, tt, "bridge")
+	waitFor(t, tt, "inspect", func() bool { return a.docker.inspectOpen && tt.HasText("\"Driver\": \"bridge\"") })
+	mustClick(t, tt, "Close")
+	tt.Frame()
+
+	a.docker.view = 3
+	tt.Frame()
+	mustClick(t, tt, "pgdata")
+	waitFor(t, tt, "volume inspect", func() bool {
+		return a.docker.inspectOpen && a.docker.inspectKind == session.InspectVolume && a.docker.inspectRef == "pgdata"
+	})
+	mustClick(t, tt, "Close")
+	tt.Frame()
+
+	a.docker.view = 1
+	tt.Frame()
+	if err := tt.RightClick("nginx:1.27"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := chooseMenu(a, tt, "Pull"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, tt, "pull", func() bool { return ex.did("pull", "nginx:1.27") })
+	waitFor(t, tt, "done", func() bool { return a.docker.busy == "" })
+
+	mustClick(t, tt, "Prune images")
+	tt.Frame()
+	if !tt.HasText("Remove all dangling images?") {
+		t.Fatalf("no prune confirmation: %q", tt.Texts())
+	}
+	mustClick(t, tt, "Prune")
+	waitFor(t, tt, "prune", func() bool { return ex.has("image prune -f") })
 }
 
 // composeList is two containers of one project and one on its own.

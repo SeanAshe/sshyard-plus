@@ -49,6 +49,7 @@ func (a *App) railView(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 			a.ToggleFiles()
 		}
 		toggle(layout.Docker, icons.Docker, icons.DockerOn, m.DockerManager())
+		toggle(layout.Services, icons.Services, icons.ServicesOn, m.SystemServices())
 		toggle(layout.Tmux, icons.Tmux, icons.TmuxOn, m.TmuxManager())
 		label = m.OpenAIRight()
 		if ai {
@@ -98,16 +99,18 @@ func (a *App) railView(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 
 // hostToolPanel is the body of tool pane k on the focused session's host:
 // the monitor and the host's details as cards scrolling, the usage,
-// Docker and tmux as tables (the tmux list) that scroll themselves.
+// Docker, services and tmux as tables (the tmux list) that scroll themselves.
 func (a *App) hostToolPanel(c *ui.Context, m locales.Messages, tok theme.Tokens, k layout.Kind) {
 	switch k {
-	case layout.Usage, layout.Docker, layout.Tmux:
+	case layout.Usage, layout.Docker, layout.Services, layout.Tmux:
 		ui.Column(c.Key("panel")).Fill().MinHeight(0).Padding(theme.Space(3)).Gap(theme.Space(2.5)).Children(func() {
 			switch k {
 			case layout.Usage:
 				a.usagePanel(c, m, tok)
 			case layout.Tmux:
 				a.tmuxPanel(c, m, tok)
+			case layout.Services:
+				a.servicesPanel(c, m, tok)
 			default:
 				a.dockerPanel(c, m, tok)
 			}

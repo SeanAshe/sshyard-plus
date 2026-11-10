@@ -142,6 +142,10 @@ func kindIcon(k layout.Kind, on bool) *icons.Icon {
 		return icons.DockerOn
 	case k == layout.Docker:
 		return icons.Docker
+	case k == layout.Services && on:
+		return icons.ServicesOn
+	case k == layout.Services:
+		return icons.Services
 	case k == layout.Tmux && on:
 		return icons.TmuxOn
 	case k == layout.Tmux:

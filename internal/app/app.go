@@ -338,6 +338,7 @@ type App struct {
 	// command history panels read
 	usage       *usageState
 	docker      *dockerState
+	services    *svcState
 	tmux        *tmuxState
 	hist        *historyState
 	selected    string // host chosen in the sidebar

@@ -35,15 +35,20 @@ if ! docker version --format "{{.Server.Version}}" >/dev/null 2>&1; then
 fi
 `
 
-// dockerListScript prints the containers (after @C) and the images
-// (after @I), one JSON object a line, the daemon's version (@V) and the
-// command docker runs as (@D).
+// dockerListScript prints the containers (after @C), the images (after
+// @I), the networks (after @N) and the volumes (after @U), one JSON
+// object a line, the daemon's version (@V) and the command docker runs
+// as (@D).
 const dockerListScript = dockerPrelude + `echo "@V $($D version --format "{{.Server.Version}}" 2>/dev/null)"
 echo "@D $D"
 echo @C
 $D ps -a --no-trunc --format "{{json .}}" || exit 1
 echo @I
-$D images --format "{{json .}}" || exit 1`
+$D images --format "{{json .}}" || exit 1
+echo @N
+$D network ls --format "{{json .}}" || exit 1
+echo @U
+$D volume ls --format "{{json .}}" || exit 1`
 
 // Container is a Docker container as docker ps lists it.
 type Container struct {
@@ -91,6 +96,35 @@ func (i Image) Ref() string {
 	return i.Repository + ":" + i.Tag
 }
 
+// PullRef is the repository:tag a pull asks for. An image with no
+// repository or no tag cannot be pulled.
+func (i Image) PullRef() string {
+	if i.Repository == "" || i.Repository == "<none>" || i.Tag == "" || i.Tag == "<none>" {
+		return ""
+	}
+	ref := i.Repository + ":" + i.Tag
+	if !DockerRefOK(ref) {
+		return ""
+	}
+	return ref
+}
+
+// Network is a Docker network as docker network ls lists it.
+type Network struct {
+	ID     string `json:"ID"`
+	Name   string `json:"Name"`
+	Driver string `json:"Driver"`
+	Scope  string `json:"Scope"`
+}
+
+// Volume is a Docker volume as docker volume ls lists it.
+type Volume struct {
+	Name       string `json:"Name"`
+	Driver     string `json:"Driver"`
+	Scope      string `json:"Scope"`
+	Mountpoint string `json:"Mountpoint"`
+}
+
 // DockerInfo is what DockerList read. Sudo is set when the user reaches
 // the daemon only through sudo.
 type DockerInfo struct {
@@ -98,6 +132,8 @@ type DockerInfo struct {
 	Sudo       bool
 	Containers []Container
 	Images     []Image
+	Networks   []Network
+	Volumes    []Volume
 }
 
 // ParseDockerList reads the output of the list script.
@@ -114,7 +150,7 @@ func ParseDockerList(out []byte) (DockerInfo, error) {
 			d.Version = strings.TrimSpace(strings.TrimPrefix(line, "@V"))
 		case strings.HasPrefix(line, "@D"):
 			d.Sudo = strings.Contains(line, "sudo")
-		case line == "@C" || line == "@I":
+		case line == "@C" || line == "@I" || line == "@N" || line == "@U":
 			part, seen = line, true
 		case line == "" || !strings.HasPrefix(line, "{"):
 		case part == "@C":
@@ -126,6 +162,16 @@ func ParseDockerList(out []byte) (DockerInfo, error) {
 			var i Image
 			if json.Unmarshal([]byte(line), &i) == nil && i.ID != "" {
 				d.Images = append(d.Images, i)
+			}
+		case part == "@N":
+			var n Network
+			if json.Unmarshal([]byte(line), &n) == nil && n.Name != "" {
+				d.Networks = append(d.Networks, n)
+			}
+		case part == "@U":
+			var v Volume
+			if json.Unmarshal([]byte(line), &v) == nil && v.Name != "" {
+				d.Volumes = append(d.Volumes, v)
 			}
 		}
 	}
@@ -187,6 +233,27 @@ const (
 	DockerUnpause     DockerAction = "unpause"
 	DockerRemove      DockerAction = "rm -f"
 	DockerRemoveImage DockerAction = "rmi"
+	DockerPull        DockerAction = "pull"
+)
+
+// DockerPrune is a prune of unused objects. Images drops dangling images,
+// as Containers: Prune Images does; networks and volumes drop what no
+// container uses.
+type DockerPrune string
+
+const (
+	PruneImages   DockerPrune = "image prune -f"
+	PruneNetworks DockerPrune = "network prune -f"
+	PruneVolumes  DockerPrune = "volume prune -f"
+)
+
+// InspectKind is a docker inspect of one object: an image, a network or a volume.
+type InspectKind string
+
+const (
+	InspectImage   InspectKind = "image"
+	InspectNetwork InspectKind = "network"
+	InspectVolume  InspectKind = "volume"
 )
 
 // dockerRef is a container or image reference docker may be given: IDs,
@@ -198,7 +265,23 @@ func DockerRefOK(ref string) bool { return len(ref) <= 512 && dockerRef.MatchStr
 
 func dockerActionOK(a DockerAction) bool {
 	switch a {
-	case DockerStart, DockerStop, DockerRestart, DockerPause, DockerUnpause, DockerRemove, DockerRemoveImage:
+	case DockerStart, DockerStop, DockerRestart, DockerPause, DockerUnpause, DockerRemove, DockerRemoveImage, DockerPull:
+		return true
+	}
+	return false
+}
+
+func dockerPruneOK(p DockerPrune) bool {
+	switch p {
+	case PruneImages, PruneNetworks, PruneVolumes:
+		return true
+	}
+	return false
+}
+
+func dockerInspectOK(k InspectKind) bool {
+	switch k {
+	case InspectImage, InspectNetwork, InspectVolume:
 		return true
 	}
 	return false
@@ -221,6 +304,58 @@ func DockerDo(ctx context.Context, client *ssh.Client, action DockerAction, ref 
 	}
 	_, err := runDocker(ctx, client, script, ref)
 	return err
+}
+
+// DockerPruneCommand is the script pruning p, "" for a prune that is not one.
+func DockerPruneCommand(p DockerPrune) string {
+	if !dockerPruneOK(p) {
+		return ""
+	}
+	return dockerPrelude + `$D ` + string(p)
+}
+
+// PruneDocker removes dangling images, or unused networks or volumes.
+// out is what docker printed, which names the space it reclaimed.
+func PruneDocker(ctx context.Context, client *ssh.Client, p DockerPrune) (string, error) {
+	script := DockerPruneCommand(p)
+	if script == "" {
+		return "", errors.New("session: bad docker prune")
+	}
+	out, err := runDocker(ctx, client, script)
+	return string(out), err
+}
+
+// ReclaimedSpace is the "Total reclaimed space" line of a prune, "" when
+// docker did not print one.
+func ReclaimedSpace(out string) string {
+	const mark = "Total reclaimed space:"
+	i := strings.Index(out, mark)
+	if i < 0 {
+		return ""
+	}
+	rest := out[i+len(mark):]
+	if n := strings.IndexByte(rest, '\n'); n >= 0 {
+		rest = rest[:n]
+	}
+	return strings.TrimSpace(rest)
+}
+
+// DockerInspectCommand is the script inspecting ref, "" when either may not be.
+func DockerInspectCommand(kind InspectKind, ref string) string {
+	if !dockerInspectOK(kind) || !DockerRefOK(ref) {
+		return ""
+	}
+	return dockerPrelude + `$D ` + string(kind) + ` inspect "$1"`
+}
+
+// InspectDocker is the JSON docker inspect prints for ref.
+func InspectDocker(ctx context.Context, client *ssh.Client, kind InspectKind, ref string) (string, error) {
+	script := DockerInspectCommand(kind, ref)
+	if script == "" {
+		return "", errors.New("session: bad docker reference")
+	}
+	out, err := runDocker(ctx, client, script, ref)
+	return string(out), err
 }
 
 // DockerLogs is the last lines of a container's output, stdout and

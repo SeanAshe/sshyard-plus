@@ -85,6 +85,9 @@ func (a *App) dockerImageView(c *ui.Context, m locales.Messages, tok theme.Token
 				if d.busy != "" {
 					ui.Spinner(c)
 				}
+				if (IconButton{Icon: icons.Download, Label: m.DockerPull(), Disabled: d.busy != "" || im.PullRef() == ""}).Clicked(c, "pull") {
+					a.dockerPull(tc, im.PullRef())
+				}
 				if (IconButton{Icon: icons.Delete, Label: m.DockerRemoveImage(), Danger: true, Disabled: d.busy != ""}).Clicked(c, "rmi") {
 					d.confirm, d.confirmRef, d.confirmImg = true, im.ID, true
 				}

@@ -200,8 +200,8 @@ func TestNoBannerText(t *testing.T) {
 // it closes it.
 func TestHostToolPanes(t *testing.T) {
 	a, tt := newTestApp(t)
-	kinds := []layout.Kind{layout.Monitor, layout.Docker, layout.HostInfo, layout.Usage, layout.Tmux}
-	for _, s := range []string{"System Monitor", "Docker", "Host Details", "Process Usage", "tmux Sessions"} {
+	kinds := []layout.Kind{layout.Monitor, layout.Docker, layout.HostInfo, layout.Usage, layout.Tmux, layout.Services}
+	for _, s := range []string{"System Monitor", "Docker", "Host Details", "Process Usage", "tmux Sessions", "System Services"} {
 		mustClick(t, tt, s)
 		tt.Frame()
 	}

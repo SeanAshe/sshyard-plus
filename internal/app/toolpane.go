@@ -11,8 +11,8 @@ import (
 
 // The tool panes, the broadcast, the session logs, the snippets, the
 // command history and the panels on the focused session's host (the
-// system monitor, the process usage, the host's details, Docker and
-// tmux), work on the sessions, not on one of their own. They are panes as the others are, dragged by their
+// system monitor, the process usage, the host's details, Docker,
+// systemd services and tmux), work on the sessions, not on one of their own. They are panes as the others are, dragged by their
 // header to any edge of a pane or another tab, but on no host, and one of
 // each in the whole workspace, which the rail opens and closes. The layout
 // saves where they are, never what they show. A tool pane never keeps a tab's focus: the
@@ -22,7 +22,7 @@ import (
 func isTool(k layout.Kind) bool {
 	switch k {
 	case layout.Broadcast, layout.Logs, layout.Snippets, layout.History,
-		layout.Monitor, layout.Usage, layout.HostInfo, layout.Docker, layout.Tmux:
+		layout.Monitor, layout.Usage, layout.HostInfo, layout.Docker, layout.Services, layout.Tmux:
 		return true
 	}
 	return false
@@ -69,6 +69,7 @@ func (a *App) nameTools(m locales.Messages) {
 	a.toolNames[layout.Usage] = m.ProcessUsage()
 	a.toolNames[layout.HostInfo] = m.HostDetails()
 	a.toolNames[layout.Docker] = m.DockerManager()
+	a.toolNames[layout.Services] = m.SystemServices()
 	a.toolNames[layout.Tmux] = m.TmuxManager()
 }
 

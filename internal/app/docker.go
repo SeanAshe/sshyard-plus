@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strconv"
@@ -15,13 +16,14 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// The Docker panel: the containers and the images of the focused
-// session's server, read again every dockerEvery while the panel shows,
-// and what can be done to them: start, stop, restart, pause, remove,
-// read a container's logs, open a shell in it. Containers that belong to
-// a Compose project are grouped under it, and the group's menu runs
-// compose against that project. A container's or an image's details open
-// in their own sheet.
+// The Docker panel: the containers, images, networks and volumes of the
+// focused session's server, read again every dockerEvery while the panel
+// shows, and what can be done to them: start, stop, restart, pause,
+// remove, pull an image, prune what is unused, read a container's logs,
+// open a shell in it, inspect a network or a volume. Containers that
+// belong to a Compose project are grouped under it, and the group's menu
+// runs compose against that project. A container's or an image's details
+// open in their own sheet.
 
 // dockerEvery is how often the panel reads the server again.
 const dockerEvery = 5 * time.Second
@@ -32,7 +34,16 @@ const dockerEvery = 5 * time.Second
 const (
 	dockerTimeout  = 30 * time.Second
 	composeTimeout = 2 * time.Minute // compose up may pull images
+	pullTimeout    = 10 * time.Minute
 	dockerLogLines = 500
+)
+
+// Which list the Docker panel shows.
+const (
+	dockerContainers = 0
+	dockerImages     = 1
+	dockerNetworks   = 2
+	dockerVolumes    = 3
 )
 
 // dockerItem is a row of the containers outline: a Compose project (id
@@ -57,20 +68,25 @@ type dockerState struct {
 	info                session.DockerInfo
 	read                bool
 	err                 error
-	// view is the segment shown: 0 the containers, 1 the images.
+	// view is the segment shown: containers, images, networks, volumes.
 	view           int
 	ctrSel         int
 	imgSel         int
+	netSel         int
+	volSel         int
 	ctr            ui.OutlineState[dockerItem]
 	rowOf          map[dockerItem]dockerRow
 	seen           map[string]bool // compose projects whose open state was chosen
 	imgList        ui.ListState
+	netList        ui.ListState
+	volList        ui.ListState
 	busy           string // the ID being acted on, "" for none
-	confirm        bool   // a removal, or compose down, is asked about
+	confirm        bool   // a removal, a prune, or compose down, is asked about
 	confirmRef     string
 	confirmImg     bool
 	confirmCompose bool
 	confirmComp    session.Compose
+	confirmPrune   session.DockerPrune
 	logsOpen       bool
 	logsRef        string
 	logsName       string
@@ -95,6 +111,14 @@ type dockerState struct {
 	imgRead    bool
 	imgRunning bool
 	imgErr     error
+	// inspect is docker inspect of a network or a volume.
+	inspectOpen bool
+	inspectKind session.InspectKind
+	inspectRef  string
+	inspectName string
+	inspectText string
+	inspectBusy bool
+	inspectErr  string
 }
 
 // dockerErrText is a failure of the panel in words.
@@ -116,7 +140,8 @@ func (a *App) readDocker(c *ui.Context, tc *conn, now bool) {
 		d.gen++
 		d.conn, d.connects, d.running, d.at = tc.id, connects, false, time.Time{}
 		d.info, d.read, d.err, d.busy = session.DockerInfo{}, false, nil, ""
-		d.ctrSel, d.imgSel = -1, -1
+		d.ctrSel, d.imgSel, d.netSel, d.volSel = -1, -1, -1, -1
+		d.inspectOpen = false
 		d.ctr.Open.Clear()
 		d.seen, d.rowOf = nil, nil
 		d.detailOpen, d.detailRunning = false, false
@@ -181,6 +206,117 @@ func (a *App) dockerDo(tc *conn, action session.DockerAction, ref string) {
 	}()
 }
 
+// dockerPull pulls the image ref, which can take a while, then reads the lists again.
+func (a *App) dockerPull(tc *conn, ref string) {
+	d := a.docker
+	client := tc.s.Client()
+	if client == nil || d.busy != "" || ref == "" {
+		return
+	}
+	d.busy = ref
+	gen := d.gen
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), pullTimeout)
+		err := session.DockerDo(ctx, client, session.DockerPull, ref)
+		cancel()
+		a.post(func() {
+			if d.gen != gen {
+				return
+			}
+			d.busy, d.at = "", time.Time{}
+			if err != nil {
+				a.toasts = append(a.toasts, func(m locales.Messages) ui.Toast {
+					return ui.Toast{Title: dockerErrText(m, err), Type: "error"}
+				})
+				return
+			}
+			name := ref
+			a.toasts = append(a.toasts, func(m locales.Messages) ui.Toast {
+				return ui.Toast{Title: m.DockerPulled(name), Type: "success"}
+			})
+		})
+	}()
+}
+
+// dockerPrune removes dangling images, or unused networks or volumes.
+func (a *App) dockerPrune(tc *conn, p session.DockerPrune) {
+	d := a.docker
+	client := tc.s.Client()
+	if client == nil || d.busy != "" {
+		return
+	}
+	d.busy = "prune"
+	gen := d.gen
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), composeTimeout)
+		out, err := session.PruneDocker(ctx, client, p)
+		cancel()
+		a.post(func() {
+			if d.gen != gen {
+				return
+			}
+			d.busy, d.at = "", time.Time{}
+			if err != nil {
+				a.toasts = append(a.toasts, func(m locales.Messages) ui.Toast {
+					return ui.Toast{Title: dockerErrText(m, err), Type: "error"}
+				})
+				return
+			}
+			space := session.ReclaimedSpace(out)
+			a.toasts = append(a.toasts, func(m locales.Messages) ui.Toast {
+				title := m.DockerPruned()
+				if space != "" {
+					title = m.DockerPrunedSpace(space)
+				}
+				return ui.Toast{Title: title, Type: "success"}
+			})
+		})
+	}()
+}
+
+// dockerInspect reads docker inspect of ref into the inspect sheet.
+func (a *App) dockerInspect(tc *conn, kind session.InspectKind, ref, name string) {
+	d := a.docker
+	client := tc.s.Client()
+	if client == nil || !session.DockerRefOK(ref) {
+		return
+	}
+	d.logsOpen = false
+	d.inspectOpen, d.inspectKind, d.inspectRef, d.inspectName = true, kind, ref, name
+	d.inspectBusy, d.inspectErr, d.inspectText = true, "", ""
+	gen := d.gen
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), dockerTimeout)
+		out, err := session.InspectDocker(ctx, client, kind, ref)
+		cancel()
+		a.post(func() {
+			if d.gen != gen || d.inspectRef != ref || d.inspectKind != kind {
+				return
+			}
+			d.inspectBusy, d.inspectText = false, prettyJSON(out)
+			if err != nil {
+				d.inspectErr = err.Error()
+			}
+		})
+	}()
+}
+
+func prettyJSON(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return s
+	}
+	var v any
+	if json.Unmarshal([]byte(s), &v) != nil {
+		return s
+	}
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return s
+	}
+	return string(b)
+}
+
 // dockerLogs reads the logs of the container ref into the logs sheet.
 func (a *App) dockerLogs(tc *conn, ref, name string) {
 	d := a.docker
@@ -188,6 +324,7 @@ func (a *App) dockerLogs(tc *conn, ref, name string) {
 	if client == nil {
 		return
 	}
+	d.inspectOpen = false
 	d.logsOpen, d.logsRef, d.logsName, d.logsBusy, d.logsErr = true, ref, name, true, ""
 	d.logsComp = session.Compose{}
 	gen := d.gen
@@ -243,6 +380,7 @@ func (a *App) composeLogs(tc *conn, comp session.Compose) {
 		return
 	}
 	ref := "compose:" + comp.Name
+	d.inspectOpen = false
 	d.logsOpen, d.logsRef, d.logsName, d.logsComp = true, ref, comp.Name, comp
 	d.logsBusy, d.logsErr = true, ""
 	gen := d.gen
@@ -286,7 +424,7 @@ func (a *App) dockerShell(tc *conn, ref string) {
 // dockerPanel is the Docker panel's body.
 func (a *App) dockerPanel(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 	if a.docker == nil {
-		d := &dockerState{ctrSel: -1, imgSel: -1, imgList: ui.ListState{RoundRows: true}}
+		d := &dockerState{ctrSel: -1, imgSel: -1, netSel: -1, volSel: -1, imgList: ui.ListState{RoundRows: true}, netList: ui.ListState{RoundRows: true}, volList: ui.ListState{RoundRows: true}}
 		d.ctr.List.RoundRows = true
 		a.docker = d
 	}
@@ -299,10 +437,19 @@ func (a *App) dockerPanel(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 	}
 	a.readDocker(c, tc, false)
 	ui.Row(c.Key("dockertools")).Gap(8).FillWidth().AlignItems(ui.Center).Children(func() {
-		formSegmented(c.Key("dockerview"), &d.view, false, m.DockerContainers(strconv.Itoa(len(d.info.Containers))), m.DockerImages(strconv.Itoa(len(d.info.Images)))).
-			Label(m.DockerManager()).Grow(1)
+		formSegmented(c.Key("dockerview"), &d.view, false,
+			m.DockerContainers(strconv.Itoa(len(d.info.Containers))),
+			m.DockerImages(strconv.Itoa(len(d.info.Images))),
+			m.DockerNetworkList(strconv.Itoa(len(d.info.Networks))),
+			m.DockerVolumeList(strconv.Itoa(len(d.info.Volumes)))).
+			Label(m.DockerManager()).Grow(1).Shrink(1).MinWidth(0)
 		if d.running {
 			ui.Spinner(c)
+		}
+		if p, ok := dockerPruneOf(d.view); ok {
+			if (IconButton{Icon: icons.Prune, Label: dockerPruneLabel(m, p), Disabled: d.running || d.busy != "" || !d.read}).Clicked(c, "dockerprune") {
+				d.confirm, d.confirmImg, d.confirmCompose, d.confirmPrune = true, false, false, p
+			}
 		}
 		if (IconButton{Icon: icons.Refresh, Label: m.Refresh(), Disabled: d.running}).Clicked(c, "dockerrefresh") {
 			d.err = nil
@@ -326,15 +473,43 @@ func (a *App) dockerPanel(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 		})
 		return
 	}
-	if d.view == 0 {
-		a.containersView(c, m, tok, tc)
-	} else {
+	switch d.view {
+	case dockerImages:
 		a.imagesView(c, m, tok, tc)
+	case dockerNetworks:
+		a.networksView(c, m, tok, tc)
+	case dockerVolumes:
+		a.volumesView(c, m, tok, tc)
+	default:
+		a.containersView(c, m, tok, tc)
 	}
 	a.dockerImageView(c, m, tok, tc)
 	a.dockerDetailView(c, m, tok, tc)
 	a.dockerConfirm(c, m, tc)
 	a.dockerLogsView(c, m, tok, tc)
+	a.dockerInspectView(c, m, tok, tc)
+}
+
+func dockerPruneOf(view int) (session.DockerPrune, bool) {
+	switch view {
+	case dockerImages:
+		return session.PruneImages, true
+	case dockerNetworks:
+		return session.PruneNetworks, true
+	case dockerVolumes:
+		return session.PruneVolumes, true
+	}
+	return "", false
+}
+
+func dockerPruneLabel(m locales.Messages, p session.DockerPrune) string {
+	switch p {
+	case session.PruneNetworks:
+		return m.DockerPruneNetworks()
+	case session.PruneVolumes:
+		return m.DockerPruneVolumes()
+	}
+	return m.DockerPruneImages()
 }
 
 // stateTint is the color of a container's state.
@@ -590,8 +765,7 @@ func (a *App) composeButtons(c *ui.Context, m locales.Messages, tc *conn, comp s
 			ui.Spinner(c)
 		}
 		if (IconButton{Icon: icons.Delete, Label: m.DockerComposeDown(), Danger: true, Disabled: busy}).Clicked(c, "down") {
-			d.confirm, d.confirmRef, d.confirmImg, d.confirmCompose = true, comp.Name, false, true
-			d.confirmComp = comp
+			d.askConfirm(comp.Name, false, true, comp)
 		}
 	})
 }
@@ -705,8 +879,12 @@ func (a *App) imageEntries(m locales.Messages, tc *conn, id string) []menuEntry 
 	if i < 0 {
 		return nil
 	}
+	im := d.info.Images[i]
 	return []menuEntry{
 		{Icon: icons.Info, Label: m.DockerDetails(), Do: func() { a.openImage(tc, id) }},
+		{Icon: icons.Download, Label: m.DockerPull(), Disabled: d.busy != "" || im.PullRef() == "", Do: func() {
+			a.dockerPull(tc, im.PullRef())
+		}},
 		menuSep,
 		{Icon: icons.Delete, Label: m.DockerRemoveImage(), Danger: true, Disabled: d.busy != "", Do: func() {
 			d.confirm, d.confirmRef, d.confirmImg, d.confirmCompose = true, id, true, false
@@ -753,11 +931,125 @@ func (a *App) imagesView(c *ui.Context, m locales.Messages, tok theme.Tokens, tc
 	}
 }
 
-// dockerConfirm asks before a container or an image is removed, or a
-// Compose project is taken down.
+func (a *App) networksView(c *ui.Context, m locales.Messages, tok theme.Tokens, tc *conn) {
+	a.dockerObjects(c, m, tok, tc, true)
+}
+
+func (a *App) volumesView(c *ui.Context, m locales.Messages, tok theme.Tokens, tc *conn) {
+	a.dockerObjects(c, m, tok, tc, false)
+}
+
+// dockerObjects is the networks list, or the volumes list: a click opens
+// docker inspect.
+func (a *App) dockerObjects(c *ui.Context, m locales.Messages, tok theme.Tokens, tc *conn, networks bool) {
+	d := a.docker
+	n := len(d.info.Volumes)
+	if networks {
+		n = len(d.info.Networks)
+	}
+	if n == 0 {
+		if networks {
+			panelNote(c, tok, m.DockerNoNetworks())
+		} else {
+			panelNote(c, tok, m.DockerNoVolumes())
+		}
+		return
+	}
+	list := &d.volList
+	sel := &d.volSel
+	kind := session.InspectVolume
+	key := "volumes"
+	if networks {
+		list, sel, kind, key = &d.netList, &d.netSel, session.InspectNetwork, "networks"
+	}
+	if *sel >= n {
+		*sel = -1
+	}
+	list.Selected = sel
+	cols := []ui.TableColumn{{Title: m.ColName(), MinWidth: 120}, {Title: m.DockerColDriver(), Width: 80}, {Title: m.DockerColScope(), Width: 72}}
+	ui.Table(c.Key(key), list, cols, n, func(row, col int) {
+		name, driver, scope, tip := a.dockerObject(networks, row)
+		muted := tok.TextMuted
+		if *sel == row {
+			muted = tok.AccentText
+		}
+		switch col {
+		case 0:
+			cell := ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Cursor(ui.CursorPointer)
+			cell.Children(func() {
+				ui.Text(c, name).FontSize(theme.Footnote).SingleLine().Tooltip(tip)
+			})
+			ref, b := name, cell.Bounds()
+			cell.HandleInput(func(ev ui.InputEvent) bool {
+				if ev.Kind == ui.InputPointerDown && ev.Button == 0 && ref != "" {
+					a.dockerInspect(tc, kind, ref, ref)
+					return false
+				}
+				return a.contextPress(b, ev, func() []menuEntry {
+					if ref == "" {
+						return nil
+					}
+					return []menuEntry{{Icon: icons.Info, Label: m.DockerInspect(), Do: func() {
+						a.dockerInspect(tc, kind, ref, ref)
+					}}}
+				})
+			})
+		case 1:
+			ui.Text(c, orDash(m, driver)).FontSize(theme.Footnote).TextColor(muted).SingleLine()
+		case 2:
+			ui.Text(c, orDash(m, scope)).FontSize(theme.Footnote).TextColor(muted).SingleLine()
+		}
+	}).Grow(1).Shrink(1).MinHeight(0).FillWidth()
+}
+
+func (a *App) dockerObject(networks bool, row int) (name, driver, scope, tip string) {
+	d := a.docker
+	if networks {
+		if row < 0 || row >= len(d.info.Networks) {
+			return
+		}
+		n := d.info.Networks[row]
+		tip = n.Name
+		if n.ID != "" {
+			tip += " · " + shortID(n.ID)
+		}
+		return n.Name, n.Driver, n.Scope, tip
+	}
+	if row < 0 || row >= len(d.info.Volumes) {
+		return
+	}
+	v := d.info.Volumes[row]
+	tip = v.Name
+	if v.Mountpoint != "" {
+		tip += " · " + v.Mountpoint
+	}
+	return v.Name, v.Driver, v.Scope, tip
+}
+
+func (d *dockerState) askConfirm(ref string, img, compose bool, comp session.Compose) {
+	d.confirm, d.confirmRef, d.confirmImg, d.confirmCompose = true, ref, img, compose
+	d.confirmComp, d.confirmPrune = comp, ""
+}
+
+// dockerConfirm asks before a container or an image is removed, a prune
+// runs, or a Compose project is taken down.
 func (a *App) dockerConfirm(c *ui.Context, m locales.Messages, tc *conn) {
 	d := a.docker
 	if !d.confirm {
+		return
+	}
+	if d.confirmPrune != "" {
+		title, msg := m.DockerPruneImages(), m.DockerPruneImagesConfirm()
+		switch d.confirmPrune {
+		case session.PruneNetworks:
+			title, msg = m.DockerPruneNetworks(), m.DockerPruneNetworksConfirm()
+		case session.PruneVolumes:
+			title, msg = m.DockerPruneVolumes(), m.DockerPruneVolumesConfirm()
+		}
+		if ui.AlertDialog(c, &d.confirm, title, msg, m.Cancel(), m.DockerPrune()) != 1 {
+			return
+		}
+		a.dockerPrune(tc, d.confirmPrune)
 		return
 	}
 	title, msg := m.DockerRemove(), m.DockerRemoveConfirm(a.dockerName(d.confirmRef))
@@ -804,6 +1096,55 @@ func shortID(id string) string {
 		return id[:12]
 	}
 	return id
+}
+
+// dockerInspectView is the sheet of docker inspect for an image, a
+// network or a volume.
+func (a *App) dockerInspectView(c *ui.Context, m locales.Messages, tok theme.Tokens, tc *conn) {
+	d := a.docker
+	if !d.inspectOpen {
+		return
+	}
+	sheet(ui.Modal(c, &d.inspectOpen, func() {
+		ui.Column(c).Gap(12).Width(720).Children(func() {
+			ui.Row(c).Gap(12).AlignItems(ui.Center).FillWidth().Children(func() {
+				tile(c, icons.Info, theme.Brand, 36)
+				ui.Column(c).Gap(2).Grow(1).Shrink(1).Children(func() {
+					sheetTitle(c, m.DockerInspectOf(d.inspectName))
+					ui.Text(c, m.DockerInspect()).FontSize(theme.Caption).TextColor(tok.TextMuted)
+				})
+				if d.inspectBusy {
+					ui.Spinner(c)
+				}
+				if (IconButton{Icon: icons.Refresh, Label: m.Refresh(), Disabled: d.inspectBusy}).Clicked(c, "inspectrefresh") {
+					a.dockerInspect(tc, d.inspectKind, d.inspectRef, d.inspectName)
+				}
+			})
+			ui.Scroll(c.Key("inspect")).Height(420).FillWidth().Radius(theme.RadiusControl).Background(tok.Fill).Children(func() {
+				text := d.inspectText
+				switch {
+				case d.inspectErr != "":
+					text = d.inspectErr
+				case !d.inspectBusy && strings.TrimSpace(text) == "":
+					text = m.DockerNoInspect()
+				}
+				t := ui.Text(c, text).FontSize(theme.Caption).Selectable().Padding(10, 12)
+				if a.fonts.term != "" {
+					t.Font(a.fonts.term)
+				}
+			})
+			ui.Row(c).Gap(8).Children(func() {
+				ui.Spacer(c)
+				if pill(c, m.Copy(), false, false, d.inspectBusy || d.inspectText == "") {
+					c.WriteClipboard(d.inspectText)
+					c.AddToast(ui.Toast{Title: m.Copied(), Type: "success"})
+				}
+				if pill(c, m.Close(), true, false, false) {
+					d.inspectOpen = false
+				}
+			})
+		})
+	}), tok)
 }
 
 // dockerLogsView is the sheet of a container's last lines of output.

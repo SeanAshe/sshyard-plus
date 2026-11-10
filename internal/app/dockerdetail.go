@@ -70,9 +70,10 @@ func dockerTime(s string) string {
 	return t.Local().Format("2006-01-02 15:04:05")
 }
 
-// orDash is s, or the dash for a value there is not.
+// orDash is s, or the dash for a value there is not. Docker prints N/A
+// for a field it has nothing for.
 func orDash(m locales.Messages, s string) string {
-	if strings.TrimSpace(s) == "" {
+	if strings.TrimSpace(s) == "" || s == "N/A" {
 		return m.MetricsDash()
 	}
 	return s

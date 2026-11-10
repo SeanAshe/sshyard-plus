@@ -9953,6 +9953,976 @@ func (msgs Messages) DockerImageUnused() string {
 	return Catalog.Format(msgs.locale, "dockerImageUnused", nil)
 }
 
+// DockerNetworkList says "Networks ({count})"
+// in the language the app shows.
+func DockerNetworkList(count string) string { return In(i18n.Locale()).DockerNetworkList(count) }
+
+// DockerNetworkList says "Networks ({count})"
+// in the language of msgs.
+func (msgs Messages) DockerNetworkList(count string) string {
+	return Catalog.Format(msgs.locale, "dockerNetworkList", map[string]any{"count": count})
+}
+
+// DockerVolumeList says "Volumes ({count})"
+// in the language the app shows.
+func DockerVolumeList(count string) string { return In(i18n.Locale()).DockerVolumeList(count) }
+
+// DockerVolumeList says "Volumes ({count})"
+// in the language of msgs.
+func (msgs Messages) DockerVolumeList(count string) string {
+	return Catalog.Format(msgs.locale, "dockerVolumeList", map[string]any{"count": count})
+}
+
+// DockerNoNetworks says "No networks on this server."
+// in the language the app shows.
+func DockerNoNetworks() string { return In(i18n.Locale()).DockerNoNetworks() }
+
+// DockerNoNetworks says "No networks on this server."
+// in the language of msgs.
+func (msgs Messages) DockerNoNetworks() string {
+	return Catalog.Format(msgs.locale, "dockerNoNetworks", nil)
+}
+
+// DockerNoVolumes says "No volumes on this server."
+// in the language the app shows.
+func DockerNoVolumes() string { return In(i18n.Locale()).DockerNoVolumes() }
+
+// DockerNoVolumes says "No volumes on this server."
+// in the language of msgs.
+func (msgs Messages) DockerNoVolumes() string {
+	return Catalog.Format(msgs.locale, "dockerNoVolumes", nil)
+}
+
+// DockerColDriver says "Driver"
+// in the language the app shows.
+func DockerColDriver() string { return In(i18n.Locale()).DockerColDriver() }
+
+// DockerColDriver says "Driver"
+// in the language of msgs.
+func (msgs Messages) DockerColDriver() string {
+	return Catalog.Format(msgs.locale, "dockerColDriver", nil)
+}
+
+// DockerColScope says "Scope"
+// in the language the app shows.
+func DockerColScope() string { return In(i18n.Locale()).DockerColScope() }
+
+// DockerColScope says "Scope"
+// in the language of msgs.
+func (msgs Messages) DockerColScope() string {
+	return Catalog.Format(msgs.locale, "dockerColScope", nil)
+}
+
+// DockerPull says "Pull"
+// in the language the app shows.
+func DockerPull() string { return In(i18n.Locale()).DockerPull() }
+
+// DockerPull says "Pull"
+// in the language of msgs.
+func (msgs Messages) DockerPull() string {
+	return Catalog.Format(msgs.locale, "dockerPull", nil)
+}
+
+// DockerPulled says "Pulled {name}"
+// in the language the app shows.
+func DockerPulled(name string) string { return In(i18n.Locale()).DockerPulled(name) }
+
+// DockerPulled says "Pulled {name}"
+// in the language of msgs.
+func (msgs Messages) DockerPulled(name string) string {
+	return Catalog.Format(msgs.locale, "dockerPulled", map[string]any{"name": name})
+}
+
+// DockerPrune says "Prune"
+// in the language the app shows.
+func DockerPrune() string { return In(i18n.Locale()).DockerPrune() }
+
+// DockerPrune says "Prune"
+// in the language of msgs.
+func (msgs Messages) DockerPrune() string {
+	return Catalog.Format(msgs.locale, "dockerPrune", nil)
+}
+
+// DockerPruneImages says "Prune images"
+// in the language the app shows.
+func DockerPruneImages() string { return In(i18n.Locale()).DockerPruneImages() }
+
+// DockerPruneImages says "Prune images"
+// in the language of msgs.
+func (msgs Messages) DockerPruneImages() string {
+	return Catalog.Format(msgs.locale, "dockerPruneImages", nil)
+}
+
+// DockerPruneImagesConfirm says "Remove all dangling images?"
+// in the language the app shows.
+func DockerPruneImagesConfirm() string { return In(i18n.Locale()).DockerPruneImagesConfirm() }
+
+// DockerPruneImagesConfirm says "Remove all dangling images?"
+// in the language of msgs.
+func (msgs Messages) DockerPruneImagesConfirm() string {
+	return Catalog.Format(msgs.locale, "dockerPruneImagesConfirm", nil)
+}
+
+// DockerPruneNetworks says "Prune networks"
+// in the language the app shows.
+func DockerPruneNetworks() string { return In(i18n.Locale()).DockerPruneNetworks() }
+
+// DockerPruneNetworks says "Prune networks"
+// in the language of msgs.
+func (msgs Messages) DockerPruneNetworks() string {
+	return Catalog.Format(msgs.locale, "dockerPruneNetworks", nil)
+}
+
+// DockerPruneNetworksConfirm says "Remove all unused networks?"
+// in the language the app shows.
+func DockerPruneNetworksConfirm() string { return In(i18n.Locale()).DockerPruneNetworksConfirm() }
+
+// DockerPruneNetworksConfirm says "Remove all unused networks?"
+// in the language of msgs.
+func (msgs Messages) DockerPruneNetworksConfirm() string {
+	return Catalog.Format(msgs.locale, "dockerPruneNetworksConfirm", nil)
+}
+
+// DockerPruneVolumes says "Prune volumes"
+// in the language the app shows.
+func DockerPruneVolumes() string { return In(i18n.Locale()).DockerPruneVolumes() }
+
+// DockerPruneVolumes says "Prune volumes"
+// in the language of msgs.
+func (msgs Messages) DockerPruneVolumes() string {
+	return Catalog.Format(msgs.locale, "dockerPruneVolumes", nil)
+}
+
+// DockerPruneVolumesConfirm says "Remove all unused volumes? Their data is lost."
+// in the language the app shows.
+func DockerPruneVolumesConfirm() string { return In(i18n.Locale()).DockerPruneVolumesConfirm() }
+
+// DockerPruneVolumesConfirm says "Remove all unused volumes? Their data is lost."
+// in the language of msgs.
+func (msgs Messages) DockerPruneVolumesConfirm() string {
+	return Catalog.Format(msgs.locale, "dockerPruneVolumesConfirm", nil)
+}
+
+// DockerPruned says "Pruned"
+// in the language the app shows.
+func DockerPruned() string { return In(i18n.Locale()).DockerPruned() }
+
+// DockerPruned says "Pruned"
+// in the language of msgs.
+func (msgs Messages) DockerPruned() string {
+	return Catalog.Format(msgs.locale, "dockerPruned", nil)
+}
+
+// DockerPrunedSpace says "Reclaimed {space}"
+// in the language the app shows.
+func DockerPrunedSpace(space string) string { return In(i18n.Locale()).DockerPrunedSpace(space) }
+
+// DockerPrunedSpace says "Reclaimed {space}"
+// in the language of msgs.
+func (msgs Messages) DockerPrunedSpace(space string) string {
+	return Catalog.Format(msgs.locale, "dockerPrunedSpace", map[string]any{"space": space})
+}
+
+// DockerInspect says "Inspect"
+// in the language the app shows.
+func DockerInspect() string { return In(i18n.Locale()).DockerInspect() }
+
+// DockerInspect says "Inspect"
+// in the language of msgs.
+func (msgs Messages) DockerInspect() string {
+	return Catalog.Format(msgs.locale, "dockerInspect", nil)
+}
+
+// DockerInspectOf says "{name}"
+// in the language the app shows.
+func DockerInspectOf(name string) string { return In(i18n.Locale()).DockerInspectOf(name) }
+
+// DockerInspectOf says "{name}"
+// in the language of msgs.
+func (msgs Messages) DockerInspectOf(name string) string {
+	return Catalog.Format(msgs.locale, "dockerInspectOf", map[string]any{"name": name})
+}
+
+// DockerNoInspect says "Docker returned nothing."
+// in the language the app shows.
+func DockerNoInspect() string { return In(i18n.Locale()).DockerNoInspect() }
+
+// DockerNoInspect says "Docker returned nothing."
+// in the language of msgs.
+func (msgs Messages) DockerNoInspect() string {
+	return Catalog.Format(msgs.locale, "dockerNoInspect", nil)
+}
+
+// SystemServices says "System Services"
+// in the language the app shows.
+func SystemServices() string { return In(i18n.Locale()).SystemServices() }
+
+// SystemServices says "System Services"
+// in the language of msgs.
+func (msgs Messages) SystemServices() string {
+	return Catalog.Format(msgs.locale, "systemServices", nil)
+}
+
+// SvcSearch says "Search names and descriptions"
+// in the language the app shows.
+func SvcSearch() string { return In(i18n.Locale()).SvcSearch() }
+
+// SvcSearch says "Search names and descriptions"
+// in the language of msgs.
+func (msgs Messages) SvcSearch() string {
+	return Catalog.Format(msgs.locale, "svcSearch", nil)
+}
+
+// SvcEmpty says "No services"
+// in the language the app shows.
+func SvcEmpty() string { return In(i18n.Locale()).SvcEmpty() }
+
+// SvcEmpty says "No services"
+// in the language of msgs.
+func (msgs Messages) SvcEmpty() string {
+	return Catalog.Format(msgs.locale, "svcEmpty", nil)
+}
+
+// SvcNoMatch says "No matching services"
+// in the language the app shows.
+func SvcNoMatch() string { return In(i18n.Locale()).SvcNoMatch() }
+
+// SvcNoMatch says "No matching services"
+// in the language of msgs.
+func (msgs Messages) SvcNoMatch() string {
+	return Catalog.Format(msgs.locale, "svcNoMatch", nil)
+}
+
+// SvcNoDescription says "No description"
+// in the language the app shows.
+func SvcNoDescription() string { return In(i18n.Locale()).SvcNoDescription() }
+
+// SvcNoDescription says "No description"
+// in the language of msgs.
+func (msgs Messages) SvcNoDescription() string {
+	return Catalog.Format(msgs.locale, "svcNoDescription", nil)
+}
+
+// SvcNoSystemd says "This host doesn’t use systemd, so its services can’t be managed yet."
+// in the language the app shows.
+func SvcNoSystemd() string { return In(i18n.Locale()).SvcNoSystemd() }
+
+// SvcNoSystemd says "This host doesn’t use systemd, so its services can’t be managed yet."
+// in the language of msgs.
+func (msgs Messages) SvcNoSystemd() string {
+	return Catalog.Format(msgs.locale, "svcNoSystemd", nil)
+}
+
+// SvcUnsupported says "Services on {system} can’t be managed yet. Only Linux hosts with systemd are supported."
+// in the language the app shows.
+func SvcUnsupported(system string) string { return In(i18n.Locale()).SvcUnsupported(system) }
+
+// SvcUnsupported says "Services on {system} can’t be managed yet. Only Linux hosts with systemd are supported."
+// in the language of msgs.
+func (msgs Messages) SvcUnsupported(system string) string {
+	return Catalog.Format(msgs.locale, "svcUnsupported", map[string]any{"system": system})
+}
+
+// SvcCustom says "Custom"
+// in the language the app shows.
+func SvcCustom() string { return In(i18n.Locale()).SvcCustom() }
+
+// SvcCustom says "Custom"
+// in the language of msgs.
+func (msgs Messages) SvcCustom() string {
+	return Catalog.Format(msgs.locale, "svcCustom", nil)
+}
+
+// SvcSystem says "System"
+// in the language the app shows.
+func SvcSystem() string { return In(i18n.Locale()).SvcSystem() }
+
+// SvcSystem says "System"
+// in the language of msgs.
+func (msgs Messages) SvcSystem() string {
+	return Catalog.Format(msgs.locale, "svcSystem", nil)
+}
+
+// SvcAll says "All"
+// in the language the app shows.
+func SvcAll() string { return In(i18n.Locale()).SvcAll() }
+
+// SvcAll says "All"
+// in the language of msgs.
+func (msgs Messages) SvcAll() string {
+	return Catalog.Format(msgs.locale, "svcAll", nil)
+}
+
+// SvcRunning says "Active"
+// in the language the app shows.
+func SvcRunning() string { return In(i18n.Locale()).SvcRunning() }
+
+// SvcRunning says "Active"
+// in the language of msgs.
+func (msgs Messages) SvcRunning() string {
+	return Catalog.Format(msgs.locale, "svcRunning", nil)
+}
+
+// SvcStopped says "Inactive"
+// in the language the app shows.
+func SvcStopped() string { return In(i18n.Locale()).SvcStopped() }
+
+// SvcStopped says "Inactive"
+// in the language of msgs.
+func (msgs Messages) SvcStopped() string {
+	return Catalog.Format(msgs.locale, "svcStopped", nil)
+}
+
+// SvcFailed says "Failed"
+// in the language the app shows.
+func SvcFailed() string { return In(i18n.Locale()).SvcFailed() }
+
+// SvcFailed says "Failed"
+// in the language of msgs.
+func (msgs Messages) SvcFailed() string {
+	return Catalog.Format(msgs.locale, "svcFailed", nil)
+}
+
+// SvcStart says "Start"
+// in the language the app shows.
+func SvcStart() string { return In(i18n.Locale()).SvcStart() }
+
+// SvcStart says "Start"
+// in the language of msgs.
+func (msgs Messages) SvcStart() string {
+	return Catalog.Format(msgs.locale, "svcStart", nil)
+}
+
+// SvcStop says "Stop"
+// in the language the app shows.
+func SvcStop() string { return In(i18n.Locale()).SvcStop() }
+
+// SvcStop says "Stop"
+// in the language of msgs.
+func (msgs Messages) SvcStop() string {
+	return Catalog.Format(msgs.locale, "svcStop", nil)
+}
+
+// SvcRestart says "Restart"
+// in the language the app shows.
+func SvcRestart() string { return In(i18n.Locale()).SvcRestart() }
+
+// SvcRestart says "Restart"
+// in the language of msgs.
+func (msgs Messages) SvcRestart() string {
+	return Catalog.Format(msgs.locale, "svcRestart", nil)
+}
+
+// SvcEnable says "Enable at boot"
+// in the language the app shows.
+func SvcEnable() string { return In(i18n.Locale()).SvcEnable() }
+
+// SvcEnable says "Enable at boot"
+// in the language of msgs.
+func (msgs Messages) SvcEnable() string {
+	return Catalog.Format(msgs.locale, "svcEnable", nil)
+}
+
+// SvcDisable says "Disable at boot"
+// in the language the app shows.
+func SvcDisable() string { return In(i18n.Locale()).SvcDisable() }
+
+// SvcDisable says "Disable at boot"
+// in the language of msgs.
+func (msgs Messages) SvcDisable() string {
+	return Catalog.Format(msgs.locale, "svcDisable", nil)
+}
+
+// SvcDetails says "Details"
+// in the language the app shows.
+func SvcDetails() string { return In(i18n.Locale()).SvcDetails() }
+
+// SvcDetails says "Details"
+// in the language of msgs.
+func (msgs Messages) SvcDetails() string {
+	return Catalog.Format(msgs.locale, "svcDetails", nil)
+}
+
+// SvcJournal says "Journal"
+// in the language the app shows.
+func SvcJournal() string { return In(i18n.Locale()).SvcJournal() }
+
+// SvcJournal says "Journal"
+// in the language of msgs.
+func (msgs Messages) SvcJournal() string {
+	return Catalog.Format(msgs.locale, "svcJournal", nil)
+}
+
+// SvcNoJournal says "No journal entries"
+// in the language the app shows.
+func SvcNoJournal() string { return In(i18n.Locale()).SvcNoJournal() }
+
+// SvcNoJournal says "No journal entries"
+// in the language of msgs.
+func (msgs Messages) SvcNoJournal() string {
+	return Catalog.Format(msgs.locale, "svcNoJournal", nil)
+}
+
+// SvcUnreadable says "Couldn’t read this service’s state"
+// in the language the app shows.
+func SvcUnreadable() string { return In(i18n.Locale()).SvcUnreadable() }
+
+// SvcUnreadable says "Couldn’t read this service’s state"
+// in the language of msgs.
+func (msgs Messages) SvcUnreadable() string {
+	return Catalog.Format(msgs.locale, "svcUnreadable", nil)
+}
+
+// SvcNeedsRoot says "Needs root: log in as root, or give this user passwordless sudo"
+// in the language the app shows.
+func SvcNeedsRoot() string { return In(i18n.Locale()).SvcNeedsRoot() }
+
+// SvcNeedsRoot says "Needs root: log in as root, or give this user passwordless sudo"
+// in the language of msgs.
+func (msgs Messages) SvcNeedsRoot() string {
+	return Catalog.Format(msgs.locale, "svcNeedsRoot", nil)
+}
+
+// SvcNeedsRootNoSudo says "Needs root: this host has no sudo, so log in as root"
+// in the language the app shows.
+func SvcNeedsRootNoSudo() string { return In(i18n.Locale()).SvcNeedsRootNoSudo() }
+
+// SvcNeedsRootNoSudo says "Needs root: this host has no sudo, so log in as root"
+// in the language of msgs.
+func (msgs Messages) SvcNeedsRootNoSudo() string {
+	return Catalog.Format(msgs.locale, "svcNeedsRootNoSudo", nil)
+}
+
+// SvcError says "systemctl failed: {detail}"
+// in the language the app shows.
+func SvcError(detail string) string { return In(i18n.Locale()).SvcError(detail) }
+
+// SvcError says "systemctl failed: {detail}"
+// in the language of msgs.
+func (msgs Messages) SvcError(detail string) string {
+	return Catalog.Format(msgs.locale, "svcError", map[string]any{"detail": detail})
+}
+
+// SvcGroupCount says "{count}"
+// in the language the app shows.
+func SvcGroupCount(count string) string { return In(i18n.Locale()).SvcGroupCount(count) }
+
+// SvcGroupCount says "{count}"
+// in the language of msgs.
+func (msgs Messages) SvcGroupCount(count string) string {
+	return Catalog.Format(msgs.locale, "svcGroupCount", map[string]any{"count": count})
+}
+
+// SvcLoad says "Load state"
+// in the language the app shows.
+func SvcLoad() string { return In(i18n.Locale()).SvcLoad() }
+
+// SvcLoad says "Load state"
+// in the language of msgs.
+func (msgs Messages) SvcLoad() string {
+	return Catalog.Format(msgs.locale, "svcLoad", nil)
+}
+
+// SvcActiveState says "Active state"
+// in the language the app shows.
+func SvcActiveState() string { return In(i18n.Locale()).SvcActiveState() }
+
+// SvcActiveState says "Active state"
+// in the language of msgs.
+func (msgs Messages) SvcActiveState() string {
+	return Catalog.Format(msgs.locale, "svcActiveState", nil)
+}
+
+// SvcBoot says "At boot"
+// in the language the app shows.
+func SvcBoot() string { return In(i18n.Locale()).SvcBoot() }
+
+// SvcBoot says "At boot"
+// in the language of msgs.
+func (msgs Messages) SvcBoot() string {
+	return Catalog.Format(msgs.locale, "svcBoot", nil)
+}
+
+// SvcMainPID says "Main PID"
+// in the language the app shows.
+func SvcMainPID() string { return In(i18n.Locale()).SvcMainPID() }
+
+// SvcMainPID says "Main PID"
+// in the language of msgs.
+func (msgs Messages) SvcMainPID() string {
+	return Catalog.Format(msgs.locale, "svcMainPID", nil)
+}
+
+// SvcMemory says "Memory"
+// in the language the app shows.
+func SvcMemory() string { return In(i18n.Locale()).SvcMemory() }
+
+// SvcMemory says "Memory"
+// in the language of msgs.
+func (msgs Messages) SvcMemory() string {
+	return Catalog.Format(msgs.locale, "svcMemory", nil)
+}
+
+// SvcTasks says "Tasks"
+// in the language the app shows.
+func SvcTasks() string { return In(i18n.Locale()).SvcTasks() }
+
+// SvcTasks says "Tasks"
+// in the language of msgs.
+func (msgs Messages) SvcTasks() string {
+	return Catalog.Format(msgs.locale, "svcTasks", nil)
+}
+
+// SvcRestarts says "Restarts"
+// in the language the app shows.
+func SvcRestarts() string { return In(i18n.Locale()).SvcRestarts() }
+
+// SvcRestarts says "Restarts"
+// in the language of msgs.
+func (msgs Messages) SvcRestarts() string {
+	return Catalog.Format(msgs.locale, "svcRestarts", nil)
+}
+
+// SvcExit says "Exit status"
+// in the language the app shows.
+func SvcExit() string { return In(i18n.Locale()).SvcExit() }
+
+// SvcExit says "Exit status"
+// in the language of msgs.
+func (msgs Messages) SvcExit() string {
+	return Catalog.Format(msgs.locale, "svcExit", nil)
+}
+
+// SvcStarted says "Started"
+// in the language the app shows.
+func SvcStarted() string { return In(i18n.Locale()).SvcStarted() }
+
+// SvcStarted says "Started"
+// in the language of msgs.
+func (msgs Messages) SvcStarted() string {
+	return Catalog.Format(msgs.locale, "svcStarted", nil)
+}
+
+// SvcStoppedAt says "Stopped"
+// in the language the app shows.
+func SvcStoppedAt() string { return In(i18n.Locale()).SvcStoppedAt() }
+
+// SvcStoppedAt says "Stopped"
+// in the language of msgs.
+func (msgs Messages) SvcStoppedAt() string {
+	return Catalog.Format(msgs.locale, "svcStoppedAt", nil)
+}
+
+// SvcUnitFile says "Unit file"
+// in the language the app shows.
+func SvcUnitFile() string { return In(i18n.Locale()).SvcUnitFile() }
+
+// SvcUnitFile says "Unit file"
+// in the language of msgs.
+func (msgs Messages) SvcUnitFile() string {
+	return Catalog.Format(msgs.locale, "svcUnitFile", nil)
+}
+
+// SvcActiveActive says "Active"
+// in the language the app shows.
+func SvcActiveActive() string { return In(i18n.Locale()).SvcActiveActive() }
+
+// SvcActiveActive says "Active"
+// in the language of msgs.
+func (msgs Messages) SvcActiveActive() string {
+	return Catalog.Format(msgs.locale, "svcActiveActive", nil)
+}
+
+// SvcActiveReloading says "Reloading"
+// in the language the app shows.
+func SvcActiveReloading() string { return In(i18n.Locale()).SvcActiveReloading() }
+
+// SvcActiveReloading says "Reloading"
+// in the language of msgs.
+func (msgs Messages) SvcActiveReloading() string {
+	return Catalog.Format(msgs.locale, "svcActiveReloading", nil)
+}
+
+// SvcActiveInactive says "Inactive"
+// in the language the app shows.
+func SvcActiveInactive() string { return In(i18n.Locale()).SvcActiveInactive() }
+
+// SvcActiveInactive says "Inactive"
+// in the language of msgs.
+func (msgs Messages) SvcActiveInactive() string {
+	return Catalog.Format(msgs.locale, "svcActiveInactive", nil)
+}
+
+// SvcActiveFailed says "Failed"
+// in the language the app shows.
+func SvcActiveFailed() string { return In(i18n.Locale()).SvcActiveFailed() }
+
+// SvcActiveFailed says "Failed"
+// in the language of msgs.
+func (msgs Messages) SvcActiveFailed() string {
+	return Catalog.Format(msgs.locale, "svcActiveFailed", nil)
+}
+
+// SvcActiveActivating says "Activating"
+// in the language the app shows.
+func SvcActiveActivating() string { return In(i18n.Locale()).SvcActiveActivating() }
+
+// SvcActiveActivating says "Activating"
+// in the language of msgs.
+func (msgs Messages) SvcActiveActivating() string {
+	return Catalog.Format(msgs.locale, "svcActiveActivating", nil)
+}
+
+// SvcActiveDeactivating says "Deactivating"
+// in the language the app shows.
+func SvcActiveDeactivating() string { return In(i18n.Locale()).SvcActiveDeactivating() }
+
+// SvcActiveDeactivating says "Deactivating"
+// in the language of msgs.
+func (msgs Messages) SvcActiveDeactivating() string {
+	return Catalog.Format(msgs.locale, "svcActiveDeactivating", nil)
+}
+
+// SvcSubRunning says "Running"
+// in the language the app shows.
+func SvcSubRunning() string { return In(i18n.Locale()).SvcSubRunning() }
+
+// SvcSubRunning says "Running"
+// in the language of msgs.
+func (msgs Messages) SvcSubRunning() string {
+	return Catalog.Format(msgs.locale, "svcSubRunning", nil)
+}
+
+// SvcSubExited says "Exited"
+// in the language the app shows.
+func SvcSubExited() string { return In(i18n.Locale()).SvcSubExited() }
+
+// SvcSubExited says "Exited"
+// in the language of msgs.
+func (msgs Messages) SvcSubExited() string {
+	return Catalog.Format(msgs.locale, "svcSubExited", nil)
+}
+
+// SvcSubDead says "Dead"
+// in the language the app shows.
+func SvcSubDead() string { return In(i18n.Locale()).SvcSubDead() }
+
+// SvcSubDead says "Dead"
+// in the language of msgs.
+func (msgs Messages) SvcSubDead() string {
+	return Catalog.Format(msgs.locale, "svcSubDead", nil)
+}
+
+// SvcSubFailed says "Failed"
+// in the language the app shows.
+func SvcSubFailed() string { return In(i18n.Locale()).SvcSubFailed() }
+
+// SvcSubFailed says "Failed"
+// in the language of msgs.
+func (msgs Messages) SvcSubFailed() string {
+	return Catalog.Format(msgs.locale, "svcSubFailed", nil)
+}
+
+// SvcSubWaiting says "Waiting"
+// in the language the app shows.
+func SvcSubWaiting() string { return In(i18n.Locale()).SvcSubWaiting() }
+
+// SvcSubWaiting says "Waiting"
+// in the language of msgs.
+func (msgs Messages) SvcSubWaiting() string {
+	return Catalog.Format(msgs.locale, "svcSubWaiting", nil)
+}
+
+// SvcSubListening says "Listening"
+// in the language the app shows.
+func SvcSubListening() string { return In(i18n.Locale()).SvcSubListening() }
+
+// SvcSubListening says "Listening"
+// in the language of msgs.
+func (msgs Messages) SvcSubListening() string {
+	return Catalog.Format(msgs.locale, "svcSubListening", nil)
+}
+
+// SvcSubReload says "Reloading"
+// in the language the app shows.
+func SvcSubReload() string { return In(i18n.Locale()).SvcSubReload() }
+
+// SvcSubReload says "Reloading"
+// in the language of msgs.
+func (msgs Messages) SvcSubReload() string {
+	return Catalog.Format(msgs.locale, "svcSubReload", nil)
+}
+
+// SvcSubAutoRestart says "Waiting to restart"
+// in the language the app shows.
+func SvcSubAutoRestart() string { return In(i18n.Locale()).SvcSubAutoRestart() }
+
+// SvcSubAutoRestart says "Waiting to restart"
+// in the language of msgs.
+func (msgs Messages) SvcSubAutoRestart() string {
+	return Catalog.Format(msgs.locale, "svcSubAutoRestart", nil)
+}
+
+// SvcSubCondition says "Condition not met"
+// in the language the app shows.
+func SvcSubCondition() string { return In(i18n.Locale()).SvcSubCondition() }
+
+// SvcSubCondition says "Condition not met"
+// in the language of msgs.
+func (msgs Messages) SvcSubCondition() string {
+	return Catalog.Format(msgs.locale, "svcSubCondition", nil)
+}
+
+// SvcSubStarting says "Starting"
+// in the language the app shows.
+func SvcSubStarting() string { return In(i18n.Locale()).SvcSubStarting() }
+
+// SvcSubStarting says "Starting"
+// in the language of msgs.
+func (msgs Messages) SvcSubStarting() string {
+	return Catalog.Format(msgs.locale, "svcSubStarting", nil)
+}
+
+// SvcSubStopping says "Stopping"
+// in the language the app shows.
+func SvcSubStopping() string { return In(i18n.Locale()).SvcSubStopping() }
+
+// SvcSubStopping says "Stopping"
+// in the language of msgs.
+func (msgs Messages) SvcSubStopping() string {
+	return Catalog.Format(msgs.locale, "svcSubStopping", nil)
+}
+
+// SvcFileEnabled says "Enabled"
+// in the language the app shows.
+func SvcFileEnabled() string { return In(i18n.Locale()).SvcFileEnabled() }
+
+// SvcFileEnabled says "Enabled"
+// in the language of msgs.
+func (msgs Messages) SvcFileEnabled() string {
+	return Catalog.Format(msgs.locale, "svcFileEnabled", nil)
+}
+
+// SvcFileEnabledRuntime says "Enabled until reboot"
+// in the language the app shows.
+func SvcFileEnabledRuntime() string { return In(i18n.Locale()).SvcFileEnabledRuntime() }
+
+// SvcFileEnabledRuntime says "Enabled until reboot"
+// in the language of msgs.
+func (msgs Messages) SvcFileEnabledRuntime() string {
+	return Catalog.Format(msgs.locale, "svcFileEnabledRuntime", nil)
+}
+
+// SvcFileDisabled says "Disabled"
+// in the language the app shows.
+func SvcFileDisabled() string { return In(i18n.Locale()).SvcFileDisabled() }
+
+// SvcFileDisabled says "Disabled"
+// in the language of msgs.
+func (msgs Messages) SvcFileDisabled() string {
+	return Catalog.Format(msgs.locale, "svcFileDisabled", nil)
+}
+
+// SvcFileStatic says "Static"
+// in the language the app shows.
+func SvcFileStatic() string { return In(i18n.Locale()).SvcFileStatic() }
+
+// SvcFileStatic says "Static"
+// in the language of msgs.
+func (msgs Messages) SvcFileStatic() string {
+	return Catalog.Format(msgs.locale, "svcFileStatic", nil)
+}
+
+// SvcFileMasked says "Masked"
+// in the language the app shows.
+func SvcFileMasked() string { return In(i18n.Locale()).SvcFileMasked() }
+
+// SvcFileMasked says "Masked"
+// in the language of msgs.
+func (msgs Messages) SvcFileMasked() string {
+	return Catalog.Format(msgs.locale, "svcFileMasked", nil)
+}
+
+// SvcFileGenerated says "Generated"
+// in the language the app shows.
+func SvcFileGenerated() string { return In(i18n.Locale()).SvcFileGenerated() }
+
+// SvcFileGenerated says "Generated"
+// in the language of msgs.
+func (msgs Messages) SvcFileGenerated() string {
+	return Catalog.Format(msgs.locale, "svcFileGenerated", nil)
+}
+
+// SvcFileIndirect says "Indirect"
+// in the language the app shows.
+func SvcFileIndirect() string { return In(i18n.Locale()).SvcFileIndirect() }
+
+// SvcFileIndirect says "Indirect"
+// in the language of msgs.
+func (msgs Messages) SvcFileIndirect() string {
+	return Catalog.Format(msgs.locale, "svcFileIndirect", nil)
+}
+
+// SvcFileLinked says "Linked"
+// in the language the app shows.
+func SvcFileLinked() string { return In(i18n.Locale()).SvcFileLinked() }
+
+// SvcFileLinked says "Linked"
+// in the language of msgs.
+func (msgs Messages) SvcFileLinked() string {
+	return Catalog.Format(msgs.locale, "svcFileLinked", nil)
+}
+
+// SvcFileTransient says "Transient"
+// in the language the app shows.
+func SvcFileTransient() string { return In(i18n.Locale()).SvcFileTransient() }
+
+// SvcFileTransient says "Transient"
+// in the language of msgs.
+func (msgs Messages) SvcFileTransient() string {
+	return Catalog.Format(msgs.locale, "svcFileTransient", nil)
+}
+
+// SvcFileAlias says "Alias"
+// in the language the app shows.
+func SvcFileAlias() string { return In(i18n.Locale()).SvcFileAlias() }
+
+// SvcFileAlias says "Alias"
+// in the language of msgs.
+func (msgs Messages) SvcFileAlias() string {
+	return Catalog.Format(msgs.locale, "svcFileAlias", nil)
+}
+
+// SvcFileBad says "Bad"
+// in the language the app shows.
+func SvcFileBad() string { return In(i18n.Locale()).SvcFileBad() }
+
+// SvcFileBad says "Bad"
+// in the language of msgs.
+func (msgs Messages) SvcFileBad() string {
+	return Catalog.Format(msgs.locale, "svcFileBad", nil)
+}
+
+// SvcLoadLoaded says "Loaded"
+// in the language the app shows.
+func SvcLoadLoaded() string { return In(i18n.Locale()).SvcLoadLoaded() }
+
+// SvcLoadLoaded says "Loaded"
+// in the language of msgs.
+func (msgs Messages) SvcLoadLoaded() string {
+	return Catalog.Format(msgs.locale, "svcLoadLoaded", nil)
+}
+
+// SvcLoadNotFound says "Not found"
+// in the language the app shows.
+func SvcLoadNotFound() string { return In(i18n.Locale()).SvcLoadNotFound() }
+
+// SvcLoadNotFound says "Not found"
+// in the language of msgs.
+func (msgs Messages) SvcLoadNotFound() string {
+	return Catalog.Format(msgs.locale, "svcLoadNotFound", nil)
+}
+
+// SvcLoadMasked says "Masked"
+// in the language the app shows.
+func SvcLoadMasked() string { return In(i18n.Locale()).SvcLoadMasked() }
+
+// SvcLoadMasked says "Masked"
+// in the language of msgs.
+func (msgs Messages) SvcLoadMasked() string {
+	return Catalog.Format(msgs.locale, "svcLoadMasked", nil)
+}
+
+// SvcLoadError says "Error"
+// in the language the app shows.
+func SvcLoadError() string { return In(i18n.Locale()).SvcLoadError() }
+
+// SvcLoadError says "Error"
+// in the language of msgs.
+func (msgs Messages) SvcLoadError() string {
+	return Catalog.Format(msgs.locale, "svcLoadError", nil)
+}
+
+// SvcLoadBadSetting says "Bad setting"
+// in the language the app shows.
+func SvcLoadBadSetting() string { return In(i18n.Locale()).SvcLoadBadSetting() }
+
+// SvcLoadBadSetting says "Bad setting"
+// in the language of msgs.
+func (msgs Messages) SvcLoadBadSetting() string {
+	return Catalog.Format(msgs.locale, "svcLoadBadSetting", nil)
+}
+
+// SvcSysRunning says "Running"
+// in the language the app shows.
+func SvcSysRunning() string { return In(i18n.Locale()).SvcSysRunning() }
+
+// SvcSysRunning says "Running"
+// in the language of msgs.
+func (msgs Messages) SvcSysRunning() string {
+	return Catalog.Format(msgs.locale, "svcSysRunning", nil)
+}
+
+// SvcSysDegraded says "Degraded"
+// in the language the app shows.
+func SvcSysDegraded() string { return In(i18n.Locale()).SvcSysDegraded() }
+
+// SvcSysDegraded says "Degraded"
+// in the language of msgs.
+func (msgs Messages) SvcSysDegraded() string {
+	return Catalog.Format(msgs.locale, "svcSysDegraded", nil)
+}
+
+// SvcSysStarting says "Starting"
+// in the language the app shows.
+func SvcSysStarting() string { return In(i18n.Locale()).SvcSysStarting() }
+
+// SvcSysStarting says "Starting"
+// in the language of msgs.
+func (msgs Messages) SvcSysStarting() string {
+	return Catalog.Format(msgs.locale, "svcSysStarting", nil)
+}
+
+// SvcSysInitializing says "Initializing"
+// in the language the app shows.
+func SvcSysInitializing() string { return In(i18n.Locale()).SvcSysInitializing() }
+
+// SvcSysInitializing says "Initializing"
+// in the language of msgs.
+func (msgs Messages) SvcSysInitializing() string {
+	return Catalog.Format(msgs.locale, "svcSysInitializing", nil)
+}
+
+// SvcSysMaintenance says "Maintenance"
+// in the language the app shows.
+func SvcSysMaintenance() string { return In(i18n.Locale()).SvcSysMaintenance() }
+
+// SvcSysMaintenance says "Maintenance"
+// in the language of msgs.
+func (msgs Messages) SvcSysMaintenance() string {
+	return Catalog.Format(msgs.locale, "svcSysMaintenance", nil)
+}
+
+// SvcSysStopping says "Shutting down"
+// in the language the app shows.
+func SvcSysStopping() string { return In(i18n.Locale()).SvcSysStopping() }
+
+// SvcSysStopping says "Shutting down"
+// in the language of msgs.
+func (msgs Messages) SvcSysStopping() string {
+	return Catalog.Format(msgs.locale, "svcSysStopping", nil)
+}
+
+// SvcSysOffline says "Offline"
+// in the language the app shows.
+func SvcSysOffline() string { return In(i18n.Locale()).SvcSysOffline() }
+
+// SvcSysOffline says "Offline"
+// in the language of msgs.
+func (msgs Messages) SvcSysOffline() string {
+	return Catalog.Format(msgs.locale, "svcSysOffline", nil)
+}
+
 // TmuxManager says "tmux Sessions"
 // in the language the app shows.
 func TmuxManager() string { return In(i18n.Locale()).TmuxManager() }
