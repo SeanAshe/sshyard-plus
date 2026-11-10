@@ -10,7 +10,7 @@ import (
 
 var (
 	ErrUnsafePath        = errors.New("sftp: symbolic link or unsafe path is not allowed")
-	ErrUnsafeDestination = errors.New("sftp: destination folder is writable by other users")
+	ErrUnsafeDestination = errors.New("sftp: destination folder is writable by everyone")
 	ErrPartChanged       = errors.New("sftp: partial file identity changed")
 )
 

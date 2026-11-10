@@ -298,7 +298,7 @@ func (ts *Transfers) attempts(ctx context.Context, t *Transfer) error {
 			return ctx.Err()
 		}
 		ts.mu.Lock()
-		if t.Attempt >= MaxRetries || errors.Is(err, fs.ErrNotExist) || errors.Is(err, fs.ErrPermission) || errors.Is(err, ErrUnsafeName) || errors.Is(err, ErrDstIsDir) {
+		if t.Attempt >= MaxRetries || permanent(err) {
 			ts.mu.Unlock()
 			return err
 		}
@@ -315,6 +315,17 @@ func (ts *Transfers) attempts(ctx context.Context, t *Transfer) error {
 		case <-time.After(d):
 		}
 	}
+}
+
+// permanent reports a failure that trying again cannot change: a missing
+// file, a refusal, or a path or folder the safety checks reject.
+func permanent(err error) bool {
+	for _, e := range []error{fs.ErrNotExist, fs.ErrPermission, ErrUnsafeName, ErrDstIsDir, ErrUnsafePath, ErrUnsafeDestination, ErrPartChanged} {
+		if errors.Is(err, e) {
+			return true
+		}
+	}
+	return false
 }
 
 // ErrDstIsDir is a transfer to where a folder is.
@@ -798,7 +809,10 @@ func (r remoteFS) create(p string, keep bool) (writeSeekCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	if parent.Mode().Perm()&0o022 != 0 {
+	// Only a folder anyone may write to without the sticky bit lets
+	// strangers replace the part file; group-writable folders (umask 002,
+	// shared team folders) and /tmp are fine.
+	if parent.Mode().Perm()&0o002 != 0 && parent.Mode()&fs.ModeSticky == 0 {
 		return nil, ErrUnsafeDestination
 	}
 	if _, err := r.c.ResolvePath(context.Background(), p); err != nil {

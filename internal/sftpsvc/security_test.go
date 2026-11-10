@@ -42,8 +42,8 @@ func TestDownloadDoesNotFollowPlantedPartOrAncestor(t *testing.T) {
 	ts = newQueue(r)
 	ts.Add(Download, filepath.Join(root, "source"), filepath.Join(link, "outside.txt"), "target")
 	ts.Wait()
-	if tr := ts.List()[0]; tr.State != Failed {
-		t.Fatalf("linked ancestor accepted: %+v", tr)
+	if tr := ts.List()[0]; tr.State != Failed || !errors.Is(tr.Err, ErrUnsafePath) || tr.Attempt != 0 {
+		t.Fatalf("linked ancestor accepted or retried: %+v", tr)
 	}
 	got, _ = os.ReadFile(outside)
 	if string(got) != "original" {
@@ -69,8 +69,8 @@ func TestResumeRefusesReplacedPartialIdentity(t *testing.T) {
 	}
 	ts.Resume(id)
 	ts.Wait()
-	if got := ts.List()[0]; got.State != Failed {
-		t.Fatalf("replaced part accepted: %+v", got)
+	if got := ts.List()[0]; got.State != Failed || !errors.Is(got.Err, ErrPartChanged) || got.Attempt != 0 {
+		t.Fatalf("replaced part accepted or retried: %+v", got)
 	}
 	info, err := os.Stat(outside)
 	if err != nil || info.Size() != tr.Bytes {

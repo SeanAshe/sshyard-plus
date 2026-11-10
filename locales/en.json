@@ -1139,7 +1139,7 @@
   "aiCommandOutputLimit": "Command output limit exceeded; execution cancelled and output truncated",
   "securitySftpReadLimit": "The file exceeds the read limit",
   "securitySftpUnsafePath": "Symbolic links and unsafe paths are not allowed",
-  "securitySftpUnsafeDestination": "The destination folder is writable by other users",
+  "securitySftpUnsafeDestination": "The destination folder is writable by everyone; choose another folder or remove others' write permission (chmod o-w)",
   "securitySftpPartChanged": "The partial download file changed; transfer stopped",
   "securitySftpInvalidPath": "The file path is invalid",
   "securitySftpNotDirectory": "The parent path is not a folder",

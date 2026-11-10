@@ -19,7 +19,7 @@ func TestSecurityErrorTranslations(t *testing.T) {
 	}{
 		{sftpsvc.ErrReadLimit, "The file exceeds the read limit", "文件超过读取大小上限"},
 		{sftpsvc.ErrUnsafePath, "Symbolic links and unsafe paths are not allowed", "不允许符号链接或不安全的路径"},
-		{sftpsvc.ErrUnsafeDestination, "The destination folder is writable by other users", "目标文件夹可被其他用户写入"},
+		{sftpsvc.ErrUnsafeDestination, "The destination folder is writable by everyone; choose another folder or remove others' write permission (chmod o-w)", "目标文件夹对所有用户可写，请换一个文件夹或移除其他用户的写权限（chmod o-w）"},
 		{sftpsvc.ErrOperationsBusy, "Too many SFTP operations are pending; try again later", "待处理的 SFTP 操作已达上限，请稍后重试"},
 		{sftpsvc.ErrPartChanged, "The partial download file changed; transfer stopped", "部分下载文件的身份已变化，传输已停止"},
 		{errors.New("sftp: invalid path"), "The file path is invalid", "文件路径无效"},

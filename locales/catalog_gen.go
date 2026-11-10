@@ -11507,11 +11507,11 @@ func (msgs Messages) SecuritySftpUnsafePath() string {
 	return Catalog.Format(msgs.locale, "securitySftpUnsafePath", nil)
 }
 
-// SecuritySftpUnsafeDestination says "The destination folder is writable by other users"
+// SecuritySftpUnsafeDestination says "The destination folder is writable by everyone; choose another folder or remove others' write permission (chmod o-w)"
 // in the language the app shows.
 func SecuritySftpUnsafeDestination() string { return In(i18n.Locale()).SecuritySftpUnsafeDestination() }
 
-// SecuritySftpUnsafeDestination says "The destination folder is writable by other users"
+// SecuritySftpUnsafeDestination says "The destination folder is writable by everyone; choose another folder or remove others' write permission (chmod o-w)"
 // in the language of msgs.
 func (msgs Messages) SecuritySftpUnsafeDestination() string {
 	return Catalog.Format(msgs.locale, "securitySftpUnsafeDestination", nil)

@@ -532,31 +532,40 @@ func (a *App) transfersSheet(c *ui.Context, cn *conn, tok theme.Tokens, m locale
 					return
 				}
 				// Rows past the box's height scroll, the buttons clear of
-				// the bar.
+				// the bar; a failed row's reason may take a second line.
 				end := float32(2)
-				if len(ts)*26 > 320-2*6 {
+				if len(ts)*26+failed*10 > 320-2*6 {
 					end += scrollGutter
 				}
 				ui.List(c.Key("queue"), &fs.queue, len(ts), func(i int) {
 					t := ts[i]
-					ui.Row(c.Key("tr:"+strconv.Itoa(t.ID))).Gap(8).AlignItems(ui.Center).Height(26).Padding(0, end, 0, 2).FillWidth().Children(func() {
+					// A failed row shows its whole reason where the progress
+					// was, wrapping, rather than cut to the status column.
+					broke := t.State == sftpsvc.Failed
+					row := ui.Row(c.Key("tr:" + strconv.Itoa(t.ID))).Gap(8).AlignItems(ui.Center).FillWidth()
+					if broke {
+						row.MinHeight(26).Padding(4, end, 4, 2)
+					} else {
+						row.Height(26).Padding(0, end, 0, 2)
+					}
+					row.Children(func() {
 						ic := icons.Upload
 						if t.Dir == sftpsvc.Download {
 							ic = icons.Download
 						}
 						ui.Icon(c, ic.SVG).Width(14).Height(14).Shrink(0).TextColor(tok.TextMuted)
-						name := ui.Text(c, t.Name).FontSize(theme.Footnote).SingleLine().Width(200)
+						name := ui.Text(c, t.Name).FontSize(theme.Footnote).SingleLine().Width(200).Shrink(0)
 						if t.Destination != "" {
 							name.Tooltip(t.Destination)
 						}
-						ui.Progress(c, float64(t.Percent())/100).Grow(1)
-						col := tok.TextMuted
-						if t.State == sftpsvc.Failed {
-							col = tok.Danger
-						}
-						lbl := ui.Text(c, transferLabel(m, t)).FontSize(theme.Caption).TextColor(col).SingleLine().Width(190)
-						if t.Err != nil {
-							lbl.Tooltip(securityErrorText(m, t.Err))
+						if broke {
+							ui.Text(c, transferLabel(m, t)).FontSize(theme.Caption).TextColor(tok.Danger).Grow(1).Shrink(1).MinWidth(0)
+						} else {
+							ui.Progress(c, float64(t.Percent())/100).Grow(1)
+							lbl := ui.Text(c, transferLabel(m, t)).FontSize(theme.Caption).TextColor(tok.TextMuted).SingleLine().Width(190)
+							if t.Err != nil {
+								lbl.Tooltip(securityErrorText(m, t.Err))
+							}
 						}
 						id := t.ID
 						ui.Row(c).Gap(2).Width(52).Justify(ui.End).Children(func() {

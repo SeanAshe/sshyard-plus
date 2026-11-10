@@ -1139,7 +1139,7 @@
   "aiCommandOutputLimit": "コマンド出力が制限を超えたため、実行をキャンセルし出力を切り詰めました",
   "securitySftpReadLimit": "ファイルが読み取りサイズの制限を超えています",
   "securitySftpUnsafePath": "シンボリックリンクや安全でないパスは使用できません",
-  "securitySftpUnsafeDestination": "転送先フォルダーは他のユーザーも書き込み可能です",
+  "securitySftpUnsafeDestination": "転送先フォルダーはすべてのユーザーが書き込み可能です。別のフォルダーを選ぶか、他のユーザーの書き込み権限を外してください（chmod o-w）",
   "securitySftpPartChanged": "ダウンロード途中のファイルが変更されたため、転送を停止しました",
   "securitySftpInvalidPath": "ファイルパスが無効です",
   "securitySftpNotDirectory": "親パスがフォルダーではありません",

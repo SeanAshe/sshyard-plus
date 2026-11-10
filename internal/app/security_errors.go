@@ -46,7 +46,7 @@ func securityText(m locales.Messages, s string) string {
 		return m.SecuritySftpReadLimit()
 	case "symbolic link or unsafe path is not allowed":
 		return m.SecuritySftpUnsafePath()
-	case "destination folder is writable by other users":
+	case "destination folder is writable by everyone":
 		return m.SecuritySftpUnsafeDestination()
 	case "partial file identity changed":
 		return m.SecuritySftpPartChanged()

@@ -1139,7 +1139,7 @@
   "aiCommandOutputLimit": "명령 출력 제한을 초과하여 실행을 취소하고 출력을 잘랐습니다",
   "securitySftpReadLimit": "파일이 읽기 제한을 초과합니다",
   "securitySftpUnsafePath": "심볼릭 링크 및 안전하지 않은 경로는 허용되지 않습니다",
-  "securitySftpUnsafeDestination": "대상 폴더에 다른 사용자의 쓰기 권한이 있습니다",
+  "securitySftpUnsafeDestination": "대상 폴더에 모든 사용자의 쓰기 권한이 있습니다. 다른 폴더를 선택하거나 다른 사용자의 쓰기 권한을 제거하세요(chmod o-w)",
   "securitySftpPartChanged": "부분 다운로드 파일이 변경되어 전송을 중지했습니다",
   "securitySftpInvalidPath": "파일 경로가 올바르지 않습니다",
   "securitySftpNotDirectory": "상위 경로가 폴더가 아닙니다",

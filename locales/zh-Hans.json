@@ -1139,7 +1139,7 @@
   "aiCommandOutputLimit": "命令输出超过上限，已取消执行并截断输出",
   "securitySftpReadLimit": "文件超过读取大小上限",
   "securitySftpUnsafePath": "不允许符号链接或不安全的路径",
-  "securitySftpUnsafeDestination": "目标文件夹可被其他用户写入",
+  "securitySftpUnsafeDestination": "目标文件夹对所有用户可写，请换一个文件夹或移除其他用户的写权限（chmod o-w）",
   "securitySftpPartChanged": "部分下载文件的身份已变化，传输已停止",
   "securitySftpInvalidPath": "文件路径无效",
   "securitySftpNotDirectory": "父路径不是文件夹",

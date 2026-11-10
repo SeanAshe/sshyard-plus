@@ -91,9 +91,10 @@ func TestPlanCanceledWhileServerSilent(t *testing.T) {
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			wait := 5 * pagerReplyTimeout
+			// Timed from before the timer, so the cancel is never early.
+			start := time.Now()
 			time.AfterFunc(wait, cancel)
 			done := make(chan error, 1)
-			start := time.Now()
 			go func() {
 				_, _, err := c.PlanDownload(ctx, []string{"/big"}, t.TempDir())
 				done <- err

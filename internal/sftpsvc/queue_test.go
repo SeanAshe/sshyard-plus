@@ -260,6 +260,47 @@ func TestQueueUploadKeepsModeAndTime(t *testing.T) {
 	}
 }
 
+// Uploads go into group-writable (umask 002, shared) and sticky (/tmp)
+// folders; only a folder anyone may write to without the sticky bit is
+// refused, at once rather than after retries.
+func TestQueueUploadDestinationFolderModes(t *testing.T) {
+	r, root := queueServer(t)
+	src := filepath.Join(t.TempDir(), "install.txt")
+	os.WriteFile(src, []byte("install"), 0o644)
+	cases := []struct {
+		name string
+		mode fs.FileMode
+		ok   bool
+	}{
+		{"group", 0o775, true},
+		{"setgid", 0o775 | fs.ModeSetgid, true},
+		{"sticky", 0o777 | fs.ModeSticky, true},
+		{"open", 0o777, false},
+	}
+	ts := newQueue(r)
+	for _, tc := range cases {
+		dir := filepath.Join(root, tc.name)
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(dir, tc.mode); err != nil {
+			t.Fatal(err)
+		}
+		ts.Add(Upload, src, dir+"/install.txt", tc.name)
+	}
+	ts.Wait()
+	for i, tr := range ts.List() {
+		tc := cases[i]
+		_, statErr := os.Stat(filepath.Join(root, tc.name, "install.txt"))
+		if tc.ok && (tr.State != Done || statErr != nil) {
+			t.Errorf("%s: %v %v, upload refused", tc.name, tr.State, tr.Err)
+		}
+		if !tc.ok && (tr.State != Failed || !errors.Is(tr.Err, ErrUnsafeDestination) || tr.Attempt != 0 || statErr == nil) {
+			t.Errorf("%s: %v %v after %d retries, want ErrUnsafeDestination at once", tc.name, tr.State, tr.Err, tr.Attempt)
+		}
+	}
+}
+
 func bigFile(t *testing.T, p string, n int) []byte {
 	data := make([]byte, n)
 	rand.Read(data)
