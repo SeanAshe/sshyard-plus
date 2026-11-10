@@ -93,8 +93,12 @@ func TestOSC52Policy(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "s.json")
 	os.WriteFile(p, []byte(`{"theme":"dark"}`), 0o600)
 	got, err := Load(p)
-	if err != nil || got.OSC52Write != OSC52Ask || got.OSC52MaxBytes != OSC52MaxDefault {
+	if err != nil || got.OSC52Write != OSC52Ask || got.OSC52MaxBytes != OSC52MaxDefault || !got.OSC52Notify {
 		t.Fatalf("old file %+v %v", got, err)
+	}
+	os.WriteFile(p, []byte(`{"osc52Notify":false}`), 0o600)
+	if got, err := Load(p); err != nil || got.OSC52Notify {
+		t.Fatalf("notify off %+v %v", got, err)
 	}
 }
 

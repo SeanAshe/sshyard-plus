@@ -529,6 +529,8 @@
   "osc52Follow": "전역 설정 따르기",
   "osc52Limit": "크기 제한(KiB)",
   "osc52LimitHint": "64~8192. 이보다 큰 복사는 버립니다.",
+  "osc52Notify": "원격 복사 시 알림",
+  "osc52NotifyNote": "클립보드에 쓴 호스트를 표시하고 실행 취소할 수 있습니다. 끄면 알림 없이 복사합니다.",
   "osc52Wrote": "{host}에서 클립보드에 썼습니다({bytes}바이트)",
   "osc52Undo": "실행 취소",
   "osc52UndoGone": "클립보드가 변경되어 더 이상 실행 취소할 수 없습니다",

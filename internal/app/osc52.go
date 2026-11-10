@@ -287,6 +287,11 @@ func (a *App) applyClip(id int, host, data string, eff clipEffect) {
 	case eff.Ask:
 		a.clipAsk = &oscAsk{open: true, pane: id, host: host, data: data}
 	case eff.Write:
+		if !a.settings.OSC52Notify {
+			// No notice means no Undo, so nothing is snapshotted.
+			a.svc.WriteClipboard(data)
+			return
+		}
 		if eff.Fresh {
 			a.clip.noteUndo(id, a.svc.ReadClipboard())
 		}

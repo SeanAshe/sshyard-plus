@@ -593,6 +593,12 @@ func (a *App) prefTerminal(c *ui.Context, m locales.Messages, tok theme.Tokens, 
 				*changed = true
 			}
 		})
+		g.row(m.Osc52Notify(), m.Osc52NotifyNote(), func() {
+			on := s.OSC52Notify
+			if formSwitch(c.Key("osc52notify"), &on).Label(m.Osc52Notify()).Changed() {
+				s.OSC52Notify, *changed = on, true
+			}
+		})
 	})
 }
 

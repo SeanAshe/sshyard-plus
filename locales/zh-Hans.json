@@ -529,6 +529,8 @@
   "osc52Follow": "跟随全局",
   "osc52Limit": "大小上限（KiB）",
   "osc52LimitHint": "64–8192。超出的复制会被丢弃。",
+  "osc52Notify": "远程复制时提示",
+  "osc52NotifyNote": "显示写入来源并可撤销。关闭后静默复制，不再弹出提示。",
   "osc52Wrote": "{host} 写入了剪贴板（{bytes} 字节）",
   "osc52Undo": "撤销",
   "osc52UndoGone": "剪贴板已变化，无法撤销",

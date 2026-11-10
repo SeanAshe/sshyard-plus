@@ -529,6 +529,8 @@
   "osc52Follow": "Follow the global setting",
   "osc52Limit": "Size limit (KiB)",
   "osc52LimitHint": "64–8192. A larger copy is dropped.",
+  "osc52Notify": "Notify on remote copy",
+  "osc52NotifyNote": "Shows who wrote to the clipboard, with Undo. Turn off to copy silently.",
   "osc52Wrote": "{host} wrote to the clipboard ({bytes} bytes)",
   "osc52Undo": "Undo",
   "osc52UndoGone": "The clipboard changed, so undo is no longer available",

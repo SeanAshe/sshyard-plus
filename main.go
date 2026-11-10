@@ -193,6 +193,7 @@ func main() {
 			d.present()
 		}
 		a.Start()
+		go updater.CleanLeftovers()
 		w.OnMinimize(func() { a.SetMinimized(true) })
 		w.OnRestore(func() { a.SetMinimized(false) })
 		if ownWindowButtons() {

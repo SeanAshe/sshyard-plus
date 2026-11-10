@@ -529,6 +529,8 @@
   "osc52Follow": "跟隨全域性",
   "osc52Limit": "大小上限（KiB）",
   "osc52LimitHint": "64–8192。超出的複製會被捨棄。",
+  "osc52Notify": "遠端複製時提示",
+  "osc52NotifyNote": "顯示寫入來源並可撤銷。關閉後靜默複製，不再彈出提示。",
   "osc52Wrote": "{host} 寫入了剪貼簿（{bytes} 位元組）",
   "osc52Undo": "撤銷",
   "osc52UndoGone": "剪貼簿已變化，無法撤銷",

@@ -5377,6 +5377,26 @@ func (msgs Messages) Osc52LimitHint() string {
 	return Catalog.Format(msgs.locale, "osc52LimitHint", nil)
 }
 
+// Osc52Notify says "Notify on remote copy"
+// in the language the app shows.
+func Osc52Notify() string { return In(i18n.Locale()).Osc52Notify() }
+
+// Osc52Notify says "Notify on remote copy"
+// in the language of msgs.
+func (msgs Messages) Osc52Notify() string {
+	return Catalog.Format(msgs.locale, "osc52Notify", nil)
+}
+
+// Osc52NotifyNote says "Shows who wrote to the clipboard, with Undo. Turn off to copy silently."
+// in the language the app shows.
+func Osc52NotifyNote() string { return In(i18n.Locale()).Osc52NotifyNote() }
+
+// Osc52NotifyNote says "Shows who wrote to the clipboard, with Undo. Turn off to copy silently."
+// in the language of msgs.
+func (msgs Messages) Osc52NotifyNote() string {
+	return Catalog.Format(msgs.locale, "osc52NotifyNote", nil)
+}
+
 // Osc52Wrote says "{host} wrote to the clipboard ({bytes} bytes)"
 // in the language the app shows.
 func Osc52Wrote(host string, bytes string) string { return In(i18n.Locale()).Osc52Wrote(host, bytes) }
