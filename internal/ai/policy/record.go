@@ -3,6 +3,8 @@ package policy
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"io/fs"
 	"strings"
 	"time"
 )
@@ -44,10 +46,55 @@ type Auditor interface {
 	Record(AuditRecord) error
 }
 
-// AuditPreparer is optional. The gate calls Prepare before it runs an
-// action and refuses to run when the log cannot be opened.
+// AuditPreparer is optional. The gate calls Prepare with the record's
+// time before it runs an action, and refuses to run when the file that
+// record goes to cannot be opened for writing.
 type AuditPreparer interface {
-	Prepare() error
+	Prepare(at time.Time) error
+}
+
+// AuditError is a failed audit write. Ran is false when the log was not
+// usable before the action, which then did not run; true when the action
+// already ran and only its record was lost: that is reported, and the
+// action is never run again. Error and Reason carry no local file path.
+type AuditError struct {
+	Ran bool
+	Err error
+}
+
+func (e *AuditError) Error() string {
+	if e.Ran {
+		return "the action ran, but its audit record could not be saved: " + e.Reason() + "; do not run it again"
+	}
+	return refusalAudit + "; the action was not run: " + e.Reason()
+}
+
+func (e *AuditError) Unwrap() error { return e.Err }
+
+// Reason is the cause, such as "permission denied", without the path.
+func (e *AuditError) Reason() string {
+	var pe *fs.PathError
+	if errors.As(e.Err, &pe) && pe.Err != nil {
+		return pe.Err.Error()
+	}
+	if e.Err == nil {
+		return "unknown error"
+	}
+	return e.Err.Error()
+}
+
+// AuditNotice is the code the timeline shows for an audit failure:
+// "audit-unavailable:<reason>" before a run, "audit-failed:<reason>"
+// after one. ok is false when err holds no AuditError.
+func AuditNotice(err error) (code string, ok bool) {
+	var ae *AuditError
+	if !errors.As(err, &ae) {
+		return "", false
+	}
+	if ae.Ran {
+		return "audit-failed:" + ae.Reason(), true
+	}
+	return "audit-unavailable:" + ae.Reason(), true
 }
 
 func diffStats(diff string) (hash string, lines DiffLines) {

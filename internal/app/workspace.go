@@ -1,6 +1,7 @@
 package app
 
 import (
+	"runtime"
 	"strconv"
 	"time"
 
@@ -606,6 +607,20 @@ func (a *App) termElement(c *ui.Context, t *layout.Tab, n *layout.Node, cn *conn
 		term.Focus()
 		a.focusReq = 0
 	}
+	tv.local = isLocal(cn.host.ID)
+	// Files dropped on a local terminal type their paths at its prompt,
+	// as macOS Terminal does; a remote one takes none.
+	if tv.local {
+		if files := term.DroppedFiles(); len(files) > 0 {
+			// pasteNow writes to this terminal alone, never to those typed
+			// into with it: the paths name this computer's files.
+			if s := dropText(files, runtime.GOOS, a.shell(cn.host.ID).ID); s != "" {
+				tv.pasteNow(s)
+			}
+			t.Focus = n.ID
+			a.focusReq = cn.id
+		}
+	}
 	has := term.Focused()
 	tv.focusChanged(has)
 	if cn.s.Term.Modes().MouseTracking {
@@ -680,7 +695,7 @@ func (a *App) termEntries(t *layout.Tab, n *layout.Node, cn *conn, tv *termView,
 	}
 	entries := []menuEntry{
 		{Icon: icons.Copy, Label: m.Copy(), Disabled: sel == "", Do: func() { svc.WriteClipboard(sel) }},
-		{Icon: icons.Paste, Label: m.Paste(), Do: func() { tv.Paste(svc.ReadClipboard()) }},
+		{Icon: icons.Paste, Label: m.Paste(), Do: func() { tv.pasteClipboard(svc) }},
 		a.bound(actFind, menuEntry{Icon: icons.Search, Label: m.Find(), Do: focus(func() { a.finding = true })}),
 		{Icon: icons.Clear, Label: m.ClearScreen(), Do: func() { tv.send([]byte{0x0c}) }},
 	}

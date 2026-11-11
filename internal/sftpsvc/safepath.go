@@ -74,8 +74,16 @@ func (c *Client) resolvePath(ctx context.Context, p string) (string, error) {
 // checkTransferParent permits missing descendants, but checks every existing
 // ancestor before mkdir. create checks the final directory again afterwards.
 func (c *Client) checkTransferParent(ctx context.Context, p string) error {
-	for {
+	return checkParents(p, func(p string) error {
 		_, err := c.ResolvePath(ctx, p)
+		return err
+	})
+}
+
+// checkParents is checkTransferParent with resolve checking one path.
+func checkParents(p string, resolve func(string) error) error {
+	for {
+		err := resolve(p)
 		if err == nil {
 			return nil
 		}

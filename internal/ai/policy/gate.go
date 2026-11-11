@@ -221,7 +221,7 @@ func (g *gate) stop(v Verdict, a Action, diff string, ans Answer, refusal string
 	return g.commit(v, a, diff)
 }
 
-func (g *gate) Done(a Action, v Verdict, exit int, durMS int64, outBytes int64) {
+func (g *gate) Done(a Action, v Verdict, exit int, durMS int64, outBytes int64) error {
 	rec, ok := g.pop(a)
 	if !ok {
 		rec = g.build(v, a, "")
@@ -234,7 +234,10 @@ func (g *gate) Done(a Action, v Verdict, exit int, durMS int64, outBytes int64) 
 	if exit < 0 {
 		rec.Verdict = "cancelled"
 	}
-	_ = g.write(rec)
+	if err := g.write(rec); err != nil {
+		return &AuditError{Ran: true, Err: err}
+	}
+	return nil
 }
 
 // callReview judges this action against the current request on every attempt.
@@ -306,28 +309,33 @@ func (g *gate) reviewInput(a Action, d Decision, diff string) ReviewInput {
 }
 
 func (g *gate) commit(v Verdict, a Action, diff string) (Verdict, error) {
+	rec := g.build(v, a, diff)
 	if v.Run {
-		if err := g.prepare(); err != nil {
+		// Open the very file Done appends to, so an unusable log refuses
+		// the run instead of losing its record afterwards.
+		if err := g.prepare(rec.Time); err != nil {
+			ae := &AuditError{Err: err}
 			v.Run = false
-			v.Refusal = refusalAudit
-			return v, err
+			v.Refusal = ae.Error()
+			return v, ae
 		}
-		g.push(a, g.build(v, a, diff))
+		g.push(a, rec)
 		return v, nil
 	}
-	if err := g.write(g.build(v, a, diff)); err != nil {
-		v.Refusal = refusalAudit
-		return v, err
+	if err := g.write(rec); err != nil {
+		ae := &AuditError{Err: err}
+		v.Refusal = ae.Error()
+		return v, ae
 	}
 	return v, nil
 }
 
-func (g *gate) prepare() error {
+func (g *gate) prepare(at time.Time) error {
 	if g.auditor == nil {
 		return nil
 	}
 	if p, ok := g.auditor.(AuditPreparer); ok {
-		return p.Prepare()
+		return p.Prepare(at)
 	}
 	return nil
 }

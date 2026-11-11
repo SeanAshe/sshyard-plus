@@ -84,6 +84,7 @@ type Server struct {
 
 	ln       net.Listener
 	mu       sync.Mutex
+	kbd      func(m ssh.ConnMetadata, client ssh.KeyboardInteractiveChallenge) (*ssh.Permissions, error)
 	conns    map[net.Conn]bool
 	logins   atomic.Int32
 	lastPTY  PTY
@@ -91,6 +92,14 @@ type Server struct {
 	closed   atomic.Bool
 	resizeCh chan PTY
 	tunnels  atomic.Int32
+}
+
+// SetKeyboardInteractive logs in by keyboard-interactive questions with
+// fn, as a server asking a one-time password does.
+func (s *Server) SetKeyboardInteractive(fn func(m ssh.ConnMetadata, client ssh.KeyboardInteractiveChallenge) (*ssh.Permissions, error)) {
+	s.mu.Lock()
+	s.kbd = fn
+	s.mu.Unlock()
 }
 
 // Tunnels counts the direct-tcpip channels opened so far.
@@ -183,6 +192,9 @@ func (s *Server) config() *ssh.ServerConfig {
 		},
 		ServerVersion: "SSH-2.0-SSHYardTest",
 	}
+	s.mu.Lock()
+	cfg.KeyboardInteractiveCallback = s.kbd
+	s.mu.Unlock()
 	cfg.AddHostKey(s.HostKey)
 	return cfg
 }

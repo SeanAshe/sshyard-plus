@@ -1185,7 +1185,7 @@ func (allowReadGate) Authorize(_ context.Context, a policy.Action, _ string) (po
 	}, Run: true}, nil
 }
 
-func (allowReadGate) Done(policy.Action, policy.Verdict, int, int64, int64) {}
+func (allowReadGate) Done(policy.Action, policy.Verdict, int, int64, int64) error { return nil }
 
 type diskTools struct{}
 

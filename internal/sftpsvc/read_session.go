@@ -132,7 +132,7 @@ func (c *Client) negotiateOperation(ctx context.Context) (*Client, error) {
 		return nil, err
 	}
 	complete = true
-	return &Client{c: sc, conn: c.conn, operation: session, operations: c.operations}, nil
+	return opened(&Client{c: sc, conn: c.conn, operation: session, operations: c.operations}), nil
 }
 
 // errSubsystem is what x/crypto/ssh says when the server refuses a
@@ -172,5 +172,5 @@ func (c *Client) scpOperation() (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("sftp: no SFTP, and %w", err)
 	}
-	return &Client{c: sc, conn: c.conn, operations: c.operations, scp: true}, nil
+	return opened(&Client{c: sc, conn: c.conn, operations: c.operations, scp: true}), nil
 }

@@ -102,9 +102,15 @@ type Forward struct {
 	client       *ssh.Client  // the connection the relays (and remote) are on
 	err          error        // the forward's own failure (Remote refused)
 	proxyLimitAt time.Time    // last resource-limit log; protected by mu
-	listenOn     func(network, addr string) (net.Listener, error)
-	dialOut      func(ctx context.Context, network, addr string) (net.Conn, error)
+	// life ends when the forward stops: every dial for it gives up then.
+	life     context.Context
+	end      context.CancelFunc
+	listenOn func(network, addr string) (net.Listener, error)
+	dialIn   dialFunc // from the server (Local, Dynamic)
+	dialOut  dialFunc // from this computer (Remote)
 }
+
+type dialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
 
 // New returns a forward of r that connects as cfg says; Start runs it.
 // opts.NoShell is set, and reconnecting is endless.
@@ -117,6 +123,7 @@ func New(r Rule, cfg session.Config, opts session.Options) *Forward {
 	f := &Forward{rule: r, Conns: &netproxy.Registry{}, listenOn: net.Listen}
 	var d net.Dialer
 	f.dialOut = d.DialContext
+	f.dialIn = f.dialRemote
 	f.Conns.OnChange = f.changed
 	f.sess = session.New(cfg, opts, 1, 1)
 	f.sess.OnChange = func() {
@@ -151,6 +158,8 @@ func (f *Forward) Start() error {
 		return nil
 	}
 	f.started = true
+	f.life, f.end = context.WithCancel(context.Background())
+	life := f.life
 	f.mu.Unlock()
 	if f.rule.Kind != Remote {
 		ln, err := f.listenOn("tcp", f.rule.Listen)
@@ -173,10 +182,13 @@ func (f *Forward) Start() error {
 		f.ln = ln
 		f.mu.Unlock()
 		if f.rule.Kind == Dynamic {
-			srv := &netproxy.Server{Protocol: f.rule.Protocol, User: f.rule.User, Password: f.rule.Password, Dial: f.dialRemote, Conns: f.Conns, OnError: f.proxyError}
+			dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return dialFor(life, ctx, f.dialIn, network, addr)
+			}
+			srv := &netproxy.Server{Protocol: f.rule.Protocol, User: f.rule.User, Password: f.rule.Password, Dial: dial, Conns: f.Conns, OnError: f.proxyError}
 			go srv.Serve(ln)
 		} else {
-			go f.acceptLocal(ln)
+			go f.acceptLocal(life, ln)
 		}
 	}
 	f.sess.Start()
@@ -207,7 +219,10 @@ func (f *Forward) proxyError(err error) {
 }
 
 // Stop ends the forward and every connection it relays. It does not
-// wait on the network: the local port is free when it returns.
+// wait on the network: the local port is free when it returns. Dials
+// still pending give up, and a connection that arrives anyway is closed,
+// never relayed. The pooled SSH connection stays for whoever else shares
+// it.
 func (f *Forward) Stop() {
 	f.mu.Lock()
 	if f.stopped {
@@ -215,13 +230,16 @@ func (f *Forward) Stop() {
 		return
 	}
 	f.stopped = true
-	ln, remote := f.ln, f.remote
+	ln, remote, end := f.ln, f.remote, f.end
 	f.ln, f.remote, f.client = nil, nil, nil
 	f.mu.Unlock()
+	if end != nil {
+		end()
+	}
 	if ln != nil {
 		ln.Close()
 	}
-	f.Conns.CloseAll()
+	f.Conns.Shut()
 	// The local port is free now; the server's listener and the session
 	// end in the background, as they wait on the network.
 	go func() {
@@ -273,14 +291,28 @@ func (f *Forward) dialRemote(ctx context.Context, network, addr string) (net.Con
 	return c.DialContext(ctx, network, addr)
 }
 
-func (f *Forward) acceptLocal(ln net.Listener) {
+// dialFor dials with fn until ctx ends or the forward's life does. A
+// connection made as the forward stopped is closed rather than returned.
+func dialFor(life, ctx context.Context, fn dialFunc, network, addr string) (net.Conn, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	defer context.AfterFunc(life, cancel)()
+	c, err := fn(ctx, network, addr)
+	if err == nil && life.Err() != nil {
+		c.Close()
+		return nil, life.Err()
+	}
+	return c, err
+}
+
+func (f *Forward) acceptLocal(life context.Context, ln net.Listener) {
 	for {
 		src, err := ln.Accept()
 		if err != nil {
 			return
 		}
 		go func() {
-			dst, err := f.dialRemote(context.Background(), "tcp", f.rule.Target)
+			dst, err := dialFor(life, life, f.dialIn, "tcp", f.rule.Target)
 			if err != nil {
 				src.Close()
 				return
@@ -319,6 +351,7 @@ func (f *Forward) sync() {
 	go func() {
 		ln, err := c.Listen("tcp", f.rule.Listen)
 		f.mu.Lock()
+		life := f.life
 		if f.stopped || f.client != c {
 			f.mu.Unlock()
 			if ln != nil {
@@ -334,12 +367,12 @@ func (f *Forward) sync() {
 		f.mu.Unlock()
 		f.changed()
 		if err == nil {
-			f.acceptRemote(ln)
+			f.acceptRemote(life, ln)
 		}
 	}()
 }
 
-func (f *Forward) acceptRemote(ln net.Listener) {
+func (f *Forward) acceptRemote(life context.Context, ln net.Listener) {
 	for {
 		src, err := ln.Accept()
 		if err != nil {
@@ -352,7 +385,7 @@ func (f *Forward) acceptRemote(ln net.Listener) {
 			return
 		}
 		go func() {
-			dst, err := f.dialOut(context.Background(), "tcp", f.rule.Target)
+			dst, err := dialFor(life, life, f.dialOut, "tcp", f.rule.Target)
 			if err != nil {
 				src.Close()
 				return

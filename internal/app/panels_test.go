@@ -24,7 +24,7 @@ func TestSettingsNav(t *testing.T) {
 	a, tt := newTestApp(t)
 	mustClick(t, tt, "Settings")
 	tt.Frame()
-	for _, g := range prefGroups(locales.In("en"), theme.LightTokens()) {
+	for _, g := range prefGroups(locales.In("en")) {
 		for _, it := range g.items {
 			mustClick(t, tt, it.title)
 			tt.Frame()

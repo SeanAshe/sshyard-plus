@@ -11993,6 +11993,100 @@ func (msgs Messages) BackupDamaged() string {
 	return Catalog.Format(msgs.locale, "backupDamaged", nil)
 }
 
+// BackupTooCostly says "This backup needs more memory or time to open than SSHYard allows, so it can’t be opened."
+// in the language the app shows.
+func BackupTooCostly() string { return In(i18n.Locale()).BackupTooCostly() }
+
+// BackupTooCostly says "This backup needs more memory or time to open than SSHYard allows, so it can’t be opened."
+// in the language of msgs.
+func (msgs Messages) BackupTooCostly() string {
+	return Catalog.Format(msgs.locale, "backupTooCostly", nil)
+}
+
+// CostlyTitle says "This May Take a While"
+// in the language the app shows.
+func CostlyTitle() string { return In(i18n.Locale()).CostlyTitle() }
+
+// CostlyTitle says "This May Take a While"
+// in the language of msgs.
+func (msgs Messages) CostlyTitle() string {
+	return Catalog.Format(msgs.locale, "costlyTitle", nil)
+}
+
+// CostlyBackup says "This backup’s password is protected with stronger settings than usual: opening it can use up to {memory} of memory …"
+// in the language the app shows.
+func CostlyBackup(memory string, passes string) string {
+	return In(i18n.Locale()).CostlyBackup(memory, passes)
+}
+
+// CostlyBackup says "This backup’s password is protected with stronger settings than usual: opening it can use up to {memory} of memory …"
+// in the language of msgs.
+func (msgs Messages) CostlyBackup(memory string, passes string) string {
+	return Catalog.Format(msgs.locale, "costlyBackup", map[string]any{"memory": memory, "passes": passes})
+}
+
+// CostlyKey says "This key’s passphrase is protected with stronger settings than usual: opening it can use up to {memory} of memory o…"
+// in the language the app shows.
+func CostlyKey(memory string, passes string) string {
+	return In(i18n.Locale()).CostlyKey(memory, passes)
+}
+
+// CostlyKey says "This key’s passphrase is protected with stronger settings than usual: opening it can use up to {memory} of memory o…"
+// in the language of msgs.
+func (msgs Messages) CostlyKey(memory string, passes string) string {
+	return Catalog.Format(msgs.locale, "costlyKey", map[string]any{"memory": memory, "passes": passes})
+}
+
+// CostlyContinue says "Continue"
+// in the language the app shows.
+func CostlyContinue() string { return In(i18n.Locale()).CostlyContinue() }
+
+// CostlyContinue says "Continue"
+// in the language of msgs.
+func (msgs Messages) CostlyContinue() string {
+	return Catalog.Format(msgs.locale, "costlyContinue", nil)
+}
+
+// CostlyOpening says "Opening…"
+// in the language the app shows.
+func CostlyOpening() string { return In(i18n.Locale()).CostlyOpening() }
+
+// CostlyOpening says "Opening…"
+// in the language of msgs.
+func (msgs Messages) CostlyOpening() string {
+	return Catalog.Format(msgs.locale, "costlyOpening", nil)
+}
+
+// CostlyBusyNote says "Cancelling stops here, but the computation already under way finishes in the background and its result is discarded."
+// in the language the app shows.
+func CostlyBusyNote() string { return In(i18n.Locale()).CostlyBusyNote() }
+
+// CostlyBusyNote says "Cancelling stops here, but the computation already under way finishes in the background and its result is discarded."
+// in the language of msgs.
+func (msgs Messages) CostlyBusyNote() string {
+	return Catalog.Format(msgs.locale, "costlyBusyNote", nil)
+}
+
+// ErrKeyTooCostly says "This key needs more memory or time to open than SSHYard allows. Save it again in PuTTYgen with lower Argon2 settings."
+// in the language the app shows.
+func ErrKeyTooCostly() string { return In(i18n.Locale()).ErrKeyTooCostly() }
+
+// ErrKeyTooCostly says "This key needs more memory or time to open than SSHYard allows. Save it again in PuTTYgen with lower Argon2 settings."
+// in the language of msgs.
+func (msgs Messages) ErrKeyTooCostly() string {
+	return Catalog.Format(msgs.locale, "errKeyTooCostly", nil)
+}
+
+// ErrKeyCostly says "This key needs more memory or time to open than usual."
+// in the language the app shows.
+func ErrKeyCostly() string { return In(i18n.Locale()).ErrKeyCostly() }
+
+// ErrKeyCostly says "This key needs more memory or time to open than usual."
+// in the language of msgs.
+func (msgs Messages) ErrKeyCostly() string {
+	return Catalog.Format(msgs.locale, "errKeyCostly", nil)
+}
+
 // CloudBackupSection says "Cloud Backup"
 // in the language the app shows.
 func CloudBackupSection() string { return In(i18n.Locale()).CloudBackupSection() }
@@ -15413,6 +15507,26 @@ func AiHTTPFailedDetail(status string, detail string) string {
 // in the language of msgs.
 func (msgs Messages) AiHTTPFailedDetail(status string, detail string) string {
 	return Catalog.Format(msgs.locale, "aiHTTPFailedDetail", map[string]any{"status": status, "detail": detail})
+}
+
+// AiAuditUnavailable says "The AI audit log is unavailable, so the command was not run: {reason}"
+// in the language the app shows.
+func AiAuditUnavailable(reason string) string { return In(i18n.Locale()).AiAuditUnavailable(reason) }
+
+// AiAuditUnavailable says "The AI audit log is unavailable, so the command was not run: {reason}"
+// in the language of msgs.
+func (msgs Messages) AiAuditUnavailable(reason string) string {
+	return Catalog.Format(msgs.locale, "aiAuditUnavailable", map[string]any{"reason": reason})
+}
+
+// AiAuditRecordFailed says "The command ran, but its audit record could not be saved: {reason}"
+// in the language the app shows.
+func AiAuditRecordFailed(reason string) string { return In(i18n.Locale()).AiAuditRecordFailed(reason) }
+
+// AiAuditRecordFailed says "The command ran, but its audit record could not be saved: {reason}"
+// in the language of msgs.
+func (msgs Messages) AiAuditRecordFailed(reason string) string {
+	return Catalog.Format(msgs.locale, "aiAuditRecordFailed", map[string]any{"reason": reason})
 }
 
 // AiReviewProviderNote says "In Review mode, read-only operations run, critical ones always ask you, and the selected model checks the rest agains…"
@@ -19431,4 +19545,66 @@ func SudoRetry() string { return In(i18n.Locale()).SudoRetry() }
 // in the language of msgs.
 func (msgs Messages) SudoRetry() string {
 	return Catalog.Format(msgs.locale, "sudoRetry", nil)
+}
+
+// ChallengeTitle says "Login verification for {target}"
+// in the language the app shows.
+func ChallengeTitle(target string) string { return In(i18n.Locale()).ChallengeTitle(target) }
+
+// ChallengeTitle says "Login verification for {target}"
+// in the language of msgs.
+func (msgs Messages) ChallengeTitle(target string) string {
+	return Catalog.Format(msgs.locale, "challengeTitle", map[string]any{"target": target})
+}
+
+// ChallengeAnswer says "Answer to “{question}”"
+// in the language the app shows.
+func ChallengeAnswer(question string) string { return In(i18n.Locale()).ChallengeAnswer(question) }
+
+// ChallengeAnswer says "Answer to “{question}”"
+// in the language of msgs.
+func (msgs Messages) ChallengeAnswer(question string) string {
+	return Catalog.Format(msgs.locale, "challengeAnswer", map[string]any{"question": question})
+}
+
+// ChallengeHint says "Sent to the server for this login only, never saved."
+// in the language the app shows.
+func ChallengeHint() string { return In(i18n.Locale()).ChallengeHint() }
+
+// ChallengeHint says "Sent to the server for this login only, never saved."
+// in the language of msgs.
+func (msgs Messages) ChallengeHint() string {
+	return Catalog.Format(msgs.locale, "challengeHint", nil)
+}
+
+// ChallengeSubmit says "Continue"
+// in the language the app shows.
+func ChallengeSubmit() string { return In(i18n.Locale()).ChallengeSubmit() }
+
+// ChallengeSubmit says "Continue"
+// in the language of msgs.
+func (msgs Messages) ChallengeSubmit() string {
+	return Catalog.Format(msgs.locale, "challengeSubmit", nil)
+}
+
+// ErrChallengeCanceled says "Login to {host} was canceled: its verification questions were not answered."
+// in the language the app shows.
+func ErrChallengeCanceled(host string) string { return In(i18n.Locale()).ErrChallengeCanceled(host) }
+
+// ErrChallengeCanceled says "Login to {host} was canceled: its verification questions were not answered."
+// in the language of msgs.
+func (msgs Messages) ErrChallengeCanceled(host string) string {
+	return Catalog.Format(msgs.locale, "errChallengeCanceled", map[string]any{"host": host})
+}
+
+// ErrChallengeUnattended says "{host} asks for a verification code or other input to log in, which this connection cannot ask. Connect from a termin…"
+// in the language the app shows.
+func ErrChallengeUnattended(host string) string {
+	return In(i18n.Locale()).ErrChallengeUnattended(host)
+}
+
+// ErrChallengeUnattended says "{host} asks for a verification code or other input to log in, which this connection cannot ask. Connect from a termin…"
+// in the language of msgs.
+func (msgs Messages) ErrChallengeUnattended(host string) string {
+	return Catalog.Format(msgs.locale, "errChallengeUnattended", map[string]any{"host": host})
 }

@@ -59,6 +59,9 @@ const (
 	EventTool     Kind = "tool"
 	EventPause    Kind = "pause"
 	EventDone     Kind = "done"
+	// EventNotice is a failure the user must see while the turn goes on.
+	// Text is a code, such as policy.AuditNotice's.
+	EventNotice Kind = "notice"
 )
 
 // Event is one thing the UI timeline shows. Tool is set for EventTool;
@@ -315,7 +318,7 @@ func (s *Session) execOne(ctx context.Context, call llm.ToolCall, emit func(Even
 			return err
 		}
 		content := asString(fields["content"])
-		old, ok, err := s.readForDiff(ctx, act)
+		old, ok, err := s.readForDiff(ctx, act, emit)
 		if ctx.Err() != nil {
 			s.dropCall(call.ID)
 			return ctx.Err()
@@ -330,6 +333,9 @@ func (s *Session) execOne(ctx context.Context, call llm.ToolCall, emit func(Even
 			card := ToolCard{
 				ID: call.ID, Name: call.Name, Where: string(act.Where), Path: act.Path,
 				Phase: "done", Exit: 1, Output: err.Error(),
+			}
+			if s.auditRefused(emit, card, err) {
+				return nil
 			}
 			var denied *readDenied
 			if errors.As(err, &denied) {
@@ -349,6 +355,12 @@ func (s *Session) execOne(ctx context.Context, call llm.ToolCall, emit func(Even
 
 	verdict, err := s.gate.Authorize(ctx, act, diff)
 	if err != nil {
+		if ctx.Err() == nil && s.auditRefused(emit, ToolCard{
+			ID: call.ID, Name: call.Name, Where: string(act.Where), Command: act.Command,
+			Path: act.Path, Dir: act.Dir, Diff: diff,
+		}, err) {
+			return nil
+		}
 		s.dropCall(call.ID)
 		return err
 	}
@@ -398,13 +410,14 @@ func (s *Session) execOne(ctx context.Context, call llm.ToolCall, emit func(Even
 	dur := time.Since(start).Milliseconds()
 	if callErr != nil && (ctx.Err() != nil || errors.Is(callErr, context.Canceled) || errors.Is(callErr, context.DeadlineExceeded)) {
 		// Stop, Stop all, and the runner timeout share this path; the command already started.
-		s.gate.Done(act, verdict, -1, dur, countedBytes(s.tools, out))
+		auditErr := s.gate.Done(act, verdict, -1, dur, countedBytes(s.tools, out))
 		card.Phase, card.Status = "done", "cancel"
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(callErr, context.DeadlineExceeded) {
 			card.Status = "timeout"
 		}
 		card.Output, card.DurMS = truncOut(out), dur
 		s.emitTool(emit, card)
+		_ = s.auditLost(emit, auditErr)
 		s.dropCall(call.ID)
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -417,15 +430,57 @@ func (s *Session) execOne(ctx context.Context, call llm.ToolCall, emit func(Even
 			exitCode = 1
 		}
 	}
-	s.gate.Done(act, verdict, exitCode, dur, countedBytes(s.tools, out))
+	auditErr := s.gate.Done(act, verdict, exitCode, dur, countedBytes(s.tools, out))
 	shown := truncOut(out)
 	card.Phase = "done"
 	card.Output = shown
 	card.Exit = exitCode
 	card.DurMS = dur
 	s.emitTool(emit, card)
+	if note := s.auditLost(emit, auditErr); note != "" {
+		// The result is real; the note only keeps the model from re-running it.
+		shown += "\n\n" + note
+	}
 	s.appendTool(call.ID, shown)
 	return nil
+}
+
+// auditRefused handles an action the audit log stopped before it ran: the
+// card and a notice show why, and the model gets the reason as the result.
+func (s *Session) auditRefused(emit func(Event), card ToolCard, err error) bool {
+	code, ok := policy.AuditNotice(err)
+	if !ok {
+		return false
+	}
+	card.Phase, card.Verdict, card.Refusal, card.Output, card.Run, card.Exit = "done", "reject", code, "", false, -1
+	s.emitTool(emit, card)
+	s.emitNotice(emit, code)
+	s.appendTool(card.ID, err.Error())
+	return true
+}
+
+// auditLost shows a notice that an action ran but its audit record was not
+// saved, and returns the note for the model ("" when err is nil). The
+// action is never run again and the turn goes on.
+func (s *Session) auditLost(emit func(Event), err error) string {
+	if err == nil {
+		return ""
+	}
+	var ae *policy.AuditError
+	if errors.As(err, &ae) {
+		err = ae.Err
+	}
+	ae = &policy.AuditError{Ran: true, Err: err}
+	code, _ := policy.AuditNotice(ae)
+	s.emitNotice(emit, code)
+	return ae.Error()
+}
+
+func (s *Session) emitNotice(emit func(Event), code string) {
+	if emit == nil {
+		return
+	}
+	emit(Event{Kind: EventNotice, Text: code})
 }
 
 // countedBytes is the audit output size. Tools that ran a command report

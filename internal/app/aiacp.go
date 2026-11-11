@@ -349,6 +349,8 @@ func (a *App) onACPUpdate(c *conn, u acp.Update) {
 		a.setACPOptions(c, u.Options)
 	case "warning":
 		c.ai.items = append(c.ai.items, aiItem{kind: "err", text: "acp-warning"})
+	case "notice":
+		c.ai.items = append(c.ai.items, aiItem{kind: "err", text: u.Text})
 	case "error":
 		a.StopAI(c.id)
 		c.ai.items = append(c.ai.items, aiItem{kind: "err", text: "acp-session"})

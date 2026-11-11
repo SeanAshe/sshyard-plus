@@ -33,7 +33,7 @@ func (a *App) setBackgroundPreview(next *settings.Background) {
 }
 
 func (a *App) backgroundSection(c *ui.Context, m locales.Messages, tok theme.Tokens, s *settings.Settings, changed *bool) {
-	a.settingsSection(c, tok, icons.Image, tok.TintAt(2), m.BackgroundSection(), func(g *settingsGroup) {
+	a.settingsSection(c, tok, icons.Image, m.BackgroundSection(), func(g *settingsGroup) {
 		label := m.BackgroundChoose()
 		if s.Background.Image != "" {
 			label = m.BackgroundReplace()

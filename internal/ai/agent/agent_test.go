@@ -511,11 +511,12 @@ func (g *recordGate) Authorize(_ context.Context, a policy.Action, diff string) 
 	return policy.Verdict{Decision: policy.Decision{By: by, Outcome: policy.Allow}, Run: true}, nil
 }
 
-func (g *recordGate) Done(_ policy.Action, _ policy.Verdict, exit int, dur, n int64) {
+func (g *recordGate) Done(_ policy.Action, _ policy.Verdict, exit int, dur, n int64) error {
 	g.dones++
 	g.exit = exit
 	g.dur = dur
 	g.bytes = n
+	return nil
 }
 
 func collect(ev *[]Event) func(Event) {

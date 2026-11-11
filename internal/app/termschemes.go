@@ -25,7 +25,7 @@ func (a *App) termPalette(tok theme.Tokens) theme.Terminal {
 // schemeSection chooses the terminal's color scheme among the app's own
 // colors, the built-in schemes and the imported ones, and imports more.
 func (a *App) schemeSection(c *ui.Context, m locales.Messages, tok theme.Tokens, s *settings.Settings, changed *bool) {
-	a.settingsSection(c, tok, icons.Appearance, tok.TintAt(3), m.ColorScheme(), func(g *settingsGroup) {
+	a.settingsSection(c, tok, icons.Appearance, m.ColorScheme(), func(g *settingsGroup) {
 		g.row(m.TerminalStripe(), m.TerminalStripeNote(), func() {
 			on := s.TerminalStripe
 			if formSwitch(c.Key("termstripe"), &on).Label(m.TerminalStripe()).Changed() {

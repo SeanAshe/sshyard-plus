@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -101,9 +102,13 @@ func freePort(t *testing.T) string {
 	return addr
 }
 
-func start(t *testing.T, r Rule, cfg session.Config) *Forward {
+// start runs a forward; hooks set it up before it starts.
+func start(t *testing.T, r Rule, cfg session.Config, hooks ...func(*Forward)) *Forward {
 	t.Helper()
 	f := New(r, cfg, session.Options{Backoff: 20 * time.Millisecond, MaxBackoff: 100 * time.Millisecond})
+	for _, h := range hooks {
+		h(f)
+	}
 	if err := f.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -399,4 +404,194 @@ func TestStopClosesEverything(t *testing.T) {
 		}
 		return err == nil
 	})
+}
+
+// alive is a target that greets every connection with "alive" and tells
+// when one is closed from the other end.
+func alive(t *testing.T) (addr string, closed <-chan struct{}) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	ch := make(chan struct{}, 16)
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer c.Close()
+				c.Write([]byte("alive"))
+				io.Copy(io.Discard, c)
+				ch <- struct{}{}
+			}()
+		}
+	}()
+	return ln.Addr().String(), ch
+}
+
+// pendingDial holds each dial until released, then makes it with next
+// regardless of its context, as a dial already under way would finish.
+type pendingDial struct {
+	started chan context.Context
+	release chan struct{}
+	next    dialFunc
+}
+
+func newPendingDial(next dialFunc) *pendingDial {
+	return &pendingDial{started: make(chan context.Context, 1), release: make(chan struct{}), next: next}
+}
+
+func (p *pendingDial) dial(ctx context.Context, network, addr string) (net.Conn, error) {
+	p.started <- ctx
+	<-p.release
+	return p.next(context.Background(), network, addr)
+}
+
+func recv[T any](t *testing.T, what string, ch <-chan T) T {
+	t.Helper()
+	select {
+	case v := <-ch:
+		return v
+	case <-time.After(10 * time.Second):
+		t.Fatalf("timed out waiting for %s", what)
+		panic("unreachable")
+	}
+}
+
+// sharedTerm is a terminal on the pooled connection a forward of the
+// returned config shares, as another tab of the host would be.
+func sharedTerm(t *testing.T, srv *sshtest.Server) (session.Config, *session.Session) {
+	t.Helper()
+	cfg := config(t, srv)
+	cfg.Pool, cfg.Key = session.NewPool(), "k"
+	term := session.New(cfg, session.Options{NoShell: true}, 80, 24)
+	term.Start()
+	t.Cleanup(term.Close)
+	waitFor(t, "term", func() bool { return term.Status().State == session.Connected })
+	return cfg, term
+}
+
+// viaTerm dials from the server on term's connection, which outlives the
+// forward's own session.
+func viaTerm(term *session.Session) dialFunc {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		return term.Client().DialContext(ctx, network, addr)
+	}
+}
+
+// watchConns records whether f ever lists a connection.
+func watchConns(saw *atomic.Bool) func(*Forward) {
+	return func(f *Forward) {
+		f.SetOnChange(func() {
+			if f.Conns.Len() > 0 {
+				saw.Store(true)
+			}
+		})
+	}
+}
+
+// stopDuringDial stops f while pd holds the dial for client, runs
+// afterStop, then lets the dial through: the forward must close what it
+// brings and relay nothing, and the terminal sharing its connection must
+// still work.
+func stopDuringDial(t *testing.T, f *Forward, pd *pendingDial, saw *atomic.Bool, term *session.Session, target string, closed <-chan struct{}, client net.Conn, afterStop func()) {
+	t.Helper()
+	ctx := recv(t, "the dial", pd.started)
+	f.Stop()
+	if afterStop != nil {
+		afterStop()
+	}
+	recv(t, "the pending dial cancelled", ctx.Done())
+	close(pd.release)
+	recv(t, "the late connection closed", closed)
+	client.SetReadDeadline(time.Now().Add(10 * time.Second))
+	b, err := io.ReadAll(client)
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		t.Fatalf("client still open after stop: read %q", b)
+	}
+	if strings.Contains(string(b), "alive") || (len(b) > 1 && b[1] == 0x5a) {
+		t.Fatalf("relayed after stop: %q", b)
+	}
+	if st := f.Status(); st.State != Stopped || st.Conns != 0 || saw.Load() {
+		t.Fatalf("status %+v, listed a connection: %v", st, saw.Load())
+	}
+	c, err := term.Client().DialContext(context.Background(), "tcp", target)
+	if err != nil {
+		t.Fatalf("shared connection after stop: %v", err)
+	}
+	defer c.Close()
+	got := make([]byte, 5)
+	if _, err := io.ReadFull(c, got); err != nil || string(got) != "alive" {
+		t.Fatalf("shared connection read %q %v", got, err)
+	}
+}
+
+func TestRemoteStopPendingDial(t *testing.T) {
+	srv := server(t)
+	cfg, term := sharedTerm(t, srv)
+	target, closed := alive(t)
+	listen := freePort(t)
+	var d net.Dialer
+	pd := newPendingDial(d.DialContext)
+	var saw atomic.Bool
+	f := start(t, Rule{Kind: Remote, Listen: listen, Target: target}, cfg,
+		func(f *Forward) { f.dialOut = pd.dial }, watchConns(&saw))
+	client, err := net.Dial("tcp", listen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	stopDuringDial(t, f, pd, &saw, term, target, closed, client, nil)
+}
+
+func TestLocalStopPendingDial(t *testing.T) {
+	srv := server(t)
+	cfg, term := sharedTerm(t, srv)
+	target, closed := alive(t)
+	listen := freePort(t)
+	pd := newPendingDial(viaTerm(term))
+	var saw atomic.Bool
+	f := start(t, Rule{Kind: Local, Listen: listen, Target: target}, cfg,
+		func(f *Forward) { f.dialIn = pd.dial }, watchConns(&saw))
+	client, err := net.Dial("tcp", listen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	stopDuringDial(t, f, pd, &saw, term, target, closed, client, func() {
+		// The port is free as soon as Stop returns, a dial still pending.
+		ln, err := net.Listen("tcp", listen)
+		if err != nil {
+			t.Fatalf("port not free after stop: %v", err)
+		}
+		ln.Close()
+	})
+}
+
+func TestDynamicStopPendingDial(t *testing.T) {
+	srv := server(t)
+	cfg, term := sharedTerm(t, srv)
+	target, closed := alive(t)
+	listen := freePort(t)
+	pd := newPendingDial(viaTerm(term))
+	var saw atomic.Bool
+	f := start(t, Rule{Kind: Dynamic, Listen: listen}, cfg,
+		func(f *Forward) { f.dialIn = pd.dial }, watchConns(&saw))
+	client, err := net.Dial("tcp", listen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	host, port, _ := net.SplitHostPort(target)
+	var p int
+	fmt.Sscan(port, &p)
+	req := []byte{4, 1, 0, 0}
+	binary.BigEndian.PutUint16(req[2:], uint16(p))
+	client.Write(append(append(req, net.ParseIP(host).To4()...), 0))
+	stopDuringDial(t, f, pd, &saw, term, target, closed, client, nil)
 }

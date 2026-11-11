@@ -149,7 +149,7 @@ func (s *Session) toolRun(ctx context.Context, raw json.RawMessage) (string, err
 	}
 	act := policy.Action{Where: policy.Remote, Tool: "run_command", Command: in.Command, Dir: dir}
 	start := time.Now()
-	v, err := s.gate.Authorize(ctx, act, "")
+	v, err := s.authorize(ctx, act, "")
 	if err != nil {
 		return "", err
 	}
@@ -157,7 +157,7 @@ func (s *Session) toolRun(ctx context.Context, raw json.RawMessage) (string, err
 		return "", refusalError(v)
 	}
 	if s.cfg.Exec == nil {
-		s.gate.Done(act, v, 1, time.Since(start).Milliseconds(), 0)
+		s.finish(act, v, 1, start, 0)
 		return "", errExec
 	}
 	timeout := runDefault
@@ -172,12 +172,15 @@ func (s *Session) toolRun(ctx context.Context, raw json.RawMessage) (string, err
 		exit = 1
 	}
 	out, truncated, total := buf.snapshot()
-	s.gate.Done(act, v, exit, time.Since(start).Milliseconds(), int64(total))
+	auditErr := s.finish(act, v, exit, start, total)
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "exit code: %d\n", exit)
+	if auditErr != nil {
+		fmt.Fprintf(&b, "note: %v\n", auditErr)
+	}
 	if rctx.Err() == context.DeadlineExceeded {
 		fmt.Fprintf(&b, "stopped after %s\n", timeout)
 	} else if err != nil && exit == 1 && total == 0 {

@@ -170,6 +170,10 @@ func keyError(m locales.Messages, err error) string {
 		return m.ErrKeyPassphraseNeeded()
 	case errors.Is(err, keys.ErrPassphraseWrong):
 		return m.ErrKeyPassphraseWrong()
+	case errors.Is(err, keys.ErrTooCostly):
+		return m.ErrKeyTooCostly()
+	case errors.Is(err, keys.ErrCostly):
+		return m.ErrKeyCostly()
 	case errors.Is(err, keys.ErrPublicKey):
 		return m.ErrPublicKey()
 	case errors.Is(err, keys.ErrNotAKey):
@@ -250,11 +254,18 @@ func (a *App) SaveCredForm(m locales.Messages) bool {
 				f.err = keyError(m, f.previewErr)
 				return false
 			}
-			k, err = keys.Import(f.keyData, pass)
+			k, err = a.loadKey(f.keyData, pass)
 			// An OpenSSH key asked for each run is saved unread: its
 			// public half names it.
 			if errors.Is(err, keys.ErrPassphraseNeeded) && f.askPass && k.Public != nil && !keys.IsPPK(f.keyData) {
 				err = nil
+			}
+			if a.askKeyCost(err, f.keyData, pass, func() {
+				if a.credForm == f {
+					a.SaveCredForm(m)
+				}
+			}) {
+				return false
 			}
 		case fresh:
 			f.err = m.CredKeyRequired()
@@ -826,7 +837,7 @@ func (a *App) credDeleteView(c *ui.Context, m locales.Messages) {
 
 // credentialsSection lists the credentials in Settings.
 func (a *App) credentialsSection(c *ui.Context, m locales.Messages, tok theme.Tokens) {
-	a.settingsSection(c, tok, nil, ui.Color{}, "", func(g *settingsGroup) {
+	a.settingsSection(c, tok, nil, "", func(g *settingsGroup) {
 		crs := a.store.Credentials()
 		if len(crs) == 0 {
 			g.row(m.NoCredentials(), "", func() {})

@@ -15,6 +15,8 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/ssh"
 )
 
 // Direction is which way a transfer goes.
@@ -346,25 +348,58 @@ func (ts *Transfers) client(ctx context.Context) (*Client, error) {
 	return ts.Client(ctx)
 }
 
+// channel opens an attempt's own SFTP channel on the connection: ending
+// ctx (a pause or a cancel) or closing the shared client closes it, so
+// that a request a stalled server never answers returns at once, while
+// the shared client, the terminals and the other transfers go on. When
+// the server opens no more channels, the attempt uses the shared client.
+func (ts *Transfers) channel(ctx context.Context, t *Transfer) (*Client, func(), error) {
+	shared, err := ts.client(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	c, err := shared.operationClient(ctx)
+	var refused *ssh.OpenChannelError
+	if err != nil && ctx.Err() == nil && (errors.As(err, &refused) || errors.Is(err, ErrOperationsBusy)) {
+		ts.logf("sftp: %s: no channel of its own (%v); using the shared one", t.Name, err)
+		return shared, func() {}, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	stop := context.AfterFunc(ctx, func() { c.Close() })
+	stopShared := func() bool { return false }
+	if shared.closed != nil {
+		stopShared = context.AfterFunc(shared.closed, func() { c.Close() })
+	}
+	return c, func() {
+		stop()
+		stopShared()
+		c.Close()
+	}, nil
+}
+
 // copy makes one attempt at t, resuming from its part file.
 func (ts *Transfers) copy(ctx context.Context, t *Transfer) error {
-	c, err := ts.client(ctx)
+	c, done, err := ts.channel(ctx, t)
 	if err != nil {
 		return err
 	}
+	defer done()
+	remote := remoteFS{c, ctx}
 	var src, dst fileSide
 	if t.Dir == Upload {
-		if err := c.checkTransferParent(ctx, path.Dir(t.Dst)); err != nil {
+		if err := remote.checkParents(path.Dir(t.Dst)); err != nil {
 			return err
 		}
-		src, dst = localFS{}, remoteFS{c}
+		src, dst = localFS{}, remote
 	} else {
 		local, err := destinationRoot(t.Dst)
 		if err != nil {
 			return err
 		}
 		defer local.root.Close()
-		src, dst = remoteFS{c}, local
+		src, dst = remote, local
 		// Plans check the names; a download whose own name is unsafe
 		// (a server's "../" makes it "..") must not reach a part file
 		// in some other folder either.
@@ -412,7 +447,7 @@ func (ts *Transfers) copy(ctx context.Context, t *Transfer) error {
 			if t.partInfo == nil || !os.SameFile(t.partInfo, info) {
 				return ErrPartChanged
 			}
-		} else if _, err := c.ResolvePath(ctx, part); err != nil {
+		} else if err := remote.resolve(part); err != nil {
 			return err
 		}
 		return dst.rename(part, t.Dst)
@@ -795,7 +830,19 @@ func (localFS) mkdirAll(p string) error      { return os.MkdirAll(p, 0o755) }
 func (localFS) remove(p string) error        { return os.Remove(p) }
 func (localFS) rename(from, to string) error { return os.Rename(from, to) }
 
-type remoteFS struct{ c *Client }
+// remoteFS is a transfer's remote side, on the channel Transfers.channel
+// gave it; its path checks use that channel too, which ctx ending closes.
+type remoteFS struct {
+	c   *Client
+	ctx context.Context
+}
+
+func (r remoteFS) resolve(p string) error {
+	_, err := r.c.resolvePath(r.ctx, p)
+	return err
+}
+
+func (r remoteFS) checkParents(p string) error { return checkParents(p, r.resolve) }
 
 func (r remoteFS) lstat(p string) (fs.FileInfo, error)      { return r.c.c.Lstat(p) }
 func (r remoteFS) stat(p string) (fs.FileInfo, error)       { return r.c.c.Stat(p) }
@@ -815,7 +862,7 @@ func (r remoteFS) create(p string, keep bool) (writeSeekCloser, error) {
 	if parent.Mode().Perm()&0o002 != 0 && parent.Mode()&fs.ModeSticky == 0 {
 		return nil, ErrUnsafeDestination
 	}
-	if _, err := r.c.ResolvePath(context.Background(), p); err != nil {
+	if err := r.resolve(p); err != nil {
 		return nil, err
 	}
 	f, err := r.c.c.OpenFile(p, flag)
@@ -824,8 +871,13 @@ func (r remoteFS) create(p string, keep bool) (writeSeekCloser, error) {
 	}
 	return f, err
 }
-func (r remoteFS) mkdirAll(p string) error { return r.c.MkdirAll(p) }
-func (r remoteFS) remove(p string) error   { return r.c.c.Remove(p) }
+func (r remoteFS) mkdirAll(p string) error {
+	if err := r.checkParents(p); err != nil {
+		return err
+	}
+	return r.c.c.MkdirAll(p)
+}
+func (r remoteFS) remove(p string) error { return r.c.c.Remove(p) }
 func (r remoteFS) rename(from, to string) error {
 	if _, ok := r.c.c.HasExtension("posix-rename@openssh.com"); ok {
 		return r.c.c.PosixRename(from, to)

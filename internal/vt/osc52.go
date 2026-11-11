@@ -120,12 +120,73 @@ func (t *Terminal) osc52Done(rest string) {
 	t.OnClipboard(sel, text, false)
 }
 
-// oscPush buffers one OSC byte. An OSC 52 past the decoded limit is
-// marked dropped and not kept; the caller still reads to the end.
-func (t *Terminal) oscPush(b byte) {
-	if t.oscDrop {
-		return
+// osc52SelMax is the most Pc bytes an OSC 52 may carry. Pc names a few
+// clipboards ("c", "cp", "s0"); a longer one is not a clipboard write.
+const osc52SelMax = 32
+
+// b64EncodedLen is the base64 length, padding included, of n bytes.
+func b64EncodedLen(n int) int { return (n + 2) / 3 * 4 }
+
+// osc52BufMax is the most an OSC 52 may buffer after its prefix: Pc,
+// the ';' and a padded payload of limit decoded bytes.
+func osc52BufMax(limit int) int { return osc52SelMax + 1 + b64EncodedLen(limit) }
+
+// osc52Scan follows one OSC 52 body (Pc ; Pd) byte by byte, so the
+// buffer holding it stays within osc52BufMax. Its zero value is at the
+// start of Pc.
+type osc52Scan struct {
+	inPd   bool
+	sel    int // Pc bytes
+	digits int // Pd bytes that are not padding
+	pad    int // '=' seen
+	raw    int // Pd bytes, padding included
+	// big: over the size limit, so discarded and reported. bad: the
+	// padding is malformed, so discarded quietly like invalid base64.
+	big, bad bool
+}
+
+func (s *osc52Scan) dropped() bool { return s.big || s.bad }
+
+// push accounts for b and says whether to keep it. Once dropped, the
+// rest is only counted, so a malformed payload that grows past the
+// limit is still reported as too big.
+func (s *osc52Scan) push(b byte, limit int) bool {
+	if s.big {
+		return false
 	}
+	if !s.inPd {
+		if b == ';' {
+			s.inPd = true
+		} else if s.sel++; s.sel > osc52SelMax {
+			s.big = true
+		}
+		return !s.dropped()
+	}
+	if s.raw++; s.raw > b64EncodedLen(limit) {
+		s.big = true
+	}
+	if s.dropped() {
+		return false
+	}
+	if b == '=' {
+		// Padding is at most two '=' at the very end.
+		if s.pad++; s.pad > 2 {
+			s.bad = true
+		}
+	} else {
+		if s.pad > 0 {
+			s.bad = true
+		}
+		if s.digits++; b64DecodedLen(s.digits) > limit {
+			s.big = true
+		}
+	}
+	return !s.dropped()
+}
+
+// oscPush buffers one OSC byte. An OSC 52 that is too big or malformed
+// is marked dropped and not kept; the caller still reads to the end.
+func (t *Terminal) oscPush(b byte) {
 	if !t.osc52 {
 		if len(t.osc) >= oscCap {
 			return
@@ -133,33 +194,20 @@ func (t *Terminal) oscPush(b byte) {
 		t.osc = append(t.osc, b)
 		if bytes.HasPrefix(t.osc, []byte("52;")) {
 			t.osc52 = true
-			t.oscPd = -1
+			t.oscScan = osc52Scan{}
 		}
 		return
 	}
-	if t.oscPd < 0 {
-		// Still in Pc. A huge Pc is not a clipboard write.
-		if len(t.osc) > 64 {
-			t.oscDrop = true
-			t.osc = nil
-			return
-		}
-		t.osc = append(t.osc, b)
-		if b == ';' {
-			t.oscPd = 0
-		}
-		return
-	}
-	add := 0
-	if b != '=' {
-		add = 1
-	}
-	if b64DecodedLen(t.oscPd+add) > t.osc52Limit() {
-		t.oscDrop = true
+	limit := t.osc52Limit()
+	if !t.oscScan.push(b, limit) {
 		t.osc = nil
 		return
 	}
-	t.oscPd += add
+	if len(t.osc) >= len("52;")+osc52BufMax(limit) {
+		t.oscScan.big = true
+		t.osc = nil
+		return
+	}
 	t.osc = append(t.osc, b)
 }
 
@@ -211,6 +259,10 @@ func (t *Terminal) dcsPush(b byte) {
 		t.state = sString
 		return
 	}
+	if t.dcsIs52 {
+		t.dcs52Push(b)
+		return
+	}
 	t.dcs = append(t.dcs, b)
 	if !t.dcsChecked {
 		kind, done := dcsOSCKind(t.dcs)
@@ -225,7 +277,10 @@ func (t *Terminal) dcsPush(b byte) {
 		switch kind {
 		case "52":
 			t.dcsIs52 = true
-			t.dcsPd = -1
+			t.dcsScan = osc52Scan{}
+			// "ESC ] 52 BEL" has no body: what follows is the tail.
+			t.dcsEnded = b == 0x07
+			return
 		case "0", "2":
 		default:
 			t.dcsSkip = true
@@ -233,28 +288,47 @@ func (t *Terminal) dcsPush(b byte) {
 			return
 		}
 	}
-	if !t.dcsIs52 {
-		if len(t.dcs) > oscCap {
-			t.dcsSkip = true
-			t.dcs = nil
-		}
-		return
-	}
-	if t.dcsPd < 0 {
-		// The header is short; the second ';' starts the base64.
-		if b == ';' && bytes.Count(t.dcs, []byte{';'}) >= 2 {
-			t.dcsPd = 0
-		}
-		return
-	}
-	if b != '=' {
-		t.dcsPd++
-	}
-	if b64DecodedLen(t.dcsPd) > t.osc52Limit() {
+	if len(t.dcs) > oscCap {
 		t.dcsSkip = true
-		t.dcsTooBig = true
 		t.dcs = nil
 	}
+}
+
+// dcs52Push buffers one byte of a passed-through OSC 52, after its
+// "ESC ] 52 ;". The body is bounded like a plain OSC 52; BEL or ESC ends
+// it, and at most oscCap bytes after that are kept.
+func (t *Terminal) dcs52Push(b byte) {
+	if t.dcsEnded {
+		if t.dcsTail < oscCap {
+			t.dcs = append(t.dcs, b)
+			t.dcsTail++
+		}
+		return
+	}
+	if b == 0x07 || b == 0x1b {
+		if t.dcsScan.dropped() {
+			// Nothing of the sequence was kept; ignore the rest.
+			t.dcsSkip = true
+			t.dcsTooBig = t.dcsScan.big
+			t.dcs = nil
+			return
+		}
+		t.dcsEnded = true
+		t.dcsTail = 1
+		t.dcs = append(t.dcs, b)
+		return
+	}
+	limit := t.osc52Limit()
+	if !t.dcsScan.push(b, limit) {
+		t.dcs = nil
+		return
+	}
+	if len(t.dcs) >= len("\x1b]52;")+osc52BufMax(limit) {
+		t.dcsScan.big = true
+		t.dcs = nil
+		return
+	}
+	t.dcs = append(t.dcs, b)
 }
 
 func (t *Terminal) resetDCS() {
@@ -264,12 +338,16 @@ func (t *Terminal) resetDCS() {
 	t.dcsTooBig = false
 	t.dcsChecked = false
 	t.dcsIs52 = false
-	t.dcsPd = -1
+	t.dcsScan = osc52Scan{}
+	t.dcsEnded = false
+	t.dcsTail = 0
 }
 
 func (t *Terminal) finishDCS() {
 	inner := t.dcs
-	tmux, skip, tooBig := t.dcsTmux, t.dcsSkip, t.dcsTooBig
+	tmux := t.dcsTmux
+	tooBig := t.dcsTooBig || (t.dcsIs52 && t.dcsScan.big)
+	skip := t.dcsSkip || (t.dcsIs52 && t.dcsScan.dropped())
 	t.resetDCS()
 	t.state = sGround
 	if !tmux {

@@ -61,6 +61,14 @@ func softTile(c *ui.Context, ic *icons.Icon, tint ui.Color, size float32) ui.Ele
 	})
 }
 
+// glyph is an icon alone in one color, in the space a tile of that size
+// takes.
+func glyph(c *ui.Context, ic *icons.Icon, col ui.Color, size float32) ui.Element {
+	return ui.Box(c).Size(size, size).Shrink(0).Center().Children(func() {
+		ui.Icon(c, ic.SVG).Size(size*0.82, size*0.82).TextColor(col)
+	})
+}
+
 // dot is a status dot.
 func dot(c *ui.Context, col ui.Color) ui.Element {
 	return ui.Box(c).Size(7, 7).Shrink(0).Radius(3.5).Background(col)

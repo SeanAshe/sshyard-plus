@@ -37,7 +37,8 @@ func (v ToolView) Local() bool {
 }
 
 // Update is one session event the UI can show. Kind is message, thought,
-// tool, plan, mode, config, warning or error. Unknown agent events are dropped.
+// tool, plan, mode, config, warning, notice or error. Unknown agent events
+// are dropped. A notice's Text is a policy.AuditNotice code.
 // A config update carries the agent's selectors as they are now.
 type Update struct {
 	Kind    string

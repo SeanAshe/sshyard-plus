@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -299,6 +300,72 @@ func TestMergeSettings(t *testing.T) {
 	}
 	if len(out.AIConsentHosts) != 2 {
 		t.Fatalf("consent %v", out.AIConsentHosts)
+	}
+}
+
+// TestRestoreKeepsLocalACP: a restore never adds or changes a program this
+// computer starts. The ACP agents, a legacy single agent and the default
+// agent of an older backup are ignored; other preferences still restore,
+// and an export leaves them out.
+func TestRestoreKeepsLocalACP(t *testing.T) {
+	local := []settings.ACPConfig{{ID: "claude", Agent: "claude", Command: "/usr/local/bin/claude-acp", Args: []string{"--acp"}}}
+	theirs := settings.Default()
+	theirs.KeepAliveSeconds = 77
+	theirs.AIACPAgents = []settings.ACPConfig{
+		{ID: "claude", Agent: "claude", Command: "/tmp/evil", Args: []string{"--other"}},
+		{ID: "extra", Command: "/tmp/other"},
+	}
+	theirs.AIDefaultAgent = "acp:extra"
+	legacy := settings.Default()
+	legacy.AIACP = &settings.ACPConfig{ID: "old", Command: "/tmp/legacy"}
+	legacy.AIDefaultAgent = "acp"
+	for _, tc := range []struct {
+		name  string
+		local []settings.ACPConfig
+		def   string
+		in    settings.Settings
+	}{
+		{"configured", local, "acp:claude", theirs},
+		{"none", nil, "builtin", theirs},
+		{"legacy", nil, "builtin", legacy},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, _, _ := backupApp(t)
+			s := a.settings
+			s.AIACPAgents, s.AIDefaultAgent = slices.Clone(tc.local), tc.def
+			if err := a.ApplySettings(s); err != nil {
+				t.Fatal(err)
+			}
+			// An older backup carries them in its settings.
+			raw, err := json.Marshal(backupPayload{Settings: tc.in})
+			if err != nil {
+				t.Fatal(err)
+			}
+			p, err := unpackBackup(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := a.restoreBackup(en, p); err != nil {
+				t.Fatal(err)
+			}
+			got := a.settings
+			if !slices.EqualFunc(got.AIACPAgents, tc.local, func(x, y settings.ACPConfig) bool { return x.SameLaunch(y) }) || got.AIACP != nil {
+				t.Fatalf("ACP agents became %+v (legacy %+v), want %+v", got.AIACPAgents, got.AIACP, tc.local)
+			}
+			if got.AIDefaultAgent != tc.def {
+				t.Fatalf("default agent became %q, want %q", got.AIDefaultAgent, tc.def)
+			}
+			if tc.in.KeepAliveSeconds == 77 && got.KeepAliveSeconds != 77 {
+				t.Fatalf("other preferences not restored: keep-alive %d", got.KeepAliveSeconds)
+			}
+			out, err := a.collectBackup(false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(out.Settings.AIACPAgents) != 0 || out.Settings.AIACP != nil || out.Settings.AIDefaultAgent != "" {
+				t.Fatalf("export carries ACP launch settings: %+v %+v %q", out.Settings.AIACPAgents, out.Settings.AIACP, out.Settings.AIDefaultAgent)
+			}
+		})
 	}
 }
 

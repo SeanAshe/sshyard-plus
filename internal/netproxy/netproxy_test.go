@@ -263,6 +263,27 @@ func TestRegistryListsAndCloses(t *testing.T) {
 	}
 }
 
+// After Shut a relay is refused: both ends close and nothing is listed.
+func TestRegistryShutRefusesRelay(t *testing.T) {
+	reg := &Registry{}
+	listed := false
+	reg.OnChange = func() { listed = true }
+	reg.Shut()
+	srcA, srcB := net.Pipe()
+	dstA, dstB := net.Pipe()
+	defer srcB.Close()
+	defer dstB.Close()
+	reg.Relay(srcA, dstA, "t", "")
+	if listed || reg.Len() != 0 {
+		t.Fatalf("listed %v len %d", listed, reg.Len())
+	}
+	for _, c := range []net.Conn{srcB, dstB} {
+		if _, err := c.Write([]byte("x")); !errors.Is(err, io.ErrClosedPipe) {
+			t.Fatalf("write to a refused relay: %v", err)
+		}
+	}
+}
+
 func isTimeout(err error) bool {
 	var ne net.Error
 	return errors.As(err, &ne) && ne.Timeout()

@@ -97,9 +97,8 @@ type Terminal struct {
 	nextSub  bool
 	hasParam bool
 	osc      []byte
-	osc52    bool // this OSC started with "52;"
-	oscDrop  bool // OSC 52 over the limit: swallow, keep nothing
-	oscPd    int  // base64 digits of the OSC 52 payload, -1 until it starts
+	osc52    bool      // this OSC started with "52;"
+	oscScan  osc52Scan // its body; once dropped, swallow and keep nothing
 	escInter byte
 	utf8buf  []byte
 
@@ -117,7 +116,9 @@ type Terminal struct {
 	dcsTooBig  bool // the swallowed OSC 52 was over the limit
 	dcsChecked bool
 	dcsIs52    bool
-	dcsPd      int // base64 digits of a passed-through OSC 52, -1 until it starts
+	dcsScan    osc52Scan // the body of a passed-through OSC 52
+	dcsEnded   bool      // that OSC 52 has ended (BEL or ESC)
+	dcsTail    int       // bytes kept after it ended
 
 	// Reply, when set, receives what the terminal answers the program
 	// (device status and attributes reports). It is called with the lock
@@ -169,7 +170,7 @@ func (t *Terminal) reset() {
 	t.g0Graphics, t.g1Graphics, t.shiftOut = false, false, false
 	t.resetTabs()
 	t.onlyOSC = false
-	t.osc52, t.oscDrop = false, false
+	t.osc52, t.oscScan = false, osc52Scan{}
 	t.resetDCS()
 	t.state = sGround
 }
@@ -614,7 +615,9 @@ func (t *Terminal) rune(r rune) {
 	case sCSIDrop:
 		// An oversized CSI stays discarded even across UTF-8 input.
 	case sOSC:
-		t.osc = utf8.AppendRune(t.osc, r)
+		for _, b := range utf8.AppendRune(nil, r) {
+			t.oscPush(b)
+		}
 	default:
 		// Not part of any sequence: abort it and print.
 		t.state = sGround
@@ -774,8 +777,7 @@ func (t *Terminal) escape(b byte) {
 	case ']':
 		t.state = sOSC
 		t.osc = t.osc[:0]
-		t.osc52, t.oscDrop = false, false
-		t.oscPd = -1
+		t.osc52, t.oscScan = false, osc52Scan{}
 	case 'P':
 		t.resetDCS()
 		t.state = sDCS

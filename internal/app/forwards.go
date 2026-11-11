@@ -69,7 +69,11 @@ func (a *App) promptConns() []int {
 // StartForward starts a saved port forward on its host's connection,
 // opening one without a shell when no pane has it. A local port in use
 // is returned at once; the forward shows the error until stopped.
-func (a *App) StartForward(id string) error {
+func (a *App) StartForward(id string) error { return a.startForward(id, false) }
+
+// startForward is StartForward; auto starts it with no one watching, so
+// that a login asking questions fails rather than asking them.
+func (a *App) startForward(id string, auto bool) error {
 	if !a.ready() {
 		return keychain.ErrLocked
 	}
@@ -99,7 +103,7 @@ func (a *App) StartForward(id string) error {
 		r.User, r.Password = f.User, string(pw)
 	}
 	a.nextConn++
-	c := &conn{id: a.nextConn, host: h}
+	c := &conn{id: a.nextConn, host: h, unattended: auto}
 	cfg := a.hostConfig(h, c, func(context.Context) (session.Credentials, error) { return a.credentials(c, h) })
 	fw := forward.New(r, cfg, session.Options{KeepAlive: time.Duration(a.settings.KeepAliveSeconds) * time.Second})
 	c.s, c.fw = fw.Session(), fw
@@ -186,7 +190,7 @@ func (a *App) runningForwards(hostID string) int {
 func (a *App) autoStartForwards() {
 	for _, f := range a.store.Forwards() {
 		if f.AutoStart {
-			a.StartForward(f.ID)
+			a.startForward(f.ID, true)
 		}
 	}
 }

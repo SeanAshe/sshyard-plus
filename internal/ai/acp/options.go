@@ -202,4 +202,4 @@ type denyAll struct{}
 func (denyAll) Authorize(context.Context, policy.Action, string) (policy.Verdict, error) {
 	return policy.Verdict{Refusal: "not allowed"}, nil
 }
-func (denyAll) Done(policy.Action, policy.Verdict, int, int64, int64) {}
+func (denyAll) Done(policy.Action, policy.Verdict, int, int64, int64) error { return nil }

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -218,7 +219,9 @@ func TestGateSecretsDoNotReachTheFile(t *testing.T) {
 	if err != nil || !v.Run {
 		t.Fatalf("%+v %v", v, err)
 	}
-	g.Done(policy.Action{Where: policy.Remote, Tool: "run_command", Command: command}, v, 0, 9, 11)
+	if err := g.Done(policy.Action{Where: policy.Remote, Tool: "run_command", Command: command}, v, 0, 9, 11); err != nil {
+		t.Fatal(err)
+	}
 	body, err := os.ReadFile(filepath.Join(dir, "ai-audit", "2026-10.jsonl"))
 	if err != nil {
 		t.Fatal(err)
@@ -328,3 +331,82 @@ func TestRejectExitCodeIsNull(t *testing.T) {
 type rejectPrompt struct{}
 
 func (rejectPrompt) Ask(context.Context, policy.Prompt) policy.Answer { return policy.Reject }
+
+func auditGate(log *Log, when time.Time) policy.Gate {
+	return policy.NewGate(policy.GateConfig{
+		Auditor: log,
+		Now:     func() time.Time { return when },
+		Mode:    func() policy.Mode { return policy.ModeFull },
+		Host:    "h",
+	})
+}
+
+func TestPrepareOpensTheMonthFile(t *testing.T) {
+	dir := t.TempDir()
+	log := New(dir)
+	when := time.Date(2026, 10, 27, 15, 4, 5, 0, time.UTC)
+	if err := log.Prepare(when); err != nil {
+		t.Fatal(err)
+	}
+	st, err := os.Stat(filepath.Join(dir, "ai-audit", "2026-10.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
+		t.Fatalf("file mode %o", st.Mode().Perm())
+	}
+	recs, err := log.Read(Filter{})
+	if err != nil || len(recs) != 0 {
+		t.Fatalf("%+v %v", recs, err)
+	}
+}
+
+// A month file that cannot be opened refuses the run, though the directory
+// is fine, and the reason carries no local path.
+func TestUnwritableMonthFileRefusesTheRun(t *testing.T) {
+	dir := t.TempDir()
+	month := filepath.Join(dir, "ai-audit", "2026-10.jsonl")
+	if err := os.MkdirAll(month, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	g := auditGate(New(dir), time.Date(2026, 10, 27, 15, 4, 5, 0, time.UTC))
+	v, err := g.Authorize(context.Background(), policy.Action{Where: policy.Remote, Tool: "run_command", Command: "ls"}, "")
+	var ae *policy.AuditError
+	if v.Run || !errors.As(err, &ae) || ae.Ran {
+		t.Fatalf("%+v %v", v, err)
+	}
+	if v.Refusal == "" || strings.Contains(v.Refusal, dir) || strings.Contains(err.Error(), dir) {
+		t.Fatalf("refusal %q err %q", v.Refusal, err)
+	}
+	if code, ok := policy.AuditNotice(err); !ok || !strings.HasPrefix(code, "audit-unavailable:") || strings.Contains(code, dir) {
+		t.Fatalf("%q %v", code, ok)
+	}
+}
+
+// A write that fails after the run is returned; the run is neither undone
+// nor repeated.
+func TestRecordFailureAfterRunIsReported(t *testing.T) {
+	dir := t.TempDir()
+	log := New(dir)
+	g := auditGate(log, time.Date(2026, 10, 27, 15, 4, 5, 0, time.UTC))
+	act := policy.Action{Where: policy.Remote, Tool: "run_command", Command: "ls"}
+	v, err := g.Authorize(context.Background(), act, "")
+	if err != nil || !v.Run {
+		t.Fatalf("%+v %v", v, err)
+	}
+	month := filepath.Join(dir, "ai-audit", "2026-10.jsonl")
+	if err := os.Remove(month); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(month, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	err = g.Done(act, v, 0, 5, 7)
+	var ae *policy.AuditError
+	if !errors.As(err, &ae) || !ae.Ran || strings.Contains(err.Error(), dir) {
+		t.Fatalf("%v", err)
+	}
+	if code, ok := policy.AuditNotice(err); !ok || !strings.HasPrefix(code, "audit-failed:") {
+		t.Fatalf("%q %v", code, ok)
+	}
+}

@@ -28,7 +28,7 @@ func TestMigrationSourcesAndPreview(t *testing.T) {
 	}
 	m := locales.In("en")
 	var management []prefPage
-	for _, g := range prefGroups(m, currentTestTokens(false)) {
+	for _, g := range prefGroups(m) {
 		if g.title == m.SettingsGroupManage() {
 			for _, item := range g.items {
 				management = append(management, item.page)

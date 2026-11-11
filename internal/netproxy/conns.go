@@ -65,6 +65,7 @@ type Registry struct {
 	mu    sync.Mutex
 	next  uint64
 	conns map[uint64]*Conn
+	shut  bool
 	// OnChange, when set, is called when a connection comes or goes.
 	OnChange func()
 }
@@ -77,10 +78,16 @@ func (r *Registry) changed() {
 
 // Relay copies between src (the connection accepted) and dst (the one
 // dialed) until either ends, listed in the registry meanwhile. It blocks.
+// After Shut it closes both at once and relays nothing.
 func (r *Registry) Relay(src, dst net.Conn, target, protocol string) {
 	c := &Conn{Source: src.RemoteAddr().String(), Target: target, Protocol: protocol, Start: time.Now(), a: src, b: dst}
 	if r != nil {
 		r.mu.Lock()
+		if r.shut {
+			r.mu.Unlock()
+			c.Close()
+			return
+		}
 		if r.conns == nil {
 			r.conns = map[uint64]*Conn{}
 		}
@@ -154,6 +161,15 @@ func (r *Registry) Close(id uint64) bool {
 	}
 	c.Close()
 	return true
+}
+
+// Shut ends every connection and refuses new ones for good: a Relay
+// racing it either is listed in time to be closed here or closes itself.
+func (r *Registry) Shut() {
+	r.mu.Lock()
+	r.shut = true
+	r.mu.Unlock()
+	r.CloseAll()
 }
 
 // CloseAll ends every connection.

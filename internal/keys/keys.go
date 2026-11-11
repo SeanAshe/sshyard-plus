@@ -27,7 +27,26 @@ var (
 	ErrPublicKey = errors.New("keys: this is a public key; a private key is needed")
 	// ErrCorrupt is a PuTTY key whose checksum does not match.
 	ErrCorrupt = errors.New("keys: the key file is damaged")
+	// ErrCostly is a PuTTY key whose passphrase derivation costs more
+	// than usual, though within the limits: Import declines it, deriving
+	// nothing, and ImportCostly opens it. The error is a *CostError.
+	ErrCostly = errors.New("keys: the key's passphrase derivation costs more than usual")
+	// ErrTooCostly is a PuTTY key whose passphrase derivation costs more
+	// than this package ever derives; nothing was derived.
+	ErrTooCostly = errors.New("keys: the key's passphrase derivation costs more than SSHYard allows")
 )
+
+// CostError is a PuTTY key whose derivation costs more than usual
+// (ErrCostly): the memory it takes, in KiB, and its passes.
+type CostError struct {
+	Memory uint64
+	Passes uint64
+}
+
+func (e *CostError) Error() string { return ErrCostly.Error() }
+
+// Is makes a *CostError ErrCostly.
+func (e *CostError) Is(target error) bool { return target == ErrCostly }
 
 // UnsupportedError is a key of a kind this package does not read, such
 // as a DSA key or a PuTTY key derived with Argon2d.
@@ -86,14 +105,28 @@ func IsPPK(data []byte) bool {
 // opens an encrypted one. An encrypted key read without it is
 // ErrPassphraseNeeded; for an OpenSSH key the Key returned with it still
 // has its public half, so it can be kept and opened later. A PuTTY key is
-// converted to OpenSSH, encrypted with the same passphrase.
+// converted to OpenSSH, encrypted with the same passphrase; one whose
+// passphrase derivation costs more than usual is a *CostError
+// (ErrCostly), with nothing derived, which ImportCostly opens.
 func Import(data, passphrase []byte) (Key, error) {
+	return importKey(data, passphrase, false)
+}
+
+// ImportCostly is Import, which also opens a PuTTY key whose passphrase
+// derivation costs more than usual, once the user agreed to it; never
+// one past the limits (ErrTooCostly). The derivation can take seconds and
+// can not be interrupted: call it off the UI thread.
+func ImportCostly(data, passphrase []byte) (Key, error) {
+	return importKey(data, passphrase, true)
+}
+
+func importKey(data, passphrase []byte, costly bool) (Key, error) {
 	data = bytes.TrimSpace(bytes.TrimPrefix(data, []byte("\ufeff")))
 	if len(data) == 0 {
 		return Key{}, ErrNotAKey
 	}
 	if IsPPK(data) {
-		return importPPK(data, passphrase)
+		return importPPK(data, passphrase, costly)
 	}
 	if _, _, _, _, err := ssh.ParseAuthorizedKey(data); err == nil {
 		return Key{}, ErrPublicKey

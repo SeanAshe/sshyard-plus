@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Licoy/sshyard/internal/assets"
+	"github.com/Licoy/sshyard/internal/keys"
 	"github.com/Licoy/sshyard/internal/migration"
 	"github.com/Licoy/sshyard/locales"
 	"github.com/egoist/mygo/ui"
@@ -44,6 +45,10 @@ type migrationForm struct {
 	baseline                     []assets.Host
 	search, group, err           string
 	saveSecrets, reading, saving bool
+	// costly is set once the user agreed to derive the batch's PuTTY keys
+	// whose passphrase derivation costs more than usual (off the UI
+	// thread, as the batch is saved)
+	costly bool
 	// composing shows the text area of a text import, text its content;
 	// batch edits the selected rows, table keeps the place of its rows,
 	// done is what the saved import did
@@ -313,7 +318,19 @@ func (a *App) startMigrationSave(m locales.Messages) {
 			}
 			f.saving = false
 			var rowErr *migrationRowError
+			var ce *keys.CostError
 			switch {
+			case errors.As(err, &ce):
+				// Nothing was saved or derived: asked, the batch runs again
+				// with its costly keys allowed.
+				a.askCost(&costAsk{memory: ce.Memory, passes: ce.Passes, run: func() {
+					a.closeCost()
+					if a.migration == f {
+						f.costly = true
+						a.startMigrationSave(m)
+					}
+				}})
+				return
 			case errors.As(err, &rowErr) && f.editable():
 				rowErr.row.problem = rowErr.text
 				return

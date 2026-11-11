@@ -599,7 +599,7 @@ func (a *App) mcpRun(ctx context.Context, raw json.RawMessage, aud *audit.Log) (
 	if aud == nil {
 		return "", errors.New("audit unavailable; command was not executed")
 	}
-	if err := aud.Prepare(); err != nil {
+	if err := aud.Prepare(time.Now()); err != nil {
 		return "", mcpAuditError{"audit unavailable; command was not executed", err}
 	}
 	timeout := mcpTimeout

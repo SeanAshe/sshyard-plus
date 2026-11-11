@@ -85,7 +85,14 @@ func (a *App) hostSecretChanges(m locales.Messages, f *hostForm, h assets.Host) 
 		case s.genKey != nil:
 			k, err = keys.Encode(s.genKey, s.comment(), pass)
 		case s.keyData != nil:
-			k, err = keys.Import(s.keyData, pass)
+			k, err = a.loadKey(s.keyData, pass)
+			if a.askKeyCost(err, s.keyData, pass, func() {
+				if a.form == f {
+					a.SaveForm(m)
+				}
+			}) {
+				return h, nil, errCostAsked
+			}
 		case f.orig.Auth == assets.AuthKey:
 			var data []byte
 			data, err = a.kc.Get(keychain.Host(h.ID, keychain.PrivateKey))

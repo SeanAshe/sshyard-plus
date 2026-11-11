@@ -619,6 +619,8 @@ func (a *App) onAIEvent(id int, ev agent.Event) {
 			}
 		}
 		c.ai.items = append(c.ai.items, aiItem{kind: "tool", tool: *ev.Tool})
+	case agent.EventNotice:
+		c.ai.items = append(c.ai.items, aiItem{kind: "err", text: ev.Text})
 	case agent.EventPause:
 		c.ai.paused = true
 		c.ai.pauseCalls = ev.Calls

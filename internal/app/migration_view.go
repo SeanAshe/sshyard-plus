@@ -13,7 +13,7 @@ import (
 
 func (a *App) migrationSection(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 	ui.Text(c, m.MigrationReadOnly()).FontSize(theme.Footnote).TextColor(tok.TextMuted)
-	a.settingsSection(c, tok, icons.Import, tok.Accent, m.MigrationGeneral(), func(g *settingsGroup) {
+	a.settingsSection(c, tok, icons.Import, m.MigrationGeneral(), func(g *settingsGroup) {
 		g.row("OpenSSH", m.MigrationFormat("~/.ssh/config"), func() {
 			if (IconButton{Icon: icons.Import, Label: m.ImportSSHConfig()}).Clicked(c, "migration:openssh") {
 				a.OpenImport(m, "")
@@ -43,7 +43,7 @@ func (a *App) migrationSection(c *ui.Context, m locales.Messages, tok theme.Toke
 	}{{m.MigrationCommon(), 0, 3}, {m.MigrationCrossPlatform(), 3, 7}, {m.MigrationOther(), 7, 10}}
 	formats := []string{".xsh", ".mxtsessions / .ini", ".reg / ~/.putty/sessions/", "user.sessions / .json", ".json", ".yaml / .yml", ".json / .csv", ".remmina", ".xml / .csv", ".ini"}
 	for _, group := range groups {
-		a.settingsSection(c, tok, icons.Import, tok.Accent, group.title, func(g *settingsGroup) {
+		a.settingsSection(c, tok, icons.Import, group.title, func(g *settingsGroup) {
 			for i := group.start; i < group.end; i++ {
 				source := sources[i]
 				g.row(string(source), m.MigrationFormat(formats[i]), func() {

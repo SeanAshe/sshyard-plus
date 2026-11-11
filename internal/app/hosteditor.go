@@ -322,6 +322,9 @@ func (a *App) SaveForm(m locales.Messages) bool {
 		f.err, f.netOpen = m.ErrJumpLoop(), true
 		return false
 	}
+	if errors.Is(err, errCostAsked) {
+		return false
+	}
 	if err != nil {
 		f.err = fieldError(m, err)
 		return false

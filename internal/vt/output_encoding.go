@@ -118,7 +118,7 @@ func (t *Terminal) ResetOutputStream() {
 	t.flushOutputCharacter()
 	t.state = sGround
 	t.osc = t.osc[:0]
-	t.osc52, t.oscDrop = false, false
+	t.osc52, t.oscScan = false, osc52Scan{}
 	t.onlyOSC = false
 	t.resetDCS()
 }

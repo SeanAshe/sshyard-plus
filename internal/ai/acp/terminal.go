@@ -76,7 +76,7 @@ func (s *Session) CreateTerminal(ctx context.Context, p sdk.CreateTerminalReques
 	env := filterTermEnv(p.Env)
 	act := policy.Action{Where: policy.Remote, Tool: "run_command", Command: quoted, Dir: dir}
 	start := time.Now()
-	v, err := s.gate.Authorize(ctx, act, "")
+	v, err := s.authorize(ctx, act, "")
 	if err != nil {
 		return sdk.CreateTerminalResponse{}, err
 	}
@@ -84,7 +84,7 @@ func (s *Session) CreateTerminal(ctx context.Context, p sdk.CreateTerminalReques
 		return sdk.CreateTerminalResponse{}, refusalError(v)
 	}
 	if s.cfg.Exec == nil {
-		s.gate.Done(act, v, 1, time.Since(start).Milliseconds(), 0)
+		s.finish(act, v, 1, start, 0)
 		return sdk.CreateTerminalResponse{}, errExec
 	}
 	s.mu.Lock()
@@ -140,7 +140,7 @@ func (s *Session) runTerm(t *termProc) {
 	t.err = err
 	t.mu.Unlock()
 	_, _, total := t.buf.snapshot()
-	s.gate.Done(t.act, t.verdict, exit, time.Since(start).Milliseconds(), int64(total))
+	s.finish(t.act, t.verdict, exit, start, total)
 }
 
 func (s *Session) TerminalOutput(ctx context.Context, p sdk.TerminalOutputRequest) (sdk.TerminalOutputResponse, error) {

@@ -43,7 +43,7 @@ func (s *Session) readText(ctx context.Context, remote string, line, limit *int)
 	}
 	act := policy.Action{Where: policy.Remote, Tool: "read_file", Path: remote}
 	start := time.Now()
-	v, err := s.gate.Authorize(ctx, act, "")
+	v, err := s.authorize(ctx, act, "")
 	if err != nil {
 		return "", err
 	}
@@ -108,7 +108,7 @@ func (s *Session) writeText(ctx context.Context, remote, content string) error {
 	// A diff reads the current file, so authorize that read independently.
 	readAct := policy.Action{Where: policy.Remote, Tool: "read_file", Path: remote}
 	readStart := time.Now()
-	readVerdict, err := s.gate.Authorize(ctx, readAct, "")
+	readVerdict, err := s.authorize(ctx, readAct, "")
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func (s *Session) writeText(ctx context.Context, remote, content string) error {
 	diff := agent.Unified(remote, old, content)
 	act := policy.Action{Where: policy.Remote, Tool: "write_file", Path: remote}
 	start := time.Now()
-	v, err := s.gate.Authorize(ctx, act, diff)
+	v, err := s.authorize(ctx, act, diff)
 	if err != nil {
 		return err
 	}
@@ -185,7 +185,7 @@ func (s *Session) RequestPermission(ctx context.Context, p sdk.RequestPermission
 	defer cancel()
 
 	act, diff := actionFrom(p.ToolCall)
-	v, err := s.gate.Authorize(pctx, act, diff)
+	v, err := s.authorize(pctx, act, diff)
 	if pctx.Err() != nil {
 		return cancelledPerm(), nil
 	}
@@ -226,8 +226,31 @@ func (s *Session) SessionUpdate(ctx context.Context, n sdk.SessionNotification) 
 	return nil
 }
 
-func (s *Session) finish(act policy.Action, v policy.Verdict, exit int, start time.Time, n int) {
-	s.gate.Done(act, v, exit, time.Since(start).Milliseconds(), int64(n))
+// authorize asks the gate. When the audit log refuses the action, the
+// user sees why as a notice and the agent gets the same reason.
+func (s *Session) authorize(ctx context.Context, act policy.Action, diff string) (policy.Verdict, error) {
+	v, err := s.gate.Authorize(ctx, act, diff)
+	if code, ok := policy.AuditNotice(err); ok {
+		s.emit(Update{Kind: "notice", Text: code})
+	}
+	return v, err
+}
+
+// finish records an action that ran. A lost record is shown as a notice
+// and returned; the action is never run again.
+func (s *Session) finish(act policy.Action, v policy.Verdict, exit int, start time.Time, n int) error {
+	err := s.gate.Done(act, v, exit, time.Since(start).Milliseconds(), int64(n))
+	if err == nil {
+		return nil
+	}
+	var ae *policy.AuditError
+	if errors.As(err, &ae) {
+		err = ae.Err
+	}
+	ae = &policy.AuditError{Ran: true, Err: err}
+	code, _ := policy.AuditNotice(ae)
+	s.emit(Update{Kind: "notice", Text: code})
+	return ae
 }
 
 func refusalError(v policy.Verdict) error {

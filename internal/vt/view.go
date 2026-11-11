@@ -281,3 +281,59 @@ func (t *Terminal) WordAt(p Pos) (Pos, Pos) {
 	}
 	return Pos{p.Line, a}, Pos{p.Line, b}
 }
+
+// CursorSteps is how many characters the cursor is from the cell at
+// row, col of the snapshot's screen, along the line the cursor is on:
+// what a shell's line editor moves through with the arrows, negative to
+// the left. ok is false when the cell is on another line, lines that
+// wrapped counting as one. A wide character's two cells are one
+// character, and a cell past the end of the text counts as its end, so
+// that no arrow goes beyond what was typed.
+func (s *Snapshot) CursorSteps(row, col int) (steps int, ok bool) {
+	cy := s.CursorY
+	if s.Cols <= 0 || cy < 0 || cy >= len(s.Lines) || row < 0 || row >= len(s.Lines) {
+		return 0, false
+	}
+	top, bottom := cy, cy
+	for top > 0 && s.Lines[top-1].Wrapped {
+		top--
+	}
+	for bottom < len(s.Lines)-1 && s.Lines[bottom].Wrapped {
+		bottom++
+	}
+	if row < top || row > bottom {
+		return 0, false
+	}
+	// cells are numbered along the line, from its first row's first
+	cell := func(i int) (Cell, bool) {
+		l := s.Lines[top+i/s.Cols]
+		if c := i % s.Cols; c < len(l.Cells) {
+			return l.Cells[c], l.widePad && c == s.Cols-1
+		}
+		return blank(Cell{}), false
+	}
+	end := 0 // after the last cell of the text
+	for i := range (bottom - top + 1) * s.Cols {
+		if c, pad := cell(i); !pad && !isBlank(c) {
+			end = i + 1
+		}
+	}
+	cur := (cy-top)*s.Cols + max(0, min(s.CursorX, s.Cols-1))
+	target := (row-top)*s.Cols + max(0, min(col, s.Cols-1))
+	for target > 0 {
+		if c, _ := cell(target); c.Width != 0 {
+			break
+		}
+		target-- // the right half of a wide character is the character
+	}
+	target = min(target, max(end, cur))
+	for i := min(cur, target); i < max(cur, target); i++ {
+		if c, pad := cell(i); c.Width != 0 && !pad {
+			steps++
+		}
+	}
+	if target < cur {
+		steps = -steps
+	}
+	return steps, true
+}

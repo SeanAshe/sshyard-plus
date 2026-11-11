@@ -192,7 +192,7 @@ func TestTransferFailedRemoteRenamePreservesOriginal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := (remoteFS{c}).rename("/part", "/original"); err == nil {
+	if err := (remoteFS{c, t.Context()}).rename("/part", "/original"); err == nil {
 		t.Fatal("rename unexpectedly succeeded")
 	}
 	if got := fake.File("/original"); string(got) != "original" {

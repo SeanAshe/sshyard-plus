@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"errors"
 	"math"
 	"runtime"
@@ -16,6 +17,7 @@ import (
 	"github.com/Licoy/sshyard/internal/settings"
 	"github.com/Licoy/sshyard/internal/theme"
 	"github.com/Licoy/sshyard/internal/vt"
+	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -45,6 +47,9 @@ type termView struct {
 	// set then too, takes a paste to send once asked, when it reports so.
 	fanout    func(encode func(vt.Modes) []byte)
 	holdPaste func(text string) bool
+	// local is a terminal on this computer, whose programs can read its
+	// clipboard themselves (see pasteClipboard).
+	local bool
 	// shortcuts are the shortcuts recorded (settings.Shortcuts), whose
 	// keys the terminal leaves to the app
 	shortcuts map[string]string
@@ -101,6 +106,9 @@ type termView struct {
 	selecting, selected bool
 	preedit             string
 	swallow             bool
+	// altClick is a plain left click with ⌥ (Alt elsewhere) being held:
+	// let go where it was pressed, it moves the shell's cursor there.
+	altClick bool
 
 	// mouse reports
 	held      bool // a button press was reported, its release not yet
@@ -749,6 +757,32 @@ func (v *termView) report(m vt.Modes, btn vt.MouseBtn, act vt.MouseAction, p vt.
 	}
 }
 
+// moveCursorTo moves the shell's cursor to the cell p, as ⌥-click
+// (Alt-click elsewhere) does: the arrows that take it there along the
+// line it is on. Only on the main screen of a program that does not read
+// the mouse, and only within the cursor's line, lines that wrapped
+// counting as one; up and down would page through a shell's history.
+func (v *termView) moveCursorTo(p vt.Pos) {
+	snap := v.target.Terminal().Snapshot(0)
+	if snap.Modes.AltScreen || snap.Modes.Mouse != vt.MouseOff {
+		return
+	}
+	if steps, ok := snap.CursorSteps(p.Line-snap.First, p.Col); ok {
+		v.send(cursorMoveBytes(steps, snap.Modes))
+	}
+}
+
+// cursorMoveBytes are the arrows that move the cursor steps characters
+// right, left when negative, in the cursor key mode of m (DECCKM).
+func cursorMoveBytes(steps int, m vt.Modes) []byte {
+	k := ui.KeyRight
+	if steps < 0 {
+		k = ui.KeyLeft
+	}
+	b, _ := EncodeKey(k, 0, m)
+	return bytes.Repeat(b, abs(steps))
+}
+
 // focusChanged reports the focus coming to or leaving the pane to a
 // program that asked for it (1004).
 func (v *termView) focusChanged(focused bool) {
@@ -776,6 +810,28 @@ func (v *termView) Paste(text string) {
 		return
 	}
 	v.pasteNow(text)
+}
+
+// pasteClipboard pastes the clipboard's text. A local terminal given a
+// clipboard with an image and no text sends Ctrl+V instead, as the key
+// a program such as Codex CLI or Claude Code takes to read the image
+// from the system clipboard itself; it goes to this terminal alone. A
+// remote one has nothing to send: its programs cannot read this
+// computer's clipboard.
+func (v *termView) pasteClipboard(cb clipboard) {
+	text := cb.ReadClipboard()
+	if text == "" && v.local && clipboardHasImage(cb) {
+		v.send([]byte{0x16})
+		return
+	}
+	v.Paste(text)
+}
+
+// clipboardHasImage reports an image on the clipboard, which only a
+// clipboard that lists its formats (ui.Services) can tell.
+func clipboardHasImage(cb clipboard) bool {
+	f, ok := cb.(interface{ ClipboardFormats() []transfer.Format })
+	return ok && slices.Contains(f.ClipboardFormats(), transfer.PNG)
 }
 
 // pasteNow sends text as pasted, without holding it.
@@ -830,7 +886,7 @@ func (v *termView) input(ev ui.InputEvent, cb clipboard) bool {
 				v.swallow = true
 				return true
 			case ui.KeyV:
-				v.Paste(cb.ReadClipboard())
+				v.pasteClipboard(cb)
 				v.swallow = true
 				return true
 			}
@@ -844,7 +900,7 @@ func (v *termView) input(ev ui.InputEvent, cb clipboard) bool {
 				v.offset = max(v.offset-max(v.rows-1, 1), 0)
 				return true
 			case ui.KeyInsert:
-				v.Paste(cb.ReadClipboard())
+				v.pasteClipboard(cb)
 				return true
 			}
 		}
@@ -890,7 +946,7 @@ func (v *termView) input(ev ui.InputEvent, cb clipboard) bool {
 			}
 			return true
 		case "paste", "pasteAndMatchStyle":
-			v.Paste(cb.ReadClipboard())
+			v.pasteClipboard(cb)
 			return true
 		case "selectAll":
 			snap := t.Snapshot(0)
@@ -927,10 +983,11 @@ func (v *termView) input(ev ui.InputEvent, cb clipboard) bool {
 			return v.rightPress(ev.Mods, cb)
 		}
 		if ev.Button == 2 {
-			v.Paste(cb.ReadClipboard())
+			v.pasteClipboard(cb)
 			return true
 		}
 		p := v.cellAt(ev.X, ev.Y)
+		v.altClick = ev.Button == 0 && ev.Clicks == 1 && ev.Mods&(ui.Alt|ui.Shift|ui.Ctrl|ui.Super) == ui.Alt
 		switch {
 		case ev.Clicks == 2:
 			v.selA, v.selB = t.WordAt(p)
@@ -999,6 +1056,10 @@ func (v *termView) input(ev ui.InputEvent, cb clipboard) bool {
 		}
 		if v.selecting {
 			v.selecting = false
+			if v.altClick && !v.selected {
+				v.moveCursorTo(v.selA)
+			}
+			v.altClick = false
 			if v.copyOnSelect && v.selected {
 				if s := v.SelectedText(); s != "" {
 					cb.WriteClipboard(s)
@@ -1164,14 +1225,14 @@ func (v *termView) rightPress(mods ui.Modifiers, cb clipboard) bool {
 	}
 	switch v.rightClick {
 	case settings.RightClickPaste:
-		v.Paste(cb.ReadClipboard())
+		v.pasteClipboard(cb)
 		return true
 	case settings.RightClickCopyPaste:
 		if s := v.SelectedText(); v.selected && s != "" {
 			cb.WriteClipboard(s)
 			v.selected = false
 		} else {
-			v.Paste(cb.ReadClipboard())
+			v.pasteClipboard(cb)
 		}
 		return true
 	}

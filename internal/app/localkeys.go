@@ -117,7 +117,7 @@ func (a *App) forgetLocalKey(id string) error {
 // the keys of this computer, whether MCP connections may, and the
 // passphrases remembered for them.
 func (a *App) localKeysSection(c *ui.Context, m locales.Messages, tok theme.Tokens, s *settings.Settings, changed *bool) {
-	a.settingsSection(c, tok, icons.Key, tok.TintAt(2), m.LocalKeysSection(), func(g *settingsGroup) {
+	a.settingsSection(c, tok, icons.Key, m.LocalKeysSection(), func(g *settingsGroup) {
 		g.row(m.LocalKeysTry(), m.LocalKeysTryNote(), func() {
 			a.lkChoice = s.LocalKeys
 			if formSwitch(c.Key("localkeys"), &a.lkChoice).Label(m.LocalKeysTry()).Changed() {

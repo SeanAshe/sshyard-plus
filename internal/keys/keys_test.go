@@ -15,10 +15,13 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -88,19 +91,19 @@ func writePPK(t *testing.T, priv any, version int, passphrase, kdf string) []byt
 			private = append(private, make([]byte, aes.BlockSize-pad)...)
 		}
 		if version == 3 {
-			k.header = map[string]string{"Key-Derivation": kdf, "Argon2-Memory": "8192", "Argon2-Passes": "8", "Argon2-Parallelism": "1", "Argon2-Salt": "0123456789abcdef0123456789abcdef"}
+			k.header = map[string]string{"Key-Derivation": kdf, "Argon2-Memory": testArgon.mem, "Argon2-Passes": testArgon.passes, "Argon2-Parallelism": "1", "Argon2-Salt": "0123456789abcdef0123456789abcdef"}
 		}
 	}
 	var kdfLines string
 	if version == 3 && passphrase != "" {
-		kdfLines = fmt.Sprintf("Key-Derivation: %s\nArgon2-Memory: 8192\nArgon2-Passes: 8\nArgon2-Parallelism: 1\nArgon2-Salt: 0123456789abcdef0123456789abcdef\n", kdf)
+		kdfLines = fmt.Sprintf("Key-Derivation: %s\nArgon2-Memory: %s\nArgon2-Passes: %s\nArgon2-Parallelism: 1\nArgon2-Salt: 0123456789abcdef0123456789abcdef\n", kdf, testArgon.mem, testArgon.passes)
 	}
 	var mac []byte
 	enc := private
 	if kdf == "Argon2d" {
 		mac = make([]byte, 32)
 	} else {
-		ck, iv, mk, err := k.keys([]byte(passphrase))
+		ck, iv, mk, err := k.keys([]byte(passphrase), true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -223,6 +226,66 @@ func TestPPKDamaged(t *testing.T) {
 	}
 	if _, err := Import(data[:len(data)/2], nil); !errors.Is(err, ErrNotAKey) {
 		t.Fatalf("truncated: %v", err)
+	}
+}
+
+// A line count from the file must never reach a slice bound
+// unchecked: near math.MaxInt, i+count wraps negative and the parser
+// sliced past the end (issue #49).
+func TestPPKLineCounts(t *testing.T) {
+	_, ed, _ := ed25519.GenerateKey(rand.Reader)
+	for _, pass := range []string{"", "pw"} {
+		data := writePPK(t, ed, 3, pass, "")
+		lines := strings.Count(string(data), "\n") + 1
+		for _, field := range []string{"Public-Lines", "Private-Lines"} {
+			re := regexp.MustCompile(field + `: \d+\r\n`)
+			if !re.Match(data) {
+				t.Fatalf("no %s in the test key", field)
+			}
+			for _, n := range []string{
+				strconv.Itoa(math.MaxInt),
+				strconv.Itoa(math.MaxInt - 1),
+				strconv.Itoa(math.MaxInt - lines),
+				strconv.Itoa(math.MinInt),
+				"-1",
+				strconv.Itoa(lines),    // more than the lines left
+				"9223372036854775808",  // past int64
+				"18446744073709551616", // past uint64
+				"0x10",                 // not decimal
+			} {
+				t.Run(fmt.Sprintf("enc=%v/%s=%s", pass != "", field, n), func(t *testing.T) {
+					bad := re.ReplaceAll(data, []byte(field+": "+n+"\r\n"))
+					if _, err := parsePPK(bad); !errors.Is(err, ErrNotAKey) {
+						t.Fatalf("parse: %v", err)
+					}
+					if _, err := Import(bad, nil); !errors.Is(err, ErrNotAKey) {
+						t.Fatalf("import preview: %v", err)
+					}
+				})
+			}
+		}
+	}
+	// A count that is exactly the lines left, with nothing after it, is
+	// in bounds; the file then lacks the rest and is no key.
+	tail := []byte("PuTTY-User-Key-File-3: ssh-ed25519\nPublic-Lines: 1\nAAAA")
+	if _, err := parsePPK(tail); !errors.Is(err, ErrNotAKey) {
+		t.Fatalf("count at the end: %v", err)
+	}
+}
+
+func TestReaderStrBounds(t *testing.T) {
+	for _, b := range [][]byte{{0xff, 0xff, 0xff, 0xff, 1, 2}, {0xff, 0xff, 0xff, 0xfd}, {0, 0, 0, 3, 1, 2}, {0, 0}} {
+		r := &reader{b: b}
+		if s := r.str(); !r.err || s != nil {
+			t.Fatalf("%x: read %x", b, s)
+		}
+	}
+	r := &reader{b: []byte{0, 0, 0, 2, 'h', 'i', 0, 0, 0, 0}}
+	if s := r.str(); r.err || string(s) != "hi" {
+		t.Fatalf("read %q", s)
+	}
+	if s := r.str(); r.err || len(s) != 0 || len(r.b) != 0 {
+		t.Fatalf("empty string: %q, left %x", s, r.b)
 	}
 }
 

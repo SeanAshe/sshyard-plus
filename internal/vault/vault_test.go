@@ -105,8 +105,8 @@ func TestFormatAndVersion(t *testing.T) {
 	}
 }
 
-// TestBoundedParams: a header asking for more than the bounds is not
-// derived with; the file does not open rather than exhaust the machine.
+// TestBoundedParams: a header asking for more than the bounds is refused
+// before anything is derived, rather than exhaust the machine.
 func TestBoundedParams(t *testing.T) {
 	b, _ := Seal([]byte("data"), []byte("pw"), cheap)
 	huge := edit(t, b, func(h map[string]any) {
@@ -114,7 +114,7 @@ func TestBoundedParams(t *testing.T) {
 		w["params"] = map[string]any{"t": 1, "m": maxMemory * 8, "p": 1}
 	})
 	start := time.Now()
-	if _, err := Open(huge, []byte("pw")); !errors.Is(err, ErrPassword) {
+	if _, err := Open(huge, []byte("pw")); !errors.Is(err, ErrTooCostly) {
 		t.Fatalf("huge params: %v", err)
 	}
 	if time.Since(start) > 5*time.Second {

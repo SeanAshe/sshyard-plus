@@ -10,7 +10,7 @@ import (
 
 // Building a write diff discloses the previous content, and needs its own read
 // authorization before any bytes are fetched from the host.
-func (s *Session) readForDiff(ctx context.Context, write policy.Action) (string, bool, error) {
+func (s *Session) readForDiff(ctx context.Context, write policy.Action, emit func(Event)) (string, bool, error) {
 	read := policy.Action{Where: write.Where, Tool: "read_file", Path: write.Path, Reason: write.Reason}
 	v, err := s.gate.Authorize(ctx, read, "")
 	if err != nil {
@@ -38,7 +38,7 @@ func (s *Session) readForDiff(ctx context.Context, write policy.Action) (string,
 	if ctx.Err() != nil {
 		exit = -1
 	}
-	s.gate.Done(read, v, exit, time.Since(start).Milliseconds(), int64(len(text)))
+	_ = s.auditLost(emit, s.gate.Done(read, v, exit, time.Since(start).Milliseconds(), int64(len(text))))
 	return text, ok, err
 }
 

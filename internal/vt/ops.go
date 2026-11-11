@@ -305,11 +305,11 @@ func (t *Terminal) restoreCursor() {
 
 func (t *Terminal) oscDone() {
 	t.state = sGround
-	if t.oscDrop {
-		was52 := t.osc52
-		t.oscDrop, t.osc52 = false, false
+	if t.osc52 && t.oscScan.dropped() {
+		big := t.oscScan.big
+		t.osc52, t.oscScan = false, osc52Scan{}
 		t.osc = nil
-		if was52 && t.OnClipboardDrop != nil {
+		if big && t.OnClipboardDrop != nil {
 			t.OnClipboardDrop()
 		}
 		return

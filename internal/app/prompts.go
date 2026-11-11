@@ -169,6 +169,11 @@ func errText(m locales.Messages, h assets.Host, err error) string {
 		}
 	case session.KindPassphrase:
 		return m.ErrPassphrase(name)
+	case session.KindChallenge:
+		if errors.Is(err, session.ErrChallengeUnattended) {
+			return m.ErrChallengeUnattended(name)
+		}
+		return m.ErrChallengeCanceled(name)
 	case session.KindCertificate:
 		return m.ErrCertificate(name)
 	case session.KindNoCredentials:
@@ -461,6 +466,7 @@ func (a *App) TrustHostKey() error {
 func (a *App) promptsView(c *ui.Context, m locales.Messages) {
 	a.checkFailures(m)
 	a.sudoPromptView(c, m)
+	a.challengeView(c, m)
 	if p := a.prompt; p != nil {
 		title := m.PasswordPromptTitle(a.pv(p.host.Target()))
 		switch {

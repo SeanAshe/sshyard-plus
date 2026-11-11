@@ -836,7 +836,7 @@ func (a *App) targetNote(m locales.Messages, t settings.BackupTarget) string {
 
 // cloudSection is the backup page's places to back up to.
 func (a *App) cloudSection(c *ui.Context, m locales.Messages, tok theme.Tokens) {
-	a.settingsSection(c, tok, icons.Cloud, tok.TintAt(6), m.CloudBackupSection(), func(g *settingsGroup) {
+	a.settingsSection(c, tok, icons.Cloud, m.CloudBackupSection(), func(g *settingsGroup) {
 		ts := a.settings.BackupTargets
 		if len(ts) == 0 {
 			g.row(m.NoBackupTargets(), m.NoBackupTargetsNote(), func() {})

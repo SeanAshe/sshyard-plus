@@ -165,7 +165,7 @@ func (a *App) paletteItems(m locales.Messages, tok theme.Tokens) []paletteItem {
 			run: func() { a.paletteSnippet(m, n.ID, n.SendEnter) }})
 	}
 
-	for _, g := range prefGroups(m, tok) {
+	for _, g := range prefGroups(m) {
 		for _, it := range g.items {
 			page := it.page
 			add(paletteItem{key: "page:" + string(page), icon: it.icon, title: it.title, sub: m.Settings(), also: it.desc,
@@ -174,7 +174,7 @@ func (a *App) paletteItems(m locales.Messages, tok theme.Tokens) []paletteItem {
 	}
 	titles := map[prefPage]string{}
 	pageIcons := map[prefPage]*icons.Icon{}
-	for _, g := range prefGroups(m, tok) {
+	for _, g := range prefGroups(m) {
 		for _, it := range g.items {
 			titles[it.page], pageIcons[it.page] = it.title, it.icon
 		}

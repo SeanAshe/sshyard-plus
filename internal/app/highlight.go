@@ -140,7 +140,7 @@ func (a *App) hlPreview(c *ui.Context, tok theme.Tokens, key string, h *highligh
 // off, how far it goes, the built-in rules and the user's own.
 func (a *App) highlightSection(c *ui.Context, m locales.Messages, tok theme.Tokens, s *settings.Settings, changed *bool) {
 	h := &s.Highlight
-	a.settingsSection(c, tok, icons.Highlight, tok.TintAt(5), m.HighlightSection(), func(g *settingsGroup) {
+	a.settingsSection(c, tok, icons.Highlight, m.HighlightSection(), func(g *settingsGroup) {
 		toggle := func(key, label, note string, v *bool) {
 			g.row(label, note, func() {
 				on := *v
@@ -164,7 +164,7 @@ func (a *App) highlightSection(c *ui.Context, m locales.Messages, tok theme.Toke
 	if !h.On {
 		return
 	}
-	a.settingsSection(c, tok, icons.Logs, tok.TintAt(2), m.HighlightPresets(), func(g *settingsGroup) {
+	a.settingsSection(c, tok, icons.Logs, m.HighlightPresets(), func(g *settingsGroup) {
 		for _, p := range highlight.Presets {
 			name := presetName(m, p.ID)
 			g.row(name, p.Sample, func() {
@@ -181,7 +181,7 @@ func (a *App) highlightSection(c *ui.Context, m locales.Messages, tok theme.Toke
 		}
 	})
 	pal := a.termPalette(tok)
-	a.settingsSection(c, tok, icons.Edit, tok.TintAt(4), m.HighlightRules(), func(g *settingsGroup) {
+	a.settingsSection(c, tok, icons.Edit, m.HighlightRules(), func(g *settingsGroup) {
 		if len(h.Rules) == 0 {
 			g.row(m.HighlightNoRules(), "", func() {})
 		}

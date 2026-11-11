@@ -61,7 +61,7 @@ func (a *App) knownHostsPage(c *ui.Context, m locales.Messages, tok theme.Tokens
 		return
 	}
 	path := a.known.Path()
-	a.settingsSection(c, tok, nil, ui.Color{}, "", func(g *settingsGroup) {
+	a.settingsSection(c, tok, nil, "", func(g *settingsGroup) {
 		g.row(m.KnownHostsFile(a.homePath(path)), "", func() {
 			if a.p.OpenPath != nil && iconButton(c, "kh:folder", icons.OpenFile, m.OpenDataFolder()) {
 				if err := a.p.OpenPath(filepath.Dir(path)); err != nil {
@@ -79,7 +79,7 @@ func (a *App) knownHostsPage(c *ui.Context, m locales.Messages, tok theme.Tokens
 	used := a.knownKeyHosts()
 	q := strings.ToLower(strings.TrimSpace(a.khQuery))
 	shown := 0
-	a.settingsSection(c, tok, nil, ui.Color{}, "", func(g *settingsGroup) {
+	a.settingsSection(c, tok, nil, "", func(g *settingsGroup) {
 		for _, k := range keys {
 			title := strings.Join(k.Hosts, ", ")
 			if k.Hashed() {

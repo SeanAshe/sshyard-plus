@@ -39,7 +39,7 @@ func (a *App) prefAgents(c *ui.Context, m locales.Messages, tok theme.Tokens, s 
 		})
 	}
 
-	a.settingsSection(c, tok, icons.API, tok.TintAt(0), m.ApiSection(), func(g *settingsGroup) {
+	a.settingsSection(c, tok, icons.API, m.ApiSection(), func(g *settingsGroup) {
 		g.row(m.McpEnable(), m.McpEnableNote(), func() {
 			sw := on
 			if formSwitch(c.Key("mcpon"), &sw).Label(m.McpEnable()).Changed() {
@@ -96,7 +96,7 @@ func (a *App) prefAgents(c *ui.Context, m locales.Messages, tok theme.Tokens, s 
 		})
 	})
 
-	a.settingsSection(c, tok, icons.MCP, tok.TintAt(5), m.McpSection(), func(g *settingsGroup) {
+	a.settingsSection(c, tok, icons.MCP, m.McpSection(), func(g *settingsGroup) {
 		if srv == nil {
 			offNote(g)
 			return
@@ -116,7 +116,7 @@ func (a *App) prefAgents(c *ui.Context, m locales.Messages, tok theme.Tokens, s 
 	if !on {
 		return
 	}
-	a.settingsSection(c, tok, icons.Host, tok.TintAt(2), m.McpSessions(), func(g *settingsGroup) {
+	a.settingsSection(c, tok, icons.Host, m.McpSessions(), func(g *settingsGroup) {
 		list := a.mcpSessionList()
 		if len(list) == 0 {
 			ui.Row(c).MinHeight(44).Padding(8, 14).Children(func() {
@@ -140,7 +140,7 @@ func (a *App) prefAgents(c *ui.Context, m locales.Messages, tok theme.Tokens, s 
 // does not.
 func (a *App) skillSettings(c *ui.Context, m locales.Messages, tok theme.Tokens, serving bool) {
 	a.clearResolvedSkillErrors()
-	a.settingsSection(c, tok, icons.Skill, tok.TintAt(3), m.SkillSection(), func(g *settingsGroup) {
+	a.settingsSection(c, tok, icons.Skill, m.SkillSection(), func(g *settingsGroup) {
 		if a.mcp.skillErr != nil {
 			g.row(m.SkillRefreshFailed(skillErrorText(m, a.mcp.skillErr)), "", func() {})
 		}

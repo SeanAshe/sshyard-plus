@@ -213,3 +213,112 @@ func TestOSC52TmuxPassthrough(t *testing.T) {
 		t.Fatalf("screen %q", term.ScreenText())
 	}
 }
+
+// Malformed OSC 52 must stay within a small fixed buffer however much
+// arrives, in chunks too, be reported once at its end, and leave the
+// parser able to print what follows.
+func TestOSC52MalformedStaysBounded(t *testing.T) {
+	const n = 2 << 20
+	// The most either buffer may hold with SetOSC52Max(8): a prefix, Pc
+	// and a 12-byte payload.
+	const bound = 64
+	cases := []struct {
+		name, head string
+		fill       byte
+		end        string
+		dcs        bool
+	}{
+		{"osc-padding", "\x1b]52;c;", '=', "\x07", false},
+		{"osc-selection", "\x1b]52;", 'c', "\x1b\\", false},
+		{"osc-digits", "\x1b]52;c;", 'A', "\x07", false},
+		{"tmux-selection", "\x1bPtmux;\x1b\x1b]52;", 'c', "\x1b\\", true},
+		{"tmux-padding", "\x1bPtmux;\x1b\x1b]52;c;", '=', "\x1b\\", true},
+		{"tmux-digits", "\x1bPtmux;\x1b\x1b]52;c;", 'A', "\x07\x1b\\", true},
+	}
+	for _, tc := range cases {
+		term, got, drops := collect(t)
+		term.SetOSC52Max(8)
+		in := tc.head + strings.Repeat(string(tc.fill), n) + tc.end
+		// An odd chunk size splits the prefix and the terminator too.
+		for i := 0; i < len(in); i += 4093 {
+			end := min(i+4093, len(in))
+			term.Write([]byte(in[i:end]))
+			if len(term.osc) > bound || cap(term.osc) > oscCap || len(term.dcs) > bound || cap(term.dcs) > oscCap {
+				t.Fatalf("%s at %d: osc %d/%d dcs %d/%d", tc.name, end, len(term.osc), cap(term.osc), len(term.dcs), cap(term.dcs))
+			}
+			if end >= len(tc.head)+bound && end < len(tc.head)+n {
+				dropped := term.osc52 && term.oscScan.dropped()
+				if tc.dcs {
+					dropped = term.dcsIs52 && term.dcsScan.dropped()
+				}
+				if !dropped {
+					t.Fatalf("%s at %d: not dropped", tc.name, end)
+				}
+			}
+		}
+		if *drops != 1 || len(*got) != 0 {
+			t.Fatalf("%s: drops %d writes %+v", tc.name, *drops, *got)
+		}
+		if term.state != sGround || term.osc52 || term.dcsIs52 || term.dcs != nil {
+			t.Fatalf("%s: parser not reset, state %d", tc.name, term.state)
+		}
+		term.WriteString("AFTER")
+		if !strings.Contains(term.ScreenText(), "AFTER") || strings.Contains(term.ScreenText(), string(tc.fill)+string(tc.fill)) {
+			t.Fatalf("%s: screen %q", tc.name, term.ScreenText())
+		}
+		term.WriteString("\x1b]52;c;" + b64("ok") + "\x07" + tmuxWrap("\x1b]52;c;"+b64("tm")+"\x07"))
+		if len(*got) != 2 || (*got)[0].data != "ok" || (*got)[1].data != "tm" {
+			t.Fatalf("%s: later writes %+v", tc.name, *got)
+		}
+	}
+}
+
+// Short malformed padding is ignored quietly, like invalid base64.
+func TestOSC52MalformedPadding(t *testing.T) {
+	for _, pd := range []string{"YQ===", "YQ==YQ==", "YQ=Q"} {
+		for _, wrap := range []bool{false, true} {
+			term, got, drops := collect(t)
+			seq := "\x1b]52;c;" + pd + "\x07"
+			if wrap {
+				seq = tmuxWrap(seq)
+			}
+			term.WriteString(seq + "NEXT")
+			if len(*got) != 0 || *drops != 0 {
+				t.Fatalf("%q tmux=%v: writes %+v drops %d", pd, wrap, *got, *drops)
+			}
+			if !strings.Contains(term.ScreenText(), "NEXT") {
+				t.Fatalf("%q tmux=%v: screen %q", pd, wrap, term.ScreenText())
+			}
+		}
+	}
+}
+
+// A padded payload right at the limit still copies, directly and
+// through tmux, one past it is dropped, and a query carries nothing.
+func TestOSC52AtLimitAndQuery(t *testing.T) {
+	for _, wrap := range []bool{false, true} {
+		for _, end := range []string{"\x07", "\x1b\\"} {
+			term, got, drops := collect(t)
+			term.SetOSC52Max(8)
+			w := func(s string) {
+				if wrap {
+					s = tmuxWrap(s)
+				}
+				term.WriteString(s)
+			}
+			w("\x1b]52;cp;" + b64("1234567") + end) // padded with '='
+			w("\x1b]52;c;" + b64("12345678") + end) // exactly the limit
+			w("\x1b]52;c;" + b64("123456789") + end)
+			w("\x1b]52;c;?" + end)
+			if len(*got) != 3 || (*got)[0].data != "1234567" || (*got)[0].sel != "cp" || (*got)[1].data != "12345678" {
+				t.Fatalf("tmux=%v end %q: %+v", wrap, end, *got)
+			}
+			if q := (*got)[2]; !q.query || q.data != "" {
+				t.Fatalf("tmux=%v end %q: query %+v", wrap, end, q)
+			}
+			if *drops != 1 {
+				t.Fatalf("tmux=%v end %q: drops %d", wrap, end, *drops)
+			}
+		}
+	}
+}

@@ -49,6 +49,12 @@ type Credentials struct {
 	Skip []string
 	// OnKey hears the KeyID of the TryAgent or local key that logged in.
 	OnKey func(id string)
+	// PasswordPrompt says the caller asks for a missing or refused
+	// password itself and connects again with it, as it does whenever
+	// Password is set: a keyboard-interactive round asking only for a
+	// password Password does not answer fails the login, rather than being
+	// asked through Config.Ask.
+	PasswordPrompt bool
 }
 
 // ErrPassphraseNeeded reports a private key encrypted with a passphrase
@@ -99,6 +105,11 @@ type Config struct {
 	Proxy *netproxy.Dialer
 	// Progress, when set, hears the name of each hop as it is dialed.
 	Progress func(hop string)
+	// Ask, when set, asks the user the keyboard-interactive questions of
+	// any hop the saved password does not answer (a one-time password,
+	// a verification code); nil fails such a login with
+	// ErrChallengeUnattended.
+	Ask Ask
 }
 
 func (c Config) timeout() time.Duration {
@@ -108,9 +119,10 @@ func (c Config) timeout() time.Duration {
 	return 15 * time.Second
 }
 
-// authMethods are how cr logs in, the agent's connection to close once
-// it did, and the keys offered with TryAgent and LocalKeys, nil for none.
-func authMethods(cr Credentials) ([]ssh.AuthMethod, io.Closer, *keyOffer, error) {
+// authMethods are how cr logs in, answering keyboard-interactive
+// questions with kbd, the agent's connection to close once it did, and
+// the keys offered with TryAgent and LocalKeys, nil for none.
+func authMethods(cr Credentials, kbd ssh.KeyboardInteractiveChallenge) ([]ssh.AuthMethod, io.Closer, *keyOffer, error) {
 	var ms []ssh.AuthMethod
 	var closer io.Closer
 	var offer *keyOffer
@@ -168,14 +180,12 @@ func authMethods(cr Credentials) ([]ssh.AuthMethod, io.Closer, *keyOffer, error)
 		ms = append(ms, ssh.PublicKeys(signers...))
 	}
 	if cr.Password != "" {
-		pw := cr.Password
-		ms = append(ms, ssh.Password(pw), ssh.KeyboardInteractive(func(name, instruction string, questions []string, echos []bool) ([]string, error) {
-			answers := make([]string, len(questions))
-			for i := range questions {
-				answers[i] = pw
-			}
-			return answers, nil
-		}))
+		ms = append(ms, ssh.Password(cr.Password))
+	}
+	// Last, as the one that may ask the user: after a key, or along with
+	// one, the server may want a one-time password too.
+	if len(ms) > 0 && kbd != nil {
+		ms = append(ms, ssh.KeyboardInteractive(kbd))
 	}
 	if len(ms) == 0 {
 		closeAgent(closer)
@@ -245,7 +255,7 @@ func Dial(ctx context.Context, cfg Config) (*ssh.Client, error) {
 		default:
 			dial = cfg.Dial
 		}
-		c, err := dialHop(ctx, hop, dial, cfg.timeout())
+		c, err := dialHop(ctx, hop, dial, cfg.timeout(), cfg.Ask)
 		if err != nil {
 			closeUnder()
 			if len(cfg.Jumps) > 0 {
@@ -266,8 +276,9 @@ func Dial(ctx context.Context, cfg Config) (*ssh.Client, error) {
 	return client, nil
 }
 
-// dialHop connects and logs in to one hop.
-func dialHop(ctx context.Context, hop Hop, dial func(ctx context.Context, network, addr string) (net.Conn, error), timeout time.Duration) (*ssh.Client, error) {
+// dialHop connects and logs in to one hop, asking the user with ask the
+// questions the saved password does not answer.
+func dialHop(ctx context.Context, hop Hop, dial func(ctx context.Context, network, addr string) (net.Conn, error), timeout time.Duration, ask Ask) (*ssh.Client, error) {
 	if hop.HostKey == nil {
 		return nil, errors.New("session: no host key callback")
 	}
@@ -278,17 +289,22 @@ func dialHop(ctx context.Context, hop Hop, dial func(ctx context.Context, networ
 			return nil, err
 		}
 	}
-	methods, closer, offer, err := authMethods(cr)
+	user := hop.User
+	if cr.User != "" {
+		user = cr.User
+	}
+	kbd := &responder{password: cr.Password, declinePassword: cr.Password != "" || cr.PasswordPrompt, ask: ask, hop: hop.Name, user: user}
+	methods, closer, offer, err := authMethods(cr, kbd.answer)
 	if err != nil {
 		return nil, err
 	}
 	if closer != nil {
 		defer closer.Close()
 	}
-	user := hop.User
-	if cr.User != "" {
-		user = cr.User
+	if offer != nil {
+		kbd.stop = offer.stopped
 	}
+	parent := ctx
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	if dial == nil {
@@ -302,11 +318,14 @@ func dialHop(ctx context.Context, hop Hop, dial func(ctx context.Context, networ
 		}
 		return nil, err
 	}
-	// The handshake has no context; a deadline bounds it, and closing
-	// the connection on cancel stops it.
-	if dl, ok := ctx.Deadline(); ok {
-		conn.SetDeadline(dl)
-	}
+	// The handshake has no context; a deadline bounds it, stopped while
+	// the user answers the server's questions, and closing the connection
+	// on cancel stops it.
+	dl, _ := ctx.Deadline()
+	clock := startClock(parent, conn, dl, timeout)
+	defer clock.stop()
+	ctx = clock.ctx
+	kbd.ctx, kbd.pause, kbd.resume = ctx, clock.pause, clock.resume
 	heard := &heardConn{Conn: conn}
 	stop := context.AfterFunc(ctx, func() { conn.Close() })
 	c, chans, reqs, err := ssh.NewClientConn(heard, hop.Addr, &ssh.ClientConfig{
@@ -329,7 +348,12 @@ func dialHop(ctx context.Context, hop Hop, dial func(ctx context.Context, networ
 		if ctx.Err() != nil && !isHostKeyErr(err) {
 			return nil, fmt.Errorf("%w: %w", context.DeadlineExceeded, err)
 		}
-		if offer != nil && cr.Password == "" && keysRefused(err) {
+		if kbd.err != nil && !errors.Is(kbd.err, errPasswordWanted) {
+			// The user canceled, no one is there to answer, or a key file
+			// needs its passphrase.
+			return nil, kbd.err
+		}
+		if offer != nil && cr.Password == "" && (keysRefused(err) || errors.Is(err, errPasswordWanted)) {
 			err = &KeysRefusedError{Offered: len(offer.signers), Err: err}
 		}
 		return nil, err
@@ -395,6 +419,10 @@ const (
 	// KindLocalKey: a key file of this computer the server accepts needs
 	// its passphrase (LocalKeyError).
 	KindLocalKey
+	// KindChallenge: the server's login questions, a one-time password,
+	// were not answered: canceled, or no one to ask
+	// (ErrChallengeCanceled, ErrChallengeUnattended).
+	KindChallenge
 	KindOther
 )
 
@@ -410,6 +438,8 @@ func Classify(err error) Kind {
 		return KindHostUnknown
 	case errors.As(err, &c):
 		return KindHostChanged
+	case errors.Is(err, ErrChallengeCanceled), errors.Is(err, ErrChallengeUnattended):
+		return KindChallenge
 	case errors.Is(err, netproxy.ErrAuth):
 		return KindProxyAuth
 	case errors.As(err, new(*netproxy.Error)), errors.As(err, new(*netproxy.RefusedError)):

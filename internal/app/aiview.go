@@ -878,6 +878,9 @@ func toolOutput(m locales.Messages, s string) string {
 	if s == "remote tools are not connected yet" {
 		return m.AiToolsPending()
 	}
+	if text, ok := auditText(m, s); ok {
+		return text
+	}
 	first, rest, multiline := strings.Cut(s, "\n")
 	if first == "ai.command_output_limit" {
 		text := m.AiCommandOutputLimit()
@@ -889,7 +892,21 @@ func toolOutput(m locales.Messages, s string) string {
 	return securityText(m, s)
 }
 
+// auditText is a policy.AuditNotice code in the user's language.
+func auditText(m locales.Messages, s string) (string, bool) {
+	if reason, ok := strings.CutPrefix(s, "audit-unavailable:"); ok {
+		return m.AiAuditUnavailable(reason), true
+	}
+	if reason, ok := strings.CutPrefix(s, "audit-failed:"); ok {
+		return m.AiAuditRecordFailed(reason), true
+	}
+	return "", false
+}
+
 func aiErrLine(m locales.Messages, s string) string {
+	if text, ok := auditText(m, s); ok {
+		return text
+	}
 	if rest, ok := strings.CutPrefix(s, "http:"); ok {
 		status, detail, _ := strings.Cut(rest, ":")
 		if detail != "" {

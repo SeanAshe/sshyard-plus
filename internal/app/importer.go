@@ -230,7 +230,10 @@ func (a *App) Import(m locales.Messages) (importResult, bool) {
 			continue
 		}
 		if k.pass != "" {
-			if _, err := keys.Import(k.data, []byte(k.pass)); err != nil {
+			if _, err := a.loadKey(k.data, []byte(k.pass)); err != nil {
+				if a.askKeyCost(err, k.data, []byte(k.pass), func() { a.retryImport(m, f) }) {
+					return res, false
+				}
 				f.err = m.ImportKeyError(filepath.Base(k.path), keyError(m, err))
 				return res, false
 			}
@@ -240,20 +243,7 @@ func (a *App) Import(m locales.Messages) (importResult, bool) {
 		}
 	}
 	if !a.unlocked() && a.importNeedsSecrets(m, f) {
-		a.withSecrets(func() {
-			if a.imp != f {
-				return
-			}
-			if result, ok := a.Import(m); ok {
-				a.importing = false
-				a.toast(func(m locales.Messages) ui.Toast {
-					return ui.Toast{Title: m.ImportDone(strconv.Itoa(result.added+result.overwritten), strconv.Itoa(result.skipped)), Type: "success"}
-				})
-				if len(result.errs) > 0 {
-					a.toastError(strings.Join(result.errs, "\n"))
-				}
-			}
-		})
+		a.withSecrets(func() { a.retryImport(m, f) })
 		return res, false
 	}
 	ids := map[string]string{}   // alias → host ID
@@ -308,6 +298,23 @@ func (a *App) Import(m locales.Messages) (importResult, bool) {
 		a.importChain(m, f, id, r.e, ids, &res, 0)
 	}
 	return res, true
+}
+
+// retryImport runs the import of f again, once what stopped it (the
+// secrets locked, a costly key) is out of the way, and says how it went.
+func (a *App) retryImport(m locales.Messages, f *importForm) {
+	if a.imp != f {
+		return
+	}
+	if result, ok := a.Import(m); ok {
+		a.importing = false
+		a.toast(func(m locales.Messages) ui.Toast {
+			return ui.Toast{Title: m.ImportDone(strconv.Itoa(result.added+result.overwritten), strconv.Itoa(result.skipped)), Type: "success"}
+		})
+		if len(result.errs) > 0 {
+			a.toastError(strings.Join(result.errs, "\n"))
+		}
+	}
 }
 
 func (a *App) importNeedsSecrets(m locales.Messages, f *importForm) bool {
@@ -380,7 +387,7 @@ func (a *App) importCredential(m locales.Messages, k *impKey) (string, error) {
 	key := k.key
 	if k.pass != "" {
 		var err error
-		if key, err = keys.Import(k.data, []byte(k.pass)); err != nil {
+		if key, err = a.loadKey(k.data, []byte(k.pass)); err != nil {
 			return "", errors.New(keyError(m, err))
 		}
 	}

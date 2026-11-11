@@ -1,13 +1,17 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Licoy/sshyard/internal/assets"
@@ -122,9 +126,11 @@ type backupForm struct {
 	data    []byte
 	created time.Time
 	// busy is set while the password is derived and the file sealed or
-	// opened, off the UI thread
-	busy bool
-	err  string
+	// opened, off the UI thread; cancel stops a restore's opening before
+	// its next derivation, when the sheet closes
+	busy   bool
+	cancel context.CancelFunc
+	err    string
 }
 
 // backupSecretKeys are the allowed secret keys of the entries of snap and of
@@ -166,6 +172,9 @@ func (a *App) collectBackup(secrets bool) (backupPayload, error) {
 	p := backupPayload{Assets: a.store.Snapshot(), Settings: a.settings}
 	p.Settings.BackupTargets, p.Settings.DefaultBackupPassword = nil, false
 	p.Settings.Background = settings.DefaultBackground()
+	// What starts a program on this computer is not taken by a restore,
+	// so it is not put in a backup either.
+	p.Settings.AIACPAgents, p.Settings.AIACP, p.Settings.AIDefaultAgent = nil, nil, ""
 	if b, err := a.known.Contents(); err == nil {
 		p.KnownHosts = string(b)
 	}
@@ -193,8 +202,9 @@ var errBadBackup = errors.New("app: invalid backup entries")
 // under this device's master key, then entries are saved, with compensating
 // rollback on failure (not crash atomicity across files); host keys and preferences
 // follow, whose
-// failures are told but undo nothing. Only the secrets of the backup's
-// own entries are taken.
+// failures are told but undo nothing, except that AI keys dropped for a
+// moved endpoint are put back when the preferences that move it fail.
+// Only the secrets of the backup's own entries are taken.
 func (a *App) restoreBackup(m locales.Messages, p backupPayload) error {
 	snap := p.Assets
 	for _, id := range backupIDs(snap, p.Settings.AIProviders) {
@@ -239,6 +249,25 @@ func (a *App) restoreBackup(m locales.Messages, p backupPayload) error {
 			changes = append(changes, keychain.Change{Key: key, Delete: true})
 		}
 	}
+	// An AI provider moved to another endpoint without a key of its own
+	// loses the key it has here, so that key never reaches the new one.
+	var dropped []keychain.Change
+	defer func() {
+		for _, c := range dropped {
+			clear(c.Value)
+		}
+	}()
+	for _, key := range a.movedAIKeys(p.Settings.AIProviders, p.Secrets) {
+		old, err := a.kc.Get(key)
+		if errors.Is(err, keychain.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return errors.New(m.ErrKeychainSave(secretStoreErrorText(m, err)))
+		}
+		dropped = append(dropped, keychain.Change{Key: key, Value: old})
+		changes = append(changes, keychain.Change{Key: key, Delete: true})
+	}
 	if err := tx.setBatch(changes); err != nil {
 		msg := m.ErrKeychainSave(secretStoreErrorText(m, err))
 		if rerr := tx.rollback(); rerr != nil {
@@ -265,9 +294,62 @@ func (a *App) restoreBackup(m locales.Messages, p backupPayload) error {
 		}
 	}
 	if err := a.ApplySettings(mergeSettings(a.settings, p.Settings)); err != nil {
+		// The providers keep the endpoints their keys belong to.
+		if len(dropped) > 0 {
+			err = errors.Join(err, a.kc.Apply(dropped))
+		}
 		a.toastError(m.ErrGeneric(err.Error()))
 	}
 	return nil
+}
+
+// movedAIKeys are the keys of this device's AI providers that in moves to
+// another endpoint without bringing a key of its own.
+func (a *App) movedAIKeys(in []settings.AIProvider, secrets map[string][]byte) []string {
+	var out []string
+	for _, p := range in {
+		key := keychain.AIKey(p.ID)
+		if len(secrets[key]) > 0 || slices.Contains(out, key) {
+			continue
+		}
+		if cur := a.providerByID(p.ID); cur != nil && !sameAIEndpoint(cur.BaseURL, p.BaseURL) {
+			out = append(out, key)
+		}
+	}
+	return out
+}
+
+// sameAIEndpoint reports whether requests to the base URLs a and b reach
+// the same service: the same scheme, host and port, whatever the path. A
+// URL the AI client would not dial differs from any other, unless both are
+// written alike.
+func sameAIEndpoint(a, b string) bool {
+	a, b = strings.TrimSpace(a), strings.TrimSpace(b)
+	if a == b {
+		return true
+	}
+	ea, oka := aiEndpoint(a)
+	eb, okb := aiEndpoint(b)
+	return oka && okb && ea == eb
+}
+
+// aiEndpoint is the scheme, host and port the AI client sends requests to
+// for a base URL, false when it would not dial it.
+func aiEndpoint(raw string) (string, bool) {
+	u, err := url.Parse(raw)
+	if err != nil || u.User != nil || u.Hostname() == "" {
+		return "", false
+	}
+	scheme, port := strings.ToLower(u.Scheme), u.Port()
+	switch {
+	case scheme != "http" && scheme != "https":
+		return "", false
+	case port == "" && scheme == "http":
+		port = "80"
+	case port == "":
+		port = "443"
+	}
+	return scheme + "://" + net.JoinHostPort(strings.ToLower(u.Hostname()), port), true
 }
 
 // backupIDs are the IDs the backup's secrets are stored under.
@@ -298,8 +380,9 @@ func backupIDs(snap assets.Snapshot, provs []settings.AIProvider) []string {
 // device, cur: what belongs to this device stays (the window's layout and
 // materials, the layout of its files panes and editor windows, the fonts
 // installed here, the MCP endpoint, the places it backs up to and its
-// default backup password, the folder of its session logs), AI providers
-// are merged by ID and the hosts that confirmed AI use are joined.
+// default backup password, the folder of its session logs, the external
+// ACP agents it starts and its default agent), AI providers are merged by
+// ID and the hosts that confirmed AI use are joined.
 func mergeSettings(cur, in settings.Settings) settings.Settings {
 	out := in
 	out.Background = cur.Background
@@ -317,6 +400,11 @@ func mergeSettings(cur, in settings.Settings) settings.Settings {
 	// keeps its session logs.
 	out.BackupTargets, out.DefaultBackupPassword = slices.Clone(cur.BackupTargets), cur.DefaultBackupPassword
 	out.SessionLog = cur.SessionLog
+	// Nor does it add or change a program this computer starts: an ACP
+	// agent's executable and arguments, and the default agent that may
+	// name one, stay as they are here. A legacy single agent in the
+	// backup is dropped too, or Normalize would take it in.
+	out.AIACPAgents, out.AIACP, out.AIDefaultAgent = slices.Clone(cur.AIACPAgents), cur.AIACP, cur.AIDefaultAgent
 	out.AIProviders = slices.Clone(cur.AIProviders)
 	for _, p := range in.AIProviders {
 		if i := slices.IndexFunc(out.AIProviders, func(o settings.AIProvider) bool { return o.ID == p.ID }); i >= 0 {
@@ -344,6 +432,8 @@ func backupErrText(m locales.Messages, err error) string {
 		return m.BackupNewer()
 	case errors.Is(err, vault.ErrPassword):
 		return m.BackupWrongPassword()
+	case errors.Is(err, vault.ErrTooCostly):
+		return m.BackupTooCostly()
 	case errors.Is(err, vault.ErrCorrupt), errors.Is(err, errBadBackup), errors.Is(err, backup.ErrArchive):
 		return m.BackupDamaged()
 	case errors.Is(err, backup.ErrTooLarge):
@@ -376,6 +466,9 @@ func (a *App) openExport() {
 }
 
 func (a *App) closeBackup() {
+	if f := a.backup; f != nil && f.cancel != nil {
+		f.cancel()
+	}
 	a.backup, a.backingUp = nil, false
 }
 
@@ -514,8 +607,16 @@ func (a *App) openRestore(m locales.Messages, path string, data []byte, err erro
 }
 
 // RestoreBackup opens the sheet's backup with its password, off the UI
-// thread, then merges it in.
+// thread, then merges it in. A backup whose password derivation costs
+// more than usual is opened only once the user agrees.
 func (a *App) RestoreBackup(m locales.Messages) bool {
+	return a.openBackup(m, false)
+}
+
+// openBackup is RestoreBackup, with costly once the user agreed to the
+// cost. Closing the sheet cancels it: no derivation starts after that,
+// though one under way runs to its end, as Argon2 can not be interrupted.
+func (a *App) openBackup(m locales.Messages, costly bool) bool {
 	f := a.backup
 	if f == nil || !f.restore || f.busy {
 		return false
@@ -526,9 +627,12 @@ func (a *App) RestoreBackup(m locales.Messages) bool {
 	}
 	f.err, f.busy = "", true
 	data, pw := f.data, []byte(f.password)
+	ctx, cancel := context.WithCancel(context.Background())
+	f.cancel = cancel
 	go func() {
+		defer cancel()
 		p := backupPayload{Settings: settings.Default()}
-		plain, err := vault.Open(data, pw)
+		plain, err := openVault(ctx, data, pw, costly)
 		if err == nil {
 			p, err = unpackBackup(plain)
 		}
@@ -553,7 +657,8 @@ func (a *App) backupNeedsSecrets(p backupPayload) bool {
 			return true
 		}
 	}
-	return false
+	// Dropping the key of a provider that moves needs the store open.
+	return len(a.movedAIKeys(p.Settings.AIProviders, p.Secrets)) > 0
 }
 
 func (a *App) restoreDone(m locales.Messages, f *backupForm, p backupPayload, err error) {
@@ -562,6 +667,16 @@ func (a *App) restoreDone(m locales.Messages, f *backupForm, p backupPayload, er
 		return
 	}
 	f.busy = false
+	var ce *vault.CostError
+	if errors.As(err, &ce) {
+		a.askCost(&costAsk{backup: true, memory: ce.Cost.Memory, passes: ce.Cost.Passes, run: func() {
+			a.closeCost()
+			if a.backup == f {
+				a.openBackup(m, true)
+			}
+		}})
+		return
+	}
 	if err == nil && !a.unlocked() && a.backupNeedsSecrets(p) {
 		a.withSecrets(func() { a.restoreDone(m, f, p, nil) })
 		return
@@ -583,7 +698,7 @@ func (a *App) restoreDone(m locales.Messages, f *backupForm, p backupPayload, er
 // backupSection is the settings' backup page.
 func (a *App) backupSection(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 	a.defaultPasswordSection(c, m, tok)
-	a.settingsSection(c, tok, nil, ui.Color{}, "", func(g *settingsGroup) {
+	a.settingsSection(c, tok, nil, "", func(g *settingsGroup) {
 		g.row(m.ExportBackup(), m.ExportBackupNote(), func() {
 			if pill(c, m.ExportEllipsis(), false, false, a.p.SaveFile == nil) {
 				a.openExport()

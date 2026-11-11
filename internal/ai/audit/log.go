@@ -54,32 +54,52 @@ func New(dataDir string) *Log {
 	return &Log{dir: filepath.Join(dataDir, "ai-audit")}
 }
 
-// Prepare creates the log directory. The gate calls it before a run.
-func (l *Log) Prepare() error {
+// Prepare opens for appending, creating it when needed, the month file of
+// a record made at the given time. The gate calls it before a run, so a
+// log that cannot be written refuses the run rather than losing its record
+// afterwards.
+func (l *Log) Prepare(at time.Time) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.ready()
+	f, err := l.open(at)
+	if err != nil {
+		return err
+	}
+	return f.Close()
 }
 
 // Record appends one line to the month file of r.Time (in that time's zone).
 func (l *Log) Record(r policy.AuditRecord) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if err := l.ready(); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(l.monthPath(r.Time), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	f, err := l.open(r.Time)
 	if err != nil {
-		return err
-	}
-	defer f.Close()
-	// OpenFile applies 0600 only when it creates the file.
-	if err := tighten(f, 0o600); err != nil {
 		return err
 	}
 	enc := json.NewEncoder(f)
 	enc.SetEscapeHTML(false)
-	return enc.Encode(toLine(r))
+	if err := enc.Encode(toLine(r)); err != nil {
+		f.Close()
+		return err
+	}
+	// Close can report a write the file system deferred.
+	return f.Close()
+}
+
+func (l *Log) open(at time.Time) (*os.File, error) {
+	if err := l.ready(); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(l.monthPath(at), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	// OpenFile applies 0600 only when it creates the file.
+	if err := tighten(f, 0o600); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
 }
 
 func (l *Log) ready() error {

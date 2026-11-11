@@ -182,7 +182,7 @@ func (a *App) RemoveDefaultPassword() error {
 
 // defaultPasswordSection is the backup page's default backup password.
 func (a *App) defaultPasswordSection(c *ui.Context, m locales.Messages, tok theme.Tokens) {
-	a.settingsSection(c, tok, nil, ui.Color{}, "", func(g *settingsGroup) {
+	a.settingsSection(c, tok, nil, "", func(g *settingsGroup) {
 		set := a.settings.DefaultBackupPassword
 		note, label := m.DefaultBackupPasswordNote(), m.SetPasswordEllipsis()
 		if set {

@@ -70,11 +70,21 @@ type KeysRefusedError struct {
 func (e *KeysRefusedError) Error() string { return e.Err.Error() }
 func (e *KeysRefusedError) Unwrap() error { return e.Err }
 
-// keyOffer is the keys one login offers, and the one that signed last.
+// keyOffer is the keys one login offers, the one that signed last, and
+// the LocalKeyError that stopped the login.
 type keyOffer struct {
 	signers []ssh.Signer
 	mu      sync.Mutex
 	signed  string
+	stop    error
+}
+
+// stopped is the LocalKeyError a key file stopped the login with, nil
+// for none.
+func (o *keyOffer) stopped() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.stop
 }
 
 func (o *keyOffer) sign(id string) {
@@ -167,6 +177,11 @@ func (f *fileSigner) Sign(rand io.Reader, data []byte) (*ssh.Signature, error) {
 func (f *fileSigner) SignWithAlgorithm(rand io.Reader, data []byte, algorithm string) (*ssh.Signature, error) {
 	s, err := f.open()
 	if err != nil {
+		if errors.As(err, new(*LocalKeyError)) {
+			f.o.mu.Lock()
+			f.o.stop = err
+			f.o.mu.Unlock()
+		}
 		return nil, err
 	}
 	sig, err := s.SignWithAlgorithm(rand, data, algorithm)

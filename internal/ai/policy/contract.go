@@ -193,8 +193,9 @@ type Verdict struct {
 type Gate interface {
 	Authorize(ctx context.Context, a Action, diff string) (Verdict, error)
 	// Done records the result of an action that ran (audit: exit code,
-	// duration, output bytes).
-	Done(a Action, v Verdict, exit int, durMS int64, outBytes int64)
+	// duration, output bytes). A failed write is an *AuditError with Ran
+	// set: the caller shows it and never runs the action again.
+	Done(a Action, v Verdict, exit int, durMS int64, outBytes int64) error
 }
 
 // Exec is the seam to the remote exec channel manager from ① (feat/metrics).

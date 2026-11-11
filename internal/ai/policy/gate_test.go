@@ -6,17 +6,20 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
 
 type memAudit struct {
-	mu   sync.Mutex
-	recs []AuditRecord
-	err  error
-	prep error
+	mu     sync.Mutex
+	recs   []AuditRecord
+	err    error
+	prep   error
+	prepAt []time.Time
 }
 
 func (m *memAudit) Record(r AuditRecord) error {
@@ -29,7 +32,24 @@ func (m *memAudit) Record(r AuditRecord) error {
 	return nil
 }
 
-func (m *memAudit) Prepare() error { return m.prep }
+func (m *memAudit) Prepare(at time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.prepAt = append(m.prepAt, at)
+	return m.prep
+}
+
+func (m *memAudit) fail(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.err = err
+}
+
+func (m *memAudit) prepared() []time.Time {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]time.Time(nil), m.prepAt...)
+}
 
 func (m *memAudit) list() []AuditRecord {
 	m.mu.Lock()
@@ -543,7 +563,8 @@ func TestGateFlows(t *testing.T) {
 		aud := &memAudit{prep: errors.New("disk full")}
 		g := testGate(ModeFull, nil, nil, aud)
 		v, err := g.Authorize(ctx, cmdAction("ls"), "")
-		if err == nil || v.Run || v.Refusal != refusalAudit {
+		var ae *AuditError
+		if !errors.As(err, &ae) || ae.Ran || v.Run || !strings.HasPrefix(v.Refusal, refusalAudit) || !strings.Contains(v.Refusal, "disk full") {
 			t.Fatalf("%+v %v", v, err)
 		}
 	})
@@ -553,7 +574,8 @@ func TestGateFlows(t *testing.T) {
 		p := &scriptPrompt{answers: []Answer{Reject}}
 		g := testGate(ModeAsk, p, nil, aud)
 		v, err := g.Authorize(ctx, cmdAction("mkdir -p /tmp/x"), "")
-		if err == nil || v.Run || v.Refusal != refusalAudit {
+		var ae *AuditError
+		if !errors.As(err, &ae) || ae.Ran || v.Run || !strings.HasPrefix(v.Refusal, refusalAudit) {
 			t.Fatalf("%+v %v", v, err)
 		}
 	})
@@ -630,4 +652,73 @@ func note(p *scriptPrompt) string {
 		return ""
 	}
 	return s[0].ReviewNote
+}
+
+func TestGateAuditFailures(t *testing.T) {
+	ctx := context.Background()
+	when := time.Date(2026, 10, 27, 15, 4, 5, 0, time.FixedZone("CST", 8*3600))
+	const local = "/Users/someone/Library/ai-audit/2026-10.jsonl"
+
+	t.Run("unusable log refuses before the run", func(t *testing.T) {
+		aud := &memAudit{prep: &fs.PathError{Op: "open", Path: local, Err: syscall.EACCES}}
+		g := testGate(ModeFull, nil, nil, aud)
+		a := cmdAction("ls")
+		v, err := g.Authorize(ctx, a, "")
+		var ae *AuditError
+		if !errors.As(err, &ae) || ae.Ran || v.Run {
+			t.Fatalf("%+v %v", v, err)
+		}
+		if at := aud.prepared(); len(at) != 1 || !at[0].Equal(when) {
+			t.Fatalf("prepared %v", at)
+		}
+		reason := syscall.EACCES.Error()
+		if !strings.Contains(v.Refusal, reason) || strings.Contains(v.Refusal, local) || strings.Contains(err.Error(), local) {
+			t.Fatalf("refusal %q err %q", v.Refusal, err)
+		}
+		if code, ok := AuditNotice(err); !ok || code != "audit-unavailable:"+reason {
+			t.Fatalf("%q %v", code, ok)
+		}
+	})
+
+	t.Run("lost record after the run keeps grants and mode", func(t *testing.T) {
+		aud := &memAudit{}
+		p := &scriptPrompt{answers: []Answer{AllowSimilar}}
+		g := testGate(ModeAsk, p, nil, aud)
+		a := cmdAction("cat /etc/shadow")
+		v, err := g.Authorize(ctx, a, "")
+		if err != nil || !v.Run || v.Answer != AllowSimilar {
+			t.Fatalf("%+v %v", v, err)
+		}
+		aud.fail(&fs.PathError{Op: "write", Path: local, Err: syscall.ENOSPC})
+		err = g.Done(a, v, 0, 5, 7)
+		var ae *AuditError
+		if !errors.As(err, &ae) || !ae.Ran || strings.Contains(err.Error(), local) {
+			t.Fatalf("%v", err)
+		}
+		if code, ok := AuditNotice(err); !ok || code != "audit-failed:"+syscall.ENOSPC.Error() {
+			t.Fatalf("%q %v", code, ok)
+		}
+		aud.fail(nil)
+		v, err = g.Authorize(ctx, cmdAction("cat /etc/gshadow"), "")
+		if err != nil || !v.Run || v.Answer != AllowSimilar || len(p.seen()) != 1 {
+			t.Fatalf("grant lost %+v prompts=%d err=%v", v, len(p.seen()), err)
+		}
+	})
+
+	t.Run("healthy log records the run", func(t *testing.T) {
+		aud := &memAudit{}
+		g := testGate(ModeFull, nil, nil, aud)
+		a := cmdAction("ls")
+		v, err := g.Authorize(ctx, a, "")
+		if err != nil || !v.Run {
+			t.Fatalf("%+v %v", v, err)
+		}
+		if err := g.Done(a, v, 0, 5, 7); err != nil {
+			t.Fatal(err)
+		}
+		recs := aud.list()
+		if len(recs) != 1 || recs[0].ExitCode == nil || *recs[0].ExitCode != 0 || len(aud.prepared()) != 1 {
+			t.Fatalf("%+v", recs)
+		}
+	})
 }

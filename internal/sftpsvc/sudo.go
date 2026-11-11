@@ -104,7 +104,7 @@ func (c *Client) sudoOperation(ctx context.Context) (*Client, error) {
 		return nil, err
 	}
 	complete = true
-	return &Client{c: sc, conn: c.conn, operation: session, operations: c.operations, sudo: c.sudo}, nil
+	return opened(&Client{c: sc, conn: c.conn, operation: session, operations: c.operations, sudo: c.sudo}), nil
 }
 
 // sudoHandshake reads the stderr of sudoCommand until the SFTP server
