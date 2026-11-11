@@ -23,6 +23,8 @@ type layoutSnap struct {
 	Active   int             `json:"active"`
 	Tabs     []tabSnap       `json:"tabs"`
 	Sections map[string]bool `json:"sections,omitempty"`
+	// Widths are the railWidths, by kind name.
+	Widths map[string]float32 `json:"widths,omitempty"`
 }
 type tabSnap struct {
 	Title string    `json:"title,omitempty"`
@@ -59,6 +61,12 @@ func (a *App) layoutSnapshot() layoutSnap {
 		if p := a.sections[key]; p != nil {
 			snap.Sections[key] = *p
 		}
+	}
+	for k, w := range a.railWidths {
+		if snap.Widths == nil {
+			snap.Widths = map[string]float32{}
+		}
+		snap.Widths[k.String()] = w
 	}
 	for i, t := range a.ws.Tabs {
 		if t == nil {

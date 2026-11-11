@@ -12,6 +12,7 @@ import (
 	"github.com/Licoy/sshyard/internal/assets"
 	"github.com/Licoy/sshyard/internal/layout"
 	"github.com/Licoy/sshyard/internal/session"
+	"github.com/Licoy/sshyard/internal/settings"
 	"github.com/Licoy/sshyard/internal/theme"
 	"github.com/Licoy/sshyard/locales"
 	"github.com/egoist/mygo/ui"
@@ -115,14 +116,15 @@ func TestStatusBar(t *testing.T) {
 	}
 }
 
-// TestRailAndMonitor: the rail opens the system monitor as a pane beside
-// the terminal, then the host's details; the terminal keeps the focus,
+// TestRailAndMonitor: side by side, the rail opens the system monitor as
+// a pane beside the terminal, then the host's details; the terminal keeps the focus,
 // and each closes on its own.
 func TestRailAndMonitor(t *testing.T) {
 	ex := &frameExec{frames: linuxFrames(true)}
 	srv := startMetricSrv(t, ex.run)
 	a, tt := newTestApp(t)
 	tt.SetSize(1400, 1400)
+	a.settings.ToolPanes = settings.ToolPanesSplit
 	cn := connected(t, a, tt, srv)
 	mustClick(t, tt, "System Monitor")
 	tt.Frame()

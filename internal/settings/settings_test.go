@@ -367,6 +367,24 @@ func TestFilesEdge(t *testing.T) {
 	}
 }
 
+// TestToolPanes: the rail replaces its pane by default and for any value
+// but side by side, which is kept.
+func TestToolPanes(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	os.WriteFile(path, []byte(`{"theme":"dark","toolPanes":"tabs"}`), 0o600)
+	s, err := Load(path)
+	if err != nil || s.ToolPanes != "" {
+		t.Fatalf("old file %+v %v", s, err)
+	}
+	s.ToolPanes = ToolPanesSplit
+	if err := Save(path, s); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := Load(path); got.ToolPanes != ToolPanesSplit {
+		t.Errorf("saved %+v", got)
+	}
+}
+
 func TestRenewalNotifyDefault(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "s.json")
 	// A file from before the setting keeps the notifications on.

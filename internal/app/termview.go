@@ -61,6 +61,12 @@ type termView struct {
 	// under the pointer while they are held, underlined.
 	openLink func(string)
 	link     linkSpan
+	// zoomFont makes the terminals' font n points larger (smaller when n
+	// is negative), as the wheel turns with fontMods held or a touchpad
+	// pinches; zoomAcc and pinchAcc are a touchpad's scroll and pinch on
+	// their way to the next point.
+	zoomFont          func(n int)
+	zoomAcc, pinchAcc float32
 	// clear leaves the background to the pane's translucent fill, for a
 	// content area on the window's material (settings.ContentMaterial)
 	clear bool
@@ -1005,6 +1011,10 @@ func (v *termView) input(ev ui.InputEvent, cb clipboard) bool {
 		if v.cellH == 0 {
 			return false
 		}
+		if ev.Mods&fontMods() != 0 && v.zoomFont != nil {
+			v.wheelFont(ev)
+			return true
+		}
 		if m := t.Modes(); v.reports(m, ev.Mods) {
 			// One report a notch, or three lines of a precise scroll.
 			n := 0
@@ -1056,8 +1066,50 @@ func (v *termView) input(ev ui.InputEvent, cb clipboard) bool {
 		}
 		v.offset = max(v.offset-lines, 0)
 		return true
+	case ui.InputZoom:
+		if v.zoomFont == nil || ev.Scale <= 0 {
+			return false
+		}
+		v.pinchAcc += float32(math.Log(float64(ev.Scale)))
+		if n := int(v.pinchAcc / fontPinchStep); n != 0 {
+			v.pinchAcc -= float32(n) * fontPinchStep
+			v.zoomFont(n)
+		}
+		return true
 	}
 	return false
+}
+
+// fontMods are the modifiers the wheel changes the terminal's font size
+// with: Ctrl, or ⌘ too on macOS.
+func fontMods() ui.Modifiers { return ui.Ctrl | linkMods() }
+
+// How far a touchpad scrolls (DIPs) or pinches (the log of its scale)
+// for the font to grow or shrink by a point.
+const (
+	fontScrollStep = 40
+	fontPinchStep  = 0.08
+)
+
+// wheelFont makes the font a point larger for each notch the wheel turns
+// up, smaller down, or for each fontScrollStep a touchpad scrolls.
+func (v *termView) wheelFont(ev ui.InputEvent) {
+	n := 0
+	switch {
+	case ev.Precise && ev.Momentum:
+		// The glide after the fingers leave would keep on changing it.
+	case ev.Precise:
+		v.zoomAcc -= ev.DY
+		n = int(v.zoomAcc / fontScrollStep)
+		v.zoomAcc -= float32(n) * fontScrollStep
+	case ev.DY < 0:
+		n = 1
+	case ev.DY > 0:
+		n = -1
+	}
+	if n != 0 {
+		v.zoomFont(n)
+	}
 }
 
 // linkSpan is the cells a link spans, when on.

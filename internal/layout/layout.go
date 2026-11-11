@@ -176,6 +176,9 @@ func (t *Tab) Count(k Kind) int {
 	return n
 }
 
+// Parent is the split holding node n of the tab, nil for its root.
+func (t *Tab) Parent(n *Node) *Node { return parent(t.Root, n) }
+
 func parent(root, n *Node) *Node {
 	if root == nil || root.Leaf() {
 		return nil

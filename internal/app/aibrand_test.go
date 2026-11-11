@@ -18,18 +18,23 @@ func TestProviderDefaultURLSwitch(t *testing.T) {
 	tt.Frame()
 	tt.Advance(time.Second)
 	m := locales.In("en")
+	pick := func(label string) {
+		t.Helper()
+		mustClick(t, tt, m.AiFormat())
+		tt.Frame()
+		mustClick(t, tt, label)
+		tt.Frame()
+	}
 	for _, i := range []int{2, 3, 1, 0} {
 		labels := []string{m.AiFormatChat(), m.AiFormatResponses(), m.AiFormatAnthropic(), m.AiFormatTypeSafe()}
-		mustClick(t, tt, labels[i])
-		tt.Frame()
+		pick(labels[i])
 		if a.prov.base != providerURLHint(i) || inputText(t, tt, m.AiProviderURL()) != providerURLHint(i) {
 			t.Fatalf("format %d bound %q texts %q", i, a.prov.base, tt.Texts())
 		}
 	}
 	a.prov.base = "https://custom.example/v1"
 	tt.Frame()
-	mustClick(t, tt, m.AiFormatAnthropic())
-	tt.Frame()
+	pick(m.AiFormatAnthropic())
 	if a.prov.base != "https://custom.example/v1" || inputText(t, tt, m.AiProviderURL()) != a.prov.base {
 		t.Fatalf("custom URL changed: %q", a.prov.base)
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/Licoy/sshyard/internal/keychain"
 	"github.com/Licoy/sshyard/internal/layout"
 	"github.com/Licoy/sshyard/internal/session"
+	"github.com/Licoy/sshyard/internal/settings"
 	"github.com/Licoy/sshyard/locales"
 	"github.com/egoist/mygo/ui"
 )
@@ -47,7 +48,11 @@ func TestLayoutWorkspaceRoundTrip(t *testing.T) {
 	a.ws.Active = 0
 	closed := false
 	a.sections["none"] = &closed
+	a.settings.ToolPanes = settings.ToolPanesSplit
 	a.ToggleTool(layout.HostInfo)
+	// Dragged beside the focused files pane, which keeps the focus.
+	a.ws.Move(a.toolPane(layout.HostInfo).id, a.paneNode(files.id), layout.Right)
+	a.settleFocus(a.ws.ActiveTab())
 	term.cwd = "PRIVATE_CWD"
 	setStartOnce(term, "PRIVATE_START_COMMAND")
 	files.fs.remote.dir = "PRIVATE_REMOTE_DIRECTORY"

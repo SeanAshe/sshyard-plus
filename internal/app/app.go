@@ -560,6 +560,9 @@ type App struct {
 	// ID, which a tool pane gives the focus back to.
 	toolNames map[layout.Kind]string
 	toolFocus map[int]int
+	// railWidths are how wide, in DIPs, the panes the rail opens were
+	// last left beside another pane, by kind; see fitRailWidth.
+	railWidths map[layout.Kind]float32
 	// shells are this computer's shells, found as the app starts; see
 	// localID.
 	shells []session.Shell
@@ -1066,6 +1069,8 @@ func (a *App) makeConn(hostID string, kind layout.Kind, link int) (*conn, error)
 func (a *App) place(c *conn, at openAt) {
 	if at.pane == 0 || !a.ws.Place(c.item(), at.pane, at.edge) {
 		a.ws.Open(c.item())
+	} else if railPane(c.kind) && (at.edge == layout.Left || at.edge == layout.Right) {
+		a.fitRailWidth(c)
 	}
 	a.shown(c)
 }
@@ -1398,6 +1403,7 @@ func (a *App) finishCloseSession(c *conn) {
 	if a.clipAsk != nil && a.clipAsk.pane == id {
 		a.clipAsk = nil
 	}
+	a.keepRailWidth(c)
 	a.ws.Close(id)
 	delete(a.conns, id)
 	if c.kind == layout.Broadcast {

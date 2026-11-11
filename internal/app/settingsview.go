@@ -340,9 +340,9 @@ func (a *App) prefGeneral(c *ui.Context, m locales.Messages, tok theme.Tokens, s
 			}
 		})
 		g.row(m.ToolPanes(), m.ToolPanesNote(), func() {
-			modes := []string{"", settings.ToolPanesTabs}
+			modes := []string{"", settings.ToolPanesSplit}
 			a.toolPanesChoice = max(slices.Index(modes, s.ToolPanes), 0)
-			if formSegmented(c.Key("toolpanes"), &a.toolPanesChoice, false, m.ToolPanesSplit(), m.ToolPanesTabs()).Label(m.ToolPanes()).Changed() {
+			if formSegmented(c.Key("toolpanes"), &a.toolPanesChoice, false, m.ToolPanesTabs(), m.ToolPanesSplit()).Label(m.ToolPanes()).Changed() {
 				if a.toolPanesChoice < len(modes) {
 					s.ToolPanes, *changed = modes[a.toolPanesChoice], true
 				}
@@ -494,8 +494,8 @@ func (a *App) prefTerminal(c *ui.Context, m locales.Messages, tok theme.Tokens, 
 				s.MonospacedOnly, *changed = mono, true
 			}
 		})
-		g.row(m.FontSize(), "", func() {
-			if ui.NumberInput(c.Key("font"), &a.fontChoice, 8, 32, 1).Changed() {
+		g.row(m.FontSize(), m.FontSizeNote(), func() {
+			if ui.NumberInput(c.Key("font"), &a.fontChoice, settings.MinFontSize, settings.MaxFontSize, 1).Changed() {
 				s.TerminalFontSize = int(a.fontChoice)
 				*changed = true
 			}

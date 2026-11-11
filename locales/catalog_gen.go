@@ -1283,6 +1283,26 @@ func (msgs Messages) FontSize() string {
 	return Catalog.Format(msgs.locale, "fontSize", nil)
 }
 
+// FontSizeNote says "Hold Ctrl (⌘ on macOS) and scroll over a terminal to change it"
+// in the language the app shows.
+func FontSizeNote() string { return In(i18n.Locale()).FontSizeNote() }
+
+// FontSizeNote says "Hold Ctrl (⌘ on macOS) and scroll over a terminal to change it"
+// in the language of msgs.
+func (msgs Messages) FontSizeNote() string {
+	return Catalog.Format(msgs.locale, "fontSizeNote", nil)
+}
+
+// FontSizeNow says "Terminal font size: {size}"
+// in the language the app shows.
+func FontSizeNow(size string) string { return In(i18n.Locale()).FontSizeNow(size) }
+
+// FontSizeNow says "Terminal font size: {size}"
+// in the language of msgs.
+func (msgs Messages) FontSizeNow(size string) string {
+	return Catalog.Format(msgs.locale, "fontSizeNow", map[string]any{"size": size})
+}
+
 // TerminalLineHeight says "Line height"
 // in the language the app shows.
 func TerminalLineHeight() string { return In(i18n.Locale()).TerminalLineHeight() }
@@ -17107,11 +17127,11 @@ func (msgs Messages) ToolPanes() string {
 	return Catalog.Format(msgs.locale, "toolPanes", nil)
 }
 
-// ToolPanesNote says "Side by side keeps every tool you open; Replace shows one at a time in its place"
+// ToolPanesNote says "Replace shows one tool at a time in its place; Side by side keeps every tool you open, opening the ones past three, o…"
 // in the language the app shows.
 func ToolPanesNote() string { return In(i18n.Locale()).ToolPanesNote() }
 
-// ToolPanesNote says "Side by side keeps every tool you open; Replace shows one at a time in its place"
+// ToolPanesNote says "Replace shows one tool at a time in its place; Side by side keeps every tool you open, opening the ones past three, o…"
 // in the language of msgs.
 func (msgs Messages) ToolPanesNote() string {
 	return Catalog.Format(msgs.locale, "toolPanesNote", nil)

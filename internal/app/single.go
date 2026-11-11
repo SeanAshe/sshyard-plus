@@ -100,34 +100,50 @@ func (a *App) reuse(ex *conn, hostID string, link int) (int, error) {
 }
 
 // ToggleFiles closes the active tab's files pane, or opens one beside the
-// focused pane when it has none, or, with the rail's panes as tabs, in
-// the place of the one the tab shows.
+// session the tab works on when it has none, under one of the rail's
+// once the tab shows enough of them, or, with the rail's panes as tabs,
+// in the place of the one the tab shows.
 func (a *App) ToggleFiles() {
 	t := a.ws.ActiveTab()
 	if c := a.tabPane(t, layout.Files); c != nil {
 		a.CloseSession(c.id)
 		return
 	}
+	// Beside the session, not a pane of the rail's that took the focus.
+	if p := a.railAnchor(t); p != nil && remoteOnly(a.conns[p.Item.ID]) {
+		t.Focus = p.ID
+	}
 	if remoteOnly(a.focused()) {
 		old := a.railOld(t, layout.Files)
+		var under *conn
+		if a.filesEdge() == layout.Right {
+			under = a.railUnder(t, layout.Files)
+		}
 		a.OpenFilesBeside()
-		a.replaceRail(a.tabPane(t, layout.Files), old)
+		c := a.tabPane(t, layout.Files)
+		a.settleRail(c, old, under)
 	}
 }
 
 // ToggleAI closes the active tab's AI pane, or opens one beside the
-// focused pane when it has none, or, with the rail's panes as tabs, in
-// the place of the one the tab shows.
+// session the tab works on when it has none, under one of the rail's
+// once the tab shows enough of them, or, with the rail's panes as tabs,
+// in the place of the one the tab shows.
 func (a *App) ToggleAI() {
 	t := a.ws.ActiveTab()
 	if c := a.tabPane(t, layout.AI); c != nil {
 		a.CloseSession(c.id)
 		return
 	}
+	// Beside the session, not a pane of the rail's that took the focus.
+	if p := a.railAnchor(t); p != nil && canAI(a.conns[p.Item.ID]) {
+		t.Focus = p.ID
+	}
 	if canAI(a.focused()) {
-		old := a.railOld(t, layout.AI)
+		old, under := a.railOld(t, layout.AI), a.railUnder(t, layout.AI)
 		a.OpenAIBeside()
-		a.replaceRail(a.tabPane(t, layout.AI), old)
+		c := a.tabPane(t, layout.AI)
+		a.settleRail(c, old, under)
 	}
 }
 

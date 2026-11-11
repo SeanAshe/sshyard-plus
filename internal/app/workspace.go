@@ -641,6 +641,7 @@ func (a *App) termElement(c *ui.Context, t *layout.Tab, n *layout.Node, cn *conn
 		tv.holdPaste = func(text string) bool { return a.holdPaste(cn, text) }
 		tv.rightClick, tv.copyOnSelect = a.settings.TerminalRightClick, a.settings.CopyOnSelect
 		tv.openLink = svc.OpenURL
+		tv.zoomFont = a.stepTermFont
 		// A program reading the mouse takes the right click too.
 		return tv.input(ev, svc) || a.contextPress(tb, ev, entries)
 	})

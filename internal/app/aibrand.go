@@ -18,12 +18,25 @@ func brandImage(c *ui.Context, icon *aibrands.Icon, size float32) {
 	ui.Image(c, bitmap()).Label(icon.Name).Size(size, size).Shrink(0)
 }
 
+// providerFormatControl is a select, not a segmented control: the four
+// format names overflow the sheet's width side by side.
 func providerFormatControl(c *ui.Context, m locales.Messages, selected *int) ui.Element {
 	labels := []string{m.AiFormatChat(), m.AiFormatResponses(), m.AiFormatAnthropic(), m.AiFormatTypeSafe()}
-	return segmentedControl(c, selected, false, labels, theme.Space(2), func(i int, col ui.Color) {
-		brandImage(c, aibrands.Provider(settings.AIProvider{Format: providerFormats[i]}), 14)
-		ui.Text(c, labels[i]).FontSize(theme.Footnote).FontWeight(500).TextColor(col).SingleLine()
+	cur := labels[*selected]
+	el := brandSelect(c, &cur, labels, func(label string) *aibrands.Icon {
+		for i, l := range labels {
+			if l == label {
+				return aibrands.Provider(settings.AIProvider{Format: providerFormats[i]})
+			}
+		}
+		return nil
 	}).Label(m.AiFormat())
+	for i, l := range labels {
+		if l == cur {
+			*selected = i
+		}
+	}
+	return el
 }
 
 // brandSelect keeps the native select's pointer, keyboard and accessibility behavior.

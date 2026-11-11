@@ -462,10 +462,11 @@ func (a *App) modeChip(c *ui.Context, cn *conn, tok theme.Tokens, m locales.Mess
 
 // aiTimeline is the conversation, which follows its end as it grows
 // unless the user scrolled up from it; before the first question, a word
-// on what the pane does.
+// on what the pane does, centered while it fits and scrolling, never over
+// the composer, in a short pane.
 func (a *App) aiTimeline(c *ui.Context, cn *conn, tok theme.Tokens, m locales.Messages) {
 	if len(cn.ai.items) == 0 && !cn.ai.running {
-		ui.Column(c.Key("aiempty")).Grow(1).FillWidth().Padding(theme.Space(6)).Gap(theme.Space(2)).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+		ui.Scroll(c.Key("aiempty")).Grow(1).FillWidth().Padding(theme.Space(6)).Gap(theme.Space(2)).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
 			softTile(c, icons.Robot, tok.Accent, 44).Margin(0, 0, theme.Space(1), 0)
 			ui.Text(c, m.AiEmptyTitle(a.pv(cn.host.Label()))).FontSize(theme.Title3).FontWeight(600).TextAlign(ui.Center).MaxWidth(320)
 			empty := m.AiEmpty()

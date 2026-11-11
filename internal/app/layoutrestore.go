@@ -75,6 +75,14 @@ func (a *App) loadLayout() {
 		value := v
 		a.sections[k] = &value
 	}
+	for name, w := range snap.Widths {
+		if k, ok := railKind(name); ok && w > 0 && w < 1e5 {
+			if a.railWidths == nil {
+				a.railWidths = map[layout.Kind]float32{}
+			}
+			a.railWidths[k] = w
+		}
+	}
 	if skipped {
 		a.toasts = append(a.toasts, func(m locales.Messages) ui.Toast { return ui.Toast{Title: m.LayoutRestoreSkipped(), Type: "warning"} })
 	}
@@ -230,6 +238,17 @@ func toolKind(s string) (layout.Kind, bool) {
 		}
 	}
 	return 0, false
+}
+
+// railKind is the kind of a pane the rail opens, saved as s.
+func railKind(s string) (layout.Kind, bool) {
+	switch s {
+	case "files":
+		return layout.Files, true
+	case "ai":
+		return layout.AI, true
+	}
+	return toolKind(s)
 }
 
 func (a *App) layoutShellExists(id string) bool {

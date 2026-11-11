@@ -114,6 +114,24 @@ func (a *App) stepZoom(dir int) {
 	})
 }
 
+// stepTermFont makes the terminals' font n points larger (smaller when n
+// is negative), within the settings' bounds, and says so in one toast
+// that each step changes.
+func (a *App) stepTermFont(n int) {
+	s := a.settings
+	s.TerminalFontSize = min(max(s.TerminalFontSize+n, settings.MinFontSize), settings.MaxFontSize)
+	if s.TerminalFontSize == a.settings.TerminalFontSize {
+		return
+	}
+	if err := a.ApplySettings(s); err != nil {
+		a.toastError(err.Error())
+		return
+	}
+	a.toast(func(m locales.Messages) ui.Toast {
+		return ui.Toast{ID: "termfont", Title: m.FontSizeNow(strconv.Itoa(s.TerminalFontSize))}
+	})
+}
+
 // zoomLabel names a zoom of the settings: "125%", or following the system.
 func zoomLabel(m locales.Messages, z int) string {
 	if z == 0 {

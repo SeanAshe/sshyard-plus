@@ -82,20 +82,30 @@ func (a *App) ShowTool(k layout.Kind) {
 
 // ToggleTool closes the tool pane of kind k when it is in the active tab;
 // else it opens it, or brings it from the tab it is in, beside the
-// focused pane, or, with the rail's panes as tabs, in the place of the
-// one the tab shows (see railOld).
+// session the tab works on (see railAnchor), or under one of the rail's once the tab shows enough of
+// them (see railUnder), or, with the rail's panes as tabs, in the place
+// of the one the tab shows (see railOld).
 func (a *App) ToggleTool(k layout.Kind) {
 	t := a.ws.ActiveTab()
 	a.settleFocus(t)
 	defer func() { a.settleFocus(a.ws.ActiveTab()) }()
-	old := a.railOld(t, k)
+	old, under := a.railOld(t, k), a.railUnder(t, k)
+	at := 0
+	if p := a.railAnchor(t); p != nil {
+		at = p.ID
+	} else if t != nil {
+		at = t.Focus
+	}
 	if c := a.toolPane(k); c != nil {
 		if ct, _ := a.ws.Locate(c.id); ct == t || t == nil {
 			a.CloseSession(c.id)
 			return
 		}
-		a.ws.Move(c.id, t.Focus, layout.Right)
-		a.replaceRail(c, old)
+		a.keepRailWidth(c)
+		if a.ws.Move(c.id, at, layout.Right) {
+			a.fitRailWidth(c)
+		}
+		a.settleRail(c, old, under)
 		a.focusReq = c.id
 		a.page = pageWorkspace
 		a.saveLayout()
@@ -107,10 +117,12 @@ func (a *App) ToggleTool(k layout.Kind) {
 	a.nextConn++
 	c := &conn{id: a.nextConn, kind: k}
 	a.conns[c.id] = c
-	if t == nil || !a.ws.Place(c.item(), t.Focus, layout.Right) {
+	if t == nil || !a.ws.Place(c.item(), at, layout.Right) {
 		a.ws.Open(c.item())
+	} else {
+		a.fitRailWidth(c)
 	}
-	a.replaceRail(c, old)
+	a.settleRail(c, old, under)
 	a.focusReq = c.id
 	a.page = pageWorkspace
 	a.saveLayout()
@@ -125,7 +137,7 @@ func railPane(k layout.Kind) bool { return isTool(k) || single(k) }
 // There is none while the tab has no pane but the rail's, which keeps
 // its session.
 func (a *App) railOld(t *layout.Tab, k layout.Kind) *conn {
-	if t == nil || a.settings.ToolPanes != settings.ToolPanesTabs {
+	if t == nil || a.settings.ToolPanes == settings.ToolPanesSplit {
 		return nil
 	}
 	var last *conn
@@ -146,14 +158,276 @@ func (a *App) railOld(t *layout.Tab, k layout.Kind) *conn {
 	return last
 }
 
-// replaceRail puts c, just opened beside, in old's place, and closes old;
-// nothing when old is nil.
+// replaceRail puts c, just opened beside, in old's place, and closes old.
 func (a *App) replaceRail(c, old *conn) {
-	if c == nil || old == nil {
-		return
-	}
 	if _, p := a.ws.Locate(old.id); p != nil && a.ws.Move(c.id, p.ID, layout.Center) {
 		a.CloseSession(old.id)
+	}
+}
+
+// railColumns is how many of the rail's columns a row shows beside its
+// sessions before the next pane opens under one of them.
+const railColumns = 3
+
+// railMinWidth is the narrowest a column of a row is still of use.
+const railMinWidth = 280
+
+// railUnder is, with the rail's panes side by side, the one in tab t the
+// rail opening kind k goes under, once the row of its anchor shows
+// railColumns columns of the rail's, or has no room for one more even
+// shared out evenly: the tallest in those columns, the first in reading
+// order of those as tall, so they fill in turn rather than narrowing.
+// There is none while the tab has no pane but the rail's, or the row has
+// no column of the rail's.
+func (a *App) railUnder(t *layout.Tab, k layout.Kind) *conn {
+	anchor := a.railAnchor(t)
+	if anchor == nil || a.settings.ToolPanes != settings.ToolPanesSplit {
+		return nil
+	}
+	row := rowOf(t, anchor)
+	cols := rowColumns(row)
+	var under *conn
+	var tallest float32
+	rail := 0
+	for _, col := range cols {
+		if !a.allRail(col.n) {
+			continue
+		}
+		rail++
+		var walk func(n *layout.Node, h float32)
+		walk = func(n *layout.Node, h float32) {
+			switch {
+			case n.Leaf():
+				if c := a.conns[n.Item.ID]; c != nil && c.kind != k && (under == nil || h > tallest) {
+					under, tallest = c, h
+				}
+			case n.Axis == layout.Column:
+				walk(n.A, h*share(n))
+				walk(n.B, h*(1-share(n)))
+			default:
+				walk(n.A, h)
+				walk(n.B, h)
+			}
+		}
+		walk(col.n, 1)
+	}
+	if rail == 0 {
+		return nil
+	}
+	if rail < railColumns {
+		w := a.rowWidth(row, 0)
+		if w <= 0 || w/float32(len(cols)+1)-paneGap >= railMinWidth {
+			return nil
+		}
+	}
+	return under
+}
+
+// railAnchor is the pane of tab t the rail opens its panes beside, one it
+// does not open, as the files and AI panes it opens take the focus: the
+// focused pane, else the one focused last, else the first; nil when the
+// tab has no pane but the rail's.
+func (a *App) railAnchor(t *layout.Tab) *layout.Node {
+	if t == nil {
+		return nil
+	}
+	session := func(p *layout.Node) bool {
+		c := a.conns[p.Item.ID]
+		return c != nil && !railPane(c.kind)
+	}
+	if p := t.Pane(t.Focus); p != nil && session(p) {
+		return p
+	}
+	if p := t.Pane(a.toolFocus[t.ID]); p != nil && session(p) {
+		return p
+	}
+	for _, p := range t.Panes() {
+		if session(p) {
+			return p
+		}
+	}
+	return nil
+}
+
+// settleRail finishes opening c, just opened beside: in old's place,
+// under pane under, or else as a column of its own, the row shared out
+// evenly when one of its columns is narrower than railMinWidth.
+func (a *App) settleRail(c, old, under *conn) {
+	switch {
+	case c == nil:
+	case old != nil:
+		a.replaceRail(c, old)
+	case under != nil:
+		if _, p := a.ws.Locate(under.id); p != nil {
+			a.ws.Move(c.id, p.ID, layout.Bottom)
+		}
+	default:
+		a.fitRow(c)
+	}
+}
+
+// fitRow shares the row of pane c out evenly when one of its columns is
+// narrower than railMinWidth, as wide as the row was last frame.
+func (a *App) fitRow(c *conn) {
+	t, p := a.ws.Locate(c.id)
+	if t == nil {
+		return
+	}
+	row := rowOf(t, p)
+	w := a.rowWidth(row, c.id)
+	if w <= 0 {
+		return
+	}
+	for _, col := range rowColumns(row) {
+		if col.share*w-paneGap < railMinWidth {
+			a.evenRow(row)
+			return
+		}
+	}
+}
+
+// evenRow gives each column of row n the same width, and reports how
+// many columns it has.
+func (a *App) evenRow(n *layout.Node) int {
+	if n.Leaf() || n.Axis != layout.Row {
+		return 1
+	}
+	l, r := a.evenRow(n.A), a.evenRow(n.B)
+	n.Ratio = float32(l) / float32(l+r)
+	// The split's divider keeps its own copy of the ratio.
+	delete(a.pct, n.ID)
+	return l + r
+}
+
+// rowOf is the split of tab t, side by side all the way down, holding
+// node n: n itself when it is split, or sits, top and bottom.
+func rowOf(t *layout.Tab, n *layout.Node) *layout.Node {
+	for p := t.Parent(n); p != nil && p.Axis == layout.Row; p = t.Parent(p) {
+		n = p
+	}
+	return n
+}
+
+// column is a column of a row, a pane or a split top and bottom, and its
+// share of the row's width.
+type column struct {
+	n     *layout.Node
+	share float32
+}
+
+// rowColumns lists the columns of row n, left to right.
+func rowColumns(n *layout.Node) []column {
+	var out []column
+	var walk func(n *layout.Node, w float32)
+	walk = func(n *layout.Node, w float32) {
+		if !n.Leaf() && n.Axis == layout.Row {
+			walk(n.A, w*share(n))
+			walk(n.B, w*(1-share(n)))
+			return
+		}
+		out = append(out, column{n, w})
+	}
+	walk(n, 1)
+	return out
+}
+
+// share is split n's share of its first side, half when it has none yet,
+// as its divider reads it.
+func share(n *layout.Node) float32 {
+	if n.Ratio <= 0 || n.Ratio >= 1 {
+		return 0.5
+	}
+	return n.Ratio
+}
+
+// allRail reports whether every pane under n is one the rail opens.
+func (a *App) allRail(n *layout.Node) bool {
+	if n.Leaf() {
+		c := a.conns[n.Item.ID]
+		return c != nil && railPane(c.kind)
+	}
+	return a.allRail(n.A) && a.allRail(n.B)
+}
+
+// rowWidth is how wide row n was last frame, by where its panes but skip
+// were, gutters included; 0 when none was drawn.
+func (a *App) rowWidth(n *layout.Node, skip int) float32 {
+	var left, right float32
+	seen := false
+	var walk func(n *layout.Node)
+	walk = func(n *layout.Node) {
+		if !n.Leaf() {
+			walk(n.A)
+			walk(n.B)
+			return
+		}
+		b, ok := a.paneBounds[n.Item.ID]
+		if !ok || n.Item.ID == skip || b.W <= 0 {
+			return
+		}
+		if !seen || b.X < left {
+			left = b.X
+		}
+		if !seen || b.X+b.W > right {
+			right = b.X + b.W
+		}
+		seen = true
+	}
+	walk(n)
+	if !seen {
+		return 0
+	}
+	return right - left + paneGap
+}
+
+// keepRailWidth remembers how wide pane c is, when the rail opens its
+// kind and it sits beside another pane: alone in its tab, or only above
+// or below others, its width is the tab's, not one the user chose.
+func (a *App) keepRailWidth(c *conn) {
+	t, p := a.ws.Locate(c.id)
+	w := a.paneBounds[c.id].W
+	if !railPane(c.kind) || t == nil || w <= 0 {
+		return
+	}
+	for n := t.Parent(p); n != nil; n = t.Parent(n) {
+		if n.Axis == layout.Row {
+			if a.railWidths == nil {
+				a.railWidths = map[layout.Kind]float32{}
+			}
+			a.railWidths[c.kind] = w
+			return
+		}
+	}
+}
+
+// fitRailWidth gives pane c, just opened at the left or right edge of a
+// pane, the width remembered for its kind instead of half the room, and
+// never more than most of it nor less than a sliver.
+func (a *App) fitRailWidth(c *conn) {
+	w, ok := a.railWidths[c.kind]
+	t, p := a.ws.Locate(c.id)
+	if !ok || t == nil {
+		return
+	}
+	split := t.Parent(p)
+	if split == nil || split.Axis != layout.Row || !split.A.Leaf() || !split.B.Leaf() {
+		return
+	}
+	other := split.A
+	if other == p {
+		other = split.B
+	}
+	// The split shares what the other pane had last frame: each cell is a
+	// card and its gutter, with a one-DIP line between the two.
+	room := a.paneBounds[other.Item.ID].W + paneGap - 1
+	if room <= 0 {
+		return
+	}
+	share := min(max((w+paneGap)/room, 0.15), 0.85)
+	if split.A == p {
+		split.Ratio = share
+	} else {
+		split.Ratio = 1 - share
 	}
 }
 
