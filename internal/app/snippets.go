@@ -167,12 +167,13 @@ func (a *App) snippetSearch(c *ui.Context, m locales.Messages, tok theme.Tokens)
 
 // searchField is a panel's search field, as the hosts' one: a magnifier,
 // the text and, while it holds any, an IconButton clearing it, as Escape
-// does.
-func searchField(c *ui.Context, m locales.Messages, tok theme.Tokens, key string, q *string, placeholder string) {
+// does. It returns the text's field.
+func searchField(c *ui.Context, m locales.Messages, tok theme.Tokens, key string, q *string, placeholder string) ui.Element {
+	var in ui.Element
 	ui.Row(c.Key(key)).FillWidth().Height(30).Padding(0, theme.Space(1), 0, theme.Space(2.5)).Gap(theme.Space(1.5)).AlignItems(ui.Center).
 		Radius(theme.RadiusControl).Background(tok.Fill).Children(func() {
 		ui.Icon(c, icons.Search.SVG).Size(14, 14).Shrink(0).TextColor(tok.TextMuted)
-		in := ui.TextInputBase(c.Key("q"), q).Placeholder(placeholder).Label(placeholder).Grow(1).Shrink(1).MinWidth(40)
+		in = ui.TextInputBase(c.Key("q"), q).Placeholder(placeholder).Label(placeholder).Grow(1).Shrink(1).MinWidth(40)
 		if *q != "" {
 			if (IconButton{Icon: icons.ClearText, Label: m.ClearSearch(), Size: Small}).Clicked(c, "clear") || in.Shortcut(0, ui.KeyEscape) {
 				*q = ""
@@ -183,6 +184,7 @@ func searchField(c *ui.Context, m locales.Messages, tok theme.Tokens, key string
 			ui.Box(c).Size(24, 24).Shrink(0)
 		}
 	})
+	return in
 }
 
 // snippetTab is a capsule choosing a group, or all of them, with how many

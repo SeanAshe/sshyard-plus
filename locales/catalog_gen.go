@@ -16371,6 +16371,26 @@ func (msgs Messages) PaletteInSettings(page string) string {
 	return Catalog.Format(msgs.locale, "paletteInSettings", map[string]any{"page": page})
 }
 
+// SearchSettings says "Search settings"
+// in the language the app shows.
+func SearchSettings() string { return In(i18n.Locale()).SearchSettings() }
+
+// SearchSettings says "Search settings"
+// in the language of msgs.
+func (msgs Messages) SearchSettings() string {
+	return Catalog.Format(msgs.locale, "searchSettings", nil)
+}
+
+// SettingsNoResults says "No matching settings"
+// in the language the app shows.
+func SettingsNoResults() string { return In(i18n.Locale()).SettingsNoResults() }
+
+// SettingsNoResults says "No matching settings"
+// in the language of msgs.
+func (msgs Messages) SettingsNoResults() string {
+	return Catalog.Format(msgs.locale, "settingsNoResults", nil)
+}
+
 // ShortcutRecord says "Record a shortcut for “{action}”"
 // in the language the app shows.
 func ShortcutRecord(action string) string { return In(i18n.Locale()).ShortcutRecord(action) }

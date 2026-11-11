@@ -241,7 +241,9 @@ func (a *App) runAction(id string) {
 	case actQuickConnect:
 		a.OpenQuickConnect()
 	case actFind:
-		if cn := a.focused(); a.page == pageWorkspace && cn != nil && cn.kind == layout.Terminal {
+		if a.page == pageSettings {
+			a.prefSearch.focus = true
+		} else if cn := a.focused(); a.page == pageWorkspace && cn != nil && cn.kind == layout.Terminal {
 			a.finding = true
 		}
 	case actNewTab:

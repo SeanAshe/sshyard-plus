@@ -1621,6 +1621,8 @@
   "paletteNoResults": "일치하는 항목 없음",
   "paletteCommand": "명령",
   "paletteInSettings": "설정 › {page}",
+  "searchSettings": "설정 검색",
+  "settingsNoResults": "일치하는 설정 없음",
   "shortcutRecord": "‘{action}’ 단축키 기록",
   "shortcutReset": "‘{action}’ 기본 단축키로 복원",
   "shortcutRecordHint": "새 단축키를 누르세요. Esc를 누르면 취소됩니다.",

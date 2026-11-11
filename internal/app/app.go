@@ -306,9 +306,10 @@ type App struct {
 
 	// interface state
 	page page
-	// pref is the settings page showing
-	pref     prefPage
-	snippets snippetState
+	// pref is the settings page showing, prefSearch the settings' search
+	pref       prefPage
+	prefSearch prefSearchState
+	snippets   snippetState
 	// bc is the broadcast panel's state.
 	bc broadcastState
 	// tabStart is the first tab the title bar shows when not all fit, the

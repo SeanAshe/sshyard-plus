@@ -1621,6 +1621,8 @@
   "paletteNoResults": "没有匹配项",
   "paletteCommand": "命令",
   "paletteInSettings": "设置 › {page}",
+  "searchSettings": "搜索设置",
+  "settingsNoResults": "没有匹配的设置",
   "shortcutRecord": "为“{action}”录制快捷键",
   "shortcutReset": "恢复“{action}”的默认快捷键",
   "shortcutRecordHint": "请按下新的快捷键，按 Esc 取消。",

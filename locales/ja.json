@@ -1621,6 +1621,8 @@
   "paletteNoResults": "一致する項目はありません",
   "paletteCommand": "コマンド",
   "paletteInSettings": "設定 › {page}",
+  "searchSettings": "設定を検索",
+  "settingsNoResults": "一致する設定はありません",
   "shortcutRecord": "「{action}」のショートカットを記録",
   "shortcutReset": "「{action}」のショートカットを既定に戻す",
   "shortcutRecordHint": "新しいショートカットを押してください。Esc でキャンセルします。",

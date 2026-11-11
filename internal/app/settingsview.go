@@ -114,7 +114,14 @@ func (a *App) closeSettings() {
 // groups, as System Settings lists them; the way back is in the title bar.
 func (a *App) settingsNav(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 	cur := a.prefNow()
+	hits := settingsMatches(m, a.prefSearch.query)
+	searching := a.prefSearch.query != ""
+	found := map[prefPage]bool{}
+	for _, h := range hits {
+		found[h.item.page] = true
+	}
 	ui.Column(c).Fill().Children(func() {
+		a.settingsSearchField(c, m, tok, hits)
 		ui.Scroll(c.Key("setnav")).Grow(1).Shrink(1).FillWidth().Children(func() {
 			ui.Column(c).FillWidth().Padding(theme.Space(1), theme.Space(2.5), theme.Space(3), theme.Space(2.5)).Gap(2).Children(func() {
 				for gi, g := range prefGroups(m) {
@@ -125,7 +132,7 @@ func (a *App) settingsNav(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 					ui.Text(c, g.title).FontSize(theme.Caption).FontWeight(600).TextColor(tok.TextMuted).
 						Padding(top, theme.Space(2), theme.Space(1), theme.Space(2)).SingleLine()
 					for _, it := range g.items {
-						a.prefNavItem(c, tok, it, it.page == cur)
+						a.prefNavItem(c, tok, it, !searching && it.page == cur, searching && !found[it.page])
 					}
 				}
 			})
@@ -142,8 +149,9 @@ func (a *App) settingsNav(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 }
 
 // prefNavItem is one page's row in the settings' sidebar: its tile and
-// title, filled with a tint of the accent while it shows.
-func (a *App) prefNavItem(c *ui.Context, tok theme.Tokens, it prefItem, on bool) {
+// title, filled with a tint of the accent while it shows, muted (dim)
+// while the search finds nothing on it.
+func (a *App) prefNavItem(c *ui.Context, tok theme.Tokens, it prefItem, on, dim bool) {
 	b := ui.ButtonBase(c.Key("pref:"+string(it.page))).Label(it.title).Selected(on).FillWidth().
 		Padding(5, 8).Gap(10).Radius(theme.RadiusControl).AlignItems(ui.Center).Justify(ui.Start).Cursor(ui.CursorPointer)
 	strong := float32(0.12)
@@ -165,20 +173,25 @@ func (a *App) prefNavItem(c *ui.Context, tok theme.Tokens, it prefItem, on bool)
 		}
 		glyph(c, it.icon, col, 22)
 		tx := ui.Text(c, it.title).FontSize(theme.Body).SingleLine().Shrink(1)
-		if on {
+		switch {
+		case on:
 			tx.FontWeight(600).TextColor(tok.Accent)
+		case dim:
+			tx.TextColor(tok.TextMuted)
 		}
 	})
 	if b.Clicked() {
-		a.pref = it.page
+		a.openSetting(it.page, "")
 	}
 }
 
 // settingsGroup is one group of settings, as in System Settings: a tinted
 // tile and a title over a card of rows split by hairlines.
 type settingsGroup struct {
-	c    *ui.Context
-	tok  theme.Tokens
+	c   *ui.Context
+	tok theme.Tokens
+	// a scrolls to the row the search found; none outside the pages
+	a    *App
 	rows int
 }
 
@@ -190,7 +203,11 @@ func (g *settingsGroup) row(label, note string, control func(), lead ...func()) 
 		ui.Box(c).FillWidth().Padding(0, 0, 0, 14).Children(func() { ui.Box(c).Height(1).FillWidth().Background(tok.Line) })
 	}
 	g.rows++
-	ui.Row(c).MinHeight(48).Padding(8, 14).Gap(16).AlignItems(ui.Center).FillWidth().Children(func() {
+	r := ui.Row(c).MinHeight(48).Padding(8, 14).Gap(16).AlignItems(ui.Center).FillWidth()
+	if g.a != nil {
+		g.a.revealRow(c, tok, label, r, r)
+	}
+	r.Children(func() {
 		if len(lead) > 0 {
 			lead[0]()
 		}
@@ -213,15 +230,18 @@ func (g *settingsGroup) divider() {
 // settingsSection is a card of settings under an icon and a title; with
 // no title, the card alone.
 func (a *App) settingsSection(c *ui.Context, tok theme.Tokens, ic *icons.Icon, title string, fn func(g *settingsGroup)) {
-	ui.Column(c).Gap(8).FillWidth().Children(func() {
+	sec := ui.Column(c).Gap(8).FillWidth()
+	sec.Children(func() {
 		if title != "" {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(0, 4).Children(func() {
+			head := ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(0, 4)
+			a.revealRow(c, tok, title, sec, head)
+			head.Children(func() {
 				glyph(c, ic, tok.Accent, 20)
 				ui.Text(c, title).FontSize(theme.Body).FontWeight(600)
 			})
 		}
 		a.contentCard(c, tok).FillWidth().Children(func() {
-			fn(&settingsGroup{c: c, tok: tok})
+			fn(&settingsGroup{c: c, tok: tok, a: a})
 		})
 	})
 }
@@ -236,14 +256,11 @@ func (a *App) settingsPage(c *ui.Context, m locales.Messages, tok theme.Tokens) 
 	if cur != prefAppearance {
 		a.setBackgroundPreview(nil)
 	}
-	var item prefItem
-	for _, g := range prefGroups(m) {
-		for _, it := range g.items {
-			if it.page == cur {
-				item = it
-			}
-		}
+	if a.prefSearch.query != "" {
+		a.settingsResults(c, m, tok, settingsMatches(m, a.prefSearch.query))
+		return
 	}
+	item := prefItemOf(prefGroups(m), cur)
 	ui.Scroll(c.Key("prefpage:" + string(cur))).Fill().Children(func() {
 		ui.Column(c).Padding(theme.Space(7), theme.Space(8), theme.Space(10), theme.Space(8)).Gap(theme.Space(6)).MaxWidth(720).FillWidth().Children(func() {
 			ui.Row(c).Gap(14).AlignItems(ui.Center).Children(func() {
@@ -286,6 +303,10 @@ func (a *App) settingsPage(c *ui.Context, m locales.Messages, tok theme.Tokens) 
 			}
 		})
 	})
+	// a row the search found that the page did not draw is not waited for
+	if ps := &a.prefSearch; ps.row != "" {
+		ps.row, ps.flash = "", ""
+	}
 	if changed {
 		if err := a.ApplySettings(s); err != nil {
 			c.AddToast(ui.Toast{Title: m.ErrGeneric(err.Error()), Type: "error"})

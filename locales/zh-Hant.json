@@ -1621,6 +1621,8 @@
   "paletteNoResults": "沒有符合的項目",
   "paletteCommand": "命令",
   "paletteInSettings": "設定 › {page}",
+  "searchSettings": "搜尋設定",
+  "settingsNoResults": "沒有符合的設定",
   "shortcutRecord": "為「{action}」錄製快速鍵",
   "shortcutReset": "還原「{action}」的預設快速鍵",
   "shortcutRecordHint": "請按下新的快速鍵，按 Esc 取消。",

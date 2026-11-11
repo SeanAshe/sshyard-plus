@@ -1621,6 +1621,8 @@
   "paletteNoResults": "No matches",
   "paletteCommand": "Command",
   "paletteInSettings": "Settings › {page}",
+  "searchSettings": "Search settings",
+  "settingsNoResults": "No matching settings",
   "shortcutRecord": "Record a shortcut for “{action}”",
   "shortcutReset": "Restore the default shortcut of “{action}”",
   "shortcutRecordHint": "Press the new shortcut. Esc cancels.",

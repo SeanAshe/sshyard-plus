@@ -55,64 +55,6 @@ func (a *App) openPalette() {
 	a.palette = paletteState{open: true, gen: a.palette.gen + 1}
 }
 
-// paletteSetting is a setting the palette finds, on its page.
-type paletteSetting struct {
-	page  prefPage
-	label func(locales.Messages) string
-}
-
-// paletteSettings are the settings the palette finds beside the pages.
-var paletteSettings = []paletteSetting{
-	{prefGeneral, locales.Messages.Language},
-	{prefGeneral, locales.Messages.RememberLayout},
-	{prefGeneral, locales.Messages.RenewalNotify},
-	{prefGeneral, locales.Messages.CloseBehavior},
-	{prefGeneral, locales.Messages.TrayIconStyle},
-	{prefGeneral, locales.Messages.TrayClick},
-	{prefGeneral, locales.Messages.CheckAutomatically},
-	{prefGeneral, locales.Messages.UpdateInterval},
-	{prefAppearance, locales.Messages.Theme},
-	{prefAppearance, locales.Messages.UiZoom},
-	{prefAppearance, locales.Messages.MaterialChrome},
-	{prefAppearance, locales.Messages.MaterialContent},
-	{prefAppearance, locales.Messages.InterfaceFont},
-	{prefTerminal, locales.Messages.ColorScheme},
-	{prefTerminal, locales.Messages.TerminalStripe},
-	{prefTerminal, locales.Messages.SchemeImport},
-	{prefTerminal, locales.Messages.TerminalFont},
-	{prefTerminal, locales.Messages.MonospacedOnly},
-	{prefTerminal, locales.Messages.FontSize},
-	{prefTerminal, locales.Messages.KeepAlive},
-	{prefTerminal, locales.Messages.AutoReconnect},
-	{prefTerminal, locales.Messages.Osc52Title},
-	{prefTerminal, locales.Messages.Osc52Limit},
-	{prefMonitoring, locales.Messages.MetricsBar},
-	{prefMonitoring, locales.Messages.MetricsInterval},
-	{prefMonitoring, locales.Messages.MetricsMount},
-	{prefFiles, locales.Messages.TransferConcurrency},
-	{prefFiles, locales.Messages.OpenConfirmMB},
-	{prefFiles, locales.Messages.FilesZoom},
-	{prefAI, locales.Messages.AiContextLines},
-	{prefAI, locales.Messages.AiAuditDays},
-	{prefAI, locales.Messages.AiRedact},
-	{prefAI, locales.Messages.AiConsentSection},
-	{prefAI, locales.Messages.AiDefaultMode},
-	{prefAI, locales.Messages.AiReviewProvider},
-	{prefAI, locales.Messages.AiReviewStrictness},
-	{prefAI, locales.Messages.AiReviewModelName},
-	{prefAI, locales.Messages.AiProvidersSection},
-	{prefAgents, locales.Messages.McpEnable},
-	{prefAgents, locales.Messages.McpToken},
-	{prefAgents, locales.Messages.McpSection},
-	{prefAgents, locales.Messages.SkillSection},
-	{prefBackup, locales.Messages.ExportBackup},
-	{prefBackup, locales.Messages.RestoreBackup},
-	{prefBackup, locales.Messages.DefaultBackupPassword},
-	{prefBackup, locales.Messages.CloudBackupSection},
-	{prefAbout, locales.Messages.AboutDataFolder},
-	{prefAbout, locales.Messages.ReportIssue},
-}
-
 // paletteItems are everything the palette finds, in the order it lists
 // them when they match as well.
 func (a *App) paletteItems(m locales.Messages, tok theme.Tokens) []paletteItem {
@@ -179,10 +121,14 @@ func (a *App) paletteItems(m locales.Messages, tok theme.Tokens) []paletteItem {
 			titles[it.page], pageIcons[it.page] = it.title, it.icon
 		}
 	}
-	for _, st := range paletteSettings {
-		page := st.page
-		add(paletteItem{key: "pref:" + string(page) + ":" + st.label(en), icon: pageIcons[page], title: st.label(m),
-			sub: m.PaletteInSettings(titles[page]), also: st.label(en), run: func() { a.openSettings(page) }})
+	for _, st := range settingsIndex() {
+		// the actions are there already, as commands
+		if st.page == prefShortcuts {
+			continue
+		}
+		page, label := st.page, st.label(m)
+		add(paletteItem{key: "pref:" + string(page) + ":" + st.label(en), icon: pageIcons[page], title: label,
+			sub: m.PaletteInSettings(titles[page]), also: st.label(en), run: func() { a.openSetting(page, label) }})
 	}
 
 	for i, md := range theme.Modes {
