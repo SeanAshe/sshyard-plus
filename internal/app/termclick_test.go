@@ -101,9 +101,12 @@ func TestCopyOnSelect(t *testing.T) {
 	}
 
 	a.openSettings(prefTerminal)
+	tt.SetSize(1200, 760)
 	tt.Frame()
 	// Line numbers, timestamps and the striped-background row sit above
-	// this control, so scroll it into the window instead of growing it.
+	// this control, and the terminal-type row can push it out of view
+	// (on Windows the default-shell row does too). Scroll it into the
+	// 1200 x 760 window instead of growing the page.
 	scrollToSetting(t, tt, "Copy or paste")
 	mustClick(t, tt, "Copy or paste")
 	tt.Frame()

@@ -17031,6 +17031,38 @@ func (msgs Messages) MigrationUnclosedQuote() string {
 	return Catalog.Format(msgs.locale, "migrationUnclosedQuote", nil)
 }
 
+// MigrationNoSessions says "The file was read but has no session section (such as [Bookmarks]); check the source and export file you chose"
+// in the language the app shows.
+func MigrationNoSessions() string { return In(i18n.Locale()).MigrationNoSessions() }
+
+// MigrationNoSessions says "The file was read but has no session section (such as [Bookmarks]); check the source and export file you chose"
+// in the language of msgs.
+func (msgs Messages) MigrationNoSessions() string {
+	return Catalog.Format(msgs.locale, "migrationNoSessions", nil)
+}
+
+// MigrationUnreadableText says "Contains an unreadable character (�); check it before saving"
+// in the language the app shows.
+func MigrationUnreadableText() string { return In(i18n.Locale()).MigrationUnreadableText() }
+
+// MigrationUnreadableText says "Contains an unreadable character (�); check it before saving"
+// in the language of msgs.
+func (msgs Messages) MigrationUnreadableText() string {
+	return Catalog.Format(msgs.locale, "migrationUnreadableText", nil)
+}
+
+// MigrationRowError says "{name}: {issue}"
+// in the language the app shows.
+func MigrationRowError(name string, issue string) string {
+	return In(i18n.Locale()).MigrationRowError(name, issue)
+}
+
+// MigrationRowError says "{name}: {issue}"
+// in the language of msgs.
+func (msgs Messages) MigrationRowError(name string, issue string) string {
+	return Catalog.Format(msgs.locale, "migrationRowError", map[string]any{"name": name, "issue": issue})
+}
+
 // MigrationBatchEdit says "Edit selected hosts"
 // in the language the app shows.
 func MigrationBatchEdit() string { return In(i18n.Locale()).MigrationBatchEdit() }
@@ -17813,6 +17845,66 @@ func TerminalEncodingHint() string { return In(i18n.Locale()).TerminalEncodingHi
 // in the language of msgs.
 func (msgs Messages) TerminalEncodingHint() string {
 	return Catalog.Format(msgs.locale, "terminalEncodingHint", nil)
+}
+
+// TermType says "Terminal type"
+// in the language the app shows.
+func TermType() string { return In(i18n.Locale()).TermType() }
+
+// TermType says "Terminal type"
+// in the language of msgs.
+func (msgs Messages) TermType() string {
+	return Catalog.Format(msgs.locale, "termType", nil)
+}
+
+// TermTypeNote says "The TERM new terminals report; programs pick their keys and colors by it. With linux, F1–F5, Home and End send the …"
+// in the language the app shows.
+func TermTypeNote() string { return In(i18n.Locale()).TermTypeNote() }
+
+// TermTypeNote says "The TERM new terminals report; programs pick their keys and colors by it. With linux, F1–F5, Home and End send the …"
+// in the language of msgs.
+func (msgs Messages) TermTypeNote() string {
+	return Catalog.Format(msgs.locale, "termTypeNote", nil)
+}
+
+// TermTypeHint says "New terminals of this host report this TERM."
+// in the language the app shows.
+func TermTypeHint() string { return In(i18n.Locale()).TermTypeHint() }
+
+// TermTypeHint says "New terminals of this host report this TERM."
+// in the language of msgs.
+func (msgs Messages) TermTypeHint() string {
+	return Catalog.Format(msgs.locale, "termTypeHint", nil)
+}
+
+// TermTypeFollow says "Follow global ({term})"
+// in the language the app shows.
+func TermTypeFollow(term string) string { return In(i18n.Locale()).TermTypeFollow(term) }
+
+// TermTypeFollow says "Follow global ({term})"
+// in the language of msgs.
+func (msgs Messages) TermTypeFollow(term string) string {
+	return Catalog.Format(msgs.locale, "termTypeFollow", map[string]any{"term": term})
+}
+
+// TermTypeCustom says "Custom"
+// in the language the app shows.
+func TermTypeCustom() string { return In(i18n.Locale()).TermTypeCustom() }
+
+// TermTypeCustom says "Custom"
+// in the language of msgs.
+func (msgs Messages) TermTypeCustom() string {
+	return Catalog.Format(msgs.locale, "termTypeCustom", nil)
+}
+
+// TermTypeInvalid says "Use 1 to 64 letters, digits, “.”, “_”, “+” or “-”, without a leading “-”."
+// in the language the app shows.
+func TermTypeInvalid() string { return In(i18n.Locale()).TermTypeInvalid() }
+
+// TermTypeInvalid says "Use 1 to 64 letters, digits, “.”, “_”, “+” or “-”, without a leading “-”."
+// in the language of msgs.
+func (msgs Messages) TermTypeInvalid() string {
+	return Catalog.Format(msgs.locale, "termTypeInvalid", nil)
 }
 
 // ErrSerialNotFound says "{device} isn’t connected. Plug in the device or choose another port."
