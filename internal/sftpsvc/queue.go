@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"io/fs"
 	"log"
@@ -88,11 +89,17 @@ type Transfer struct {
 	part      string
 	partOwned bool
 	partReady bool
-	partInfo  fs.FileInfo
-	srcSize   int64
-	srcMod    time.Time
-	mark      time.Time
-	markB     int64
+	// partInfo, partSum and partSumN describe the local part file after
+	// the last time this transfer closed it. Resume rejects a different
+	// file: a new inode, a reused inode (samePart), or the same inode
+	// with different bytes (partSum).
+	partInfo fs.FileInfo
+	partSum  uint32
+	partSumN int64
+	srcSize  int64
+	srcMod   time.Time
+	mark     time.Time
+	markB    int64
 }
 
 // Percent is how far the transfer is, 0 to 100.
@@ -440,13 +447,19 @@ func (ts *Transfers) copy(ctx context.Context, t *Transfer) error {
 				return err
 			}
 			info, err := f.Stat()
-			f.Close()
 			if err != nil {
+				f.Close()
 				return err
 			}
-			if t.partInfo == nil || !os.SameFile(t.partInfo, info) {
+			if !samePart(t.partInfo, info) {
+				f.Close()
 				return ErrPartChanged
 			}
+			if err := partSumMatches(t, f, info.Size()); err != nil {
+				f.Close()
+				return err
+			}
+			f.Close()
 		} else if err := remote.resolve(part); err != nil {
 			return err
 		}
@@ -471,21 +484,40 @@ func (ts *Transfers) copy(ctx context.Context, t *Transfer) error {
 		}
 		ts.mu.Lock()
 		t.partOwned = false
+		t.partSum, t.partSumN = 0, 0
 		ts.mu.Unlock()
 	}
 	w, err := dst.create(part, off > 0)
 	if err != nil {
 		return err
 	}
+	var summed hash.Hash32
 	if f, ok := w.(*os.File); ok {
 		info, statErr := f.Stat()
 		if statErr != nil {
 			w.Close()
 			return statErr
 		}
-		if off > 0 && (t.partInfo == nil || !os.SameFile(t.partInfo, info)) {
+		if off > 0 && !samePart(t.partInfo, info) {
 			w.Close()
 			return ErrPartChanged
+		}
+		// w is write-only. A resume checks the bytes already stored
+		// through a separate read.
+		if off == 0 {
+			summed, err = continuePartSum(t, nil, 0)
+		} else if rf, rerr := dst.open(part); rerr != nil {
+			err = rerr
+		} else if raf, ok := rf.(io.ReaderAt); !ok {
+			rf.Close()
+			err = ErrPartChanged
+		} else {
+			summed, err = continuePartSum(t, raf, off)
+			rf.Close()
+		}
+		if err != nil {
+			w.Close()
+			return err
 		}
 		ts.mu.Lock()
 		t.partInfo = info
@@ -510,7 +542,11 @@ func (ts *Transfers) copy(ctx context.Context, t *Transfer) error {
 	t.Offset, t.Bytes, t.mark, t.markB = off, off, now, off
 	ts.mu.Unlock()
 	ts.changed()
-	pw := &progressWriter{ctx: ctx, w: w, done: off, total: size, fn: func(done, total int64) { ts.progress(t, done) }}
+	out := io.Writer(w)
+	if summed != nil {
+		out = io.MultiWriter(w, summed)
+	}
+	pw := &progressWriter{ctx: ctx, w: out, done: off, total: size, fn: func(done, total int64) { ts.progress(t, done) }}
 	if ts.onWrite != nil {
 		pw.step = func(done int64) { ts.onWrite(t, done) }
 	}
@@ -531,6 +567,21 @@ func (ts *Transfers) copy(ctx context.Context, t *Transfer) error {
 				ts.logf("sftp: %s: keeping mode 0600: %v", t.Name, cerr)
 			}
 		}
+	}
+	// Record the part after the writes and timestamp updates, and before
+	// close. A later resume compares this snapshot. Inode reuse keeps
+	// dev/inode, and on this filesystem it can keep the change time
+	// when the replacement is created in the same tick, so the checksum
+	// of the bytes written is what rejects that file.
+	if f, ok := w.(*os.File); ok {
+		ts.mu.Lock()
+		if info, serr := f.Stat(); serr == nil {
+			t.partInfo = info
+		}
+		if summed != nil {
+			t.partSum, t.partSumN = summed.Sum32(), pw.done
+		}
+		ts.mu.Unlock()
 	}
 	if cerr := w.Close(); err == nil {
 		err = cerr
