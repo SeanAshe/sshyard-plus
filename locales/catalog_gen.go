@@ -1495,11 +1495,11 @@ func (msgs Messages) OpenInNewTab() string {
 	return Catalog.Format(msgs.locale, "openInNewTab", nil)
 }
 
-// DuplicateSession says "Duplicate session"
+// DuplicateSession says "Duplicate Session"
 // in the language the app shows.
 func DuplicateSession() string { return In(i18n.Locale()).DuplicateSession() }
 
-// DuplicateSession says "Duplicate session"
+// DuplicateSession says "Duplicate Session"
 // in the language of msgs.
 func (msgs Messages) DuplicateSession() string {
 	return Catalog.Format(msgs.locale, "duplicateSession", nil)
@@ -17475,6 +17475,26 @@ func RenameTabEllipsis() string { return In(i18n.Locale()).RenameTabEllipsis() }
 // in the language of msgs.
 func (msgs Messages) RenameTabEllipsis() string {
 	return Catalog.Format(msgs.locale, "renameTabEllipsis", nil)
+}
+
+// CopyHostIP says "Copy Host IP"
+// in the language the app shows.
+func CopyHostIP() string { return In(i18n.Locale()).CopyHostIP() }
+
+// CopyHostIP says "Copy Host IP"
+// in the language of msgs.
+func (msgs Messages) CopyHostIP() string {
+	return Catalog.Format(msgs.locale, "copyHostIP", nil)
+}
+
+// RevealHostInSidebar says "Reveal Host in Sidebar"
+// in the language the app shows.
+func RevealHostInSidebar() string { return In(i18n.Locale()).RevealHostInSidebar() }
+
+// RevealHostInSidebar says "Reveal Host in Sidebar"
+// in the language of msgs.
+func (msgs Messages) RevealHostInSidebar() string {
+	return Catalog.Format(msgs.locale, "revealHostInSidebar", nil)
 }
 
 // RenameTab says "Rename Tab"
