@@ -27,6 +27,7 @@ import (
 	"github.com/Licoy/sshyard/internal/ai/history"
 	"github.com/Licoy/sshyard/internal/ai/policy"
 	"github.com/Licoy/sshyard/internal/assets"
+	"github.com/Licoy/sshyard/internal/awake"
 	"github.com/Licoy/sshyard/internal/forward"
 	"github.com/Licoy/sshyard/internal/highlight"
 	"github.com/Licoy/sshyard/internal/keychain"
@@ -56,6 +57,10 @@ type Platform struct {
 	// SetRememberLayout changes native geometry persistence; errors leave it unchanged.
 	// A successful change returns an undo that restores its exact previous state.
 	SetRememberLayout func(bool) (undo func() error, err error)
+	// CopySecret puts a secret on the clipboard marked as confidential, so
+	// clipboard histories and other devices leave it out; nil copies it as
+	// any text.
+	CopySecret func(text string) error
 	// OpenPath opens a file in its default app; nil can't.
 	OpenPath func(path string) error
 	// Notify shows a system notification, replacing the one of the same
@@ -104,6 +109,13 @@ type Platform struct {
 	// LocalUser is the login name a host without one defaults to, as ssh
 	// does; "" is the user running the app.
 	LocalUser string
+	// WatchNetwork calls changed, on any goroutine, each time this
+	// computer's network changes or it wakes from sleep, until ctx ends
+	// (netwatch.Watch); nil tells nothing.
+	WatchNetwork func(ctx context.Context, changed func())
+	// Awake is the system's hold that keeps the computer from sleeping
+	// while files transfer (awake.System); nil holds nothing.
+	Awake awake.Backend
 }
 
 // WindowSpec is a window the app opens beside the main one.
@@ -185,6 +197,7 @@ type conn struct {
 	// tmuxUp when, and tmuxAt when the tmux session the terminal is in
 	// was last read (tmuxReading while it is); see watchTmux
 	start       *shellStart
+	container   bool // a container's shell, whose files are not the host's: none listed
 	tmuxConn    int
 	tmuxUp      time.Time
 	tmuxAt      time.Time
@@ -279,6 +292,12 @@ type App struct {
 	nextConn int
 	// pool shares one authenticated connection per host among its panes
 	pool *session.Pool
+	// netStop stops telling of network changes; probing is set while the
+	// pool's connections are checked after one (see netchange.go)
+	netStop context.CancelFunc
+	probing atomic.Bool
+	// awake keeps the computer from sleeping while files transfer
+	awake *awake.Keeper
 	// typed are the secrets typed this run and never saved, by
 	// promptKey: an "ask" host's password, a passphrase asked each run, a
 	// password typed after the saved one was refused. Under mu:
@@ -346,7 +365,9 @@ type App struct {
 	services    *svcState
 	tmux        *tmuxState
 	hist        *historyState
-	selected    string // host chosen in the sidebar
+	sug         *suggestState // what the terminals complete from
+	listAsk     int           // the pane whose path list its shortcut asked for, 0 none
+	selected    string        // host chosen in the sidebar
 	search      string
 	searchFocus bool // the search, its field or button, takes the focus next frame
 	searchOpen  bool // the search shows its field across the toolbar
@@ -420,6 +441,7 @@ type App struct {
 	filesEdgeChoice          int // where a files pane opens, by index
 	toolPanesChoice          int // how the rail opens its tools, by index
 	rightClickChoice         int // what a terminal's right click does, by index
+	completionChoice         int // how a terminal completes, by index
 	chromeMat, contentMat    int // the materials chosen, by materials' index
 	osc52KiB                 float64
 	clip                     clipGate
@@ -428,6 +450,8 @@ type App struct {
 	// settings.TerminalTransfers, read off the UI thread.
 	xfer   xferState
 	xferOn atomic.Bool
+	// returnDirOn is settings.ReturnToFolder, read off the UI thread.
+	returnDirOn atomic.Bool
 	// sbWidth is the sidebar's width; sbSeen and sbAt are its value last
 	// seen and since when, to save it once it rests.
 	sbWidth, sbSeen float32
@@ -437,6 +461,8 @@ type App struct {
 	// seen and since when, to save it once it rests.
 	filesSplit, splitSeen float32
 	splitAt               time.Time
+	// fileClip is what Copy took on a side of a files pane, for Paste.
+	fileClip *fileClip
 	// winSvc are the services of the editor windows, by their conn,
 	// which invalidate redraws too. Under mu.
 	winSvc map[int]ui.Services
@@ -640,6 +666,7 @@ type App struct {
 func New(p Platform) (*App, error) {
 	a := &App{p: p, ws: layout.New(), conns: map[int]*conn{}, pool: session.NewPool(), typed: map[string]string{}, typedGen: map[string]int{}, skipKeys: map[string]bool{}, rememberKeys: map[string]localkeys.Remembered{}, lk: localkeys.Open(""), sections: map[string]*bool{}, temps: map[string]assets.Host{}, pct: map[int]*float32{}, fwds: map[string]*fwdRun{}, fwdOpen: map[string]bool{}, paneBounds: map[int]ui.Rect{}, metrics: map[string]*session.Collector{}, aiRecent: map[string]int{}}
 	a.logo = appicon.Bitmap()
+	a.awake = awake.New(p.Awake)
 	a.settings = settings.Default()
 	a.shells = detectShells()
 	a.kdf = vault.DefaultParams
@@ -703,9 +730,19 @@ func (disabledUpdates) SetRoute(updater.Route)       {}
 func (disabledUpdates) Available() string            { return "" }
 func (disabledUpdates) OnChange(func()) (off func()) { return func() {} }
 
+// copySecret puts the secret s on the clipboard, marked as confidential
+// where the platform can (Platform.CopySecret), else as any text.
+func (a *App) copySecret(c *ui.Context, s string) {
+	if a.p.CopySecret == nil || a.p.CopySecret(s) != nil {
+		c.WriteClipboard(s)
+	}
+}
+
 func (a *App) syncChoices() {
 	a.lkOn.Store(a.settings.LocalKeys)
 	a.xferOn.Store(a.settings.TerminalTransfers)
+	a.returnDirOn.Store(a.settings.ReturnToFolder)
+	a.awake.SetEnabled(a.settings.KeepAwake)
 	a.lkMCP.Store(a.settings.LocalKeys && a.settings.LocalKeysMCP)
 	a.langChoice = a.settings.Language
 	a.fontChoice = float64(a.settings.TerminalFontSize)
@@ -863,6 +900,7 @@ func (a *App) startIndependent() {
 		return
 	}
 	a.unlock.started = true
+	a.watchNetwork()
 	a.loadLayout()
 	if a.settings.OpenLocalOnStart {
 		a.post(func() {
@@ -946,6 +984,9 @@ func (a *App) Close() {
 	a.unlock.closed = true
 	a.unlock.after = nil
 	a.cloudStop()
+	if a.netStop != nil {
+		a.netStop()
+	}
 	a.stopCollectors()
 	a.stopMCP()
 	a.waitMCP()
@@ -967,6 +1008,7 @@ func (a *App) Close() {
 	}
 	a.stopACPProbes()
 	a.waitACP()
+	a.awake.Close()
 	a.clipAsk = nil
 	a.xfer = xferState{}
 	a.fwds = map[string]*fwdRun{}
@@ -1068,14 +1110,14 @@ func (a *App) makeConn(hostID string, kind layout.Kind, link int) (*conn, error)
 	if kind == layout.Terminal {
 		opts.Dir = h.TerminalDir
 		if !opts.Local && !isStream(h) {
-			c.start = &shellStart{host: h.Tmux}
+			c.start = &shellStart{host: h.Tmux, dir: h.TerminalDir}
 			opts.Start = a.shellStartCmd(c)
 		}
 	}
 	c.s = session.New(cfg, opts, 80, 24)
 	c.s.OnChange = a.invalidate
 	if kind != layout.Terminal {
-		c.fs = newFilesState(a.invalidate)
+		c.fs = a.newFiles()
 		c.fs.transfers.Client = a.transferClient(c)
 		c.fs.transfers.SetConcurrency(a.settings.TransferConcurrency)
 	} else {

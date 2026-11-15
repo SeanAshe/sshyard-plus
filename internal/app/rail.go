@@ -1,6 +1,7 @@
 package app
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -16,85 +17,196 @@ import (
 
 // The right edge of the workspace: a rail of IconButtons opening the tool
 // panes (the system monitor, the host's details, the snippets and the
-// others; see toolpane.go) and actions on the focused session.
+// others; see toolpane.go) and actions on the focused session. The user
+// hides the items they do not use (settings.RailHidden); what they open
+// stays in the menus, the shortcuts and the command palette.
 
 // railWidth is the rail's width, the status bar's height.
 const railWidth = statusBarHeight
 
-// railView is the rail: the panels' toggles, then actions on the focused
-// session, then ways to reach a new host at the bottom.
+// railItem is an item of the rail: its ID, which the settings keep, the
+// group it shows in (a separator falls between two groups), its icon and
+// what it is called where the user chooses the items.
+type railItem struct {
+	id    string
+	group int
+	icon  *icons.Icon
+	name  func(locales.Messages) string
+}
+
+// railBottom is the group under the rail's spacer: ways to reach a new
+// host.
+const railBottom = 3
+
+// railItems are the rail's items in its order: the panels on the host,
+// then actions on the focused session, then the tool panes working on the
+// sessions, then the bottom group. An ID never changes once released.
+var railItems = []railItem{
+	{"monitor", 0, icons.Monitor, locales.Messages.SystemMonitor},
+	{"usage", 0, icons.Usage, locales.Messages.ProcessUsage},
+	{"host", 0, icons.Info, locales.Messages.HostDetails},
+	{"files", 1, icons.Folder, locales.Messages.Sftp},
+	{"docker", 1, icons.Docker, locales.Messages.DockerManager},
+	{"services", 1, icons.Services, locales.Messages.SystemServices},
+	{"tmux", 1, icons.Tmux, locales.Messages.TmuxManager},
+	{"ai", 1, icons.Robot, locales.Messages.AiSettings},
+	{"forward", 1, icons.Forward, locales.Messages.NewForward},
+	{"snippets", 2, icons.API, locales.Messages.Snippets},
+	{"history", 2, icons.History, locales.Messages.CommandHistory},
+	{"broadcast", 2, icons.Broadcast, locales.Messages.Broadcast},
+	{"logs", 2, icons.FileText, locales.Messages.SessionLogs},
+	{"quick", railBottom, icons.Quick, locales.Messages.QuickConnect},
+	{"import", railBottom, icons.Import, locales.Messages.ImportSSHConfig},
+}
+
+// railSep stands for a separator in railRows.
+const railSep = "-"
+
+// railRows are the IDs of the rail's items not hidden, in its order: top
+// above the spacer, with railSep between two groups that both keep an
+// item, so an empty group leaves no separator; bottom under it. An ID in
+// hidden that names no item is ignored.
+func railRows(hidden []string) (top, bottom []string) {
+	group := -1
+	for _, it := range railItems {
+		switch {
+		case slices.Contains(hidden, it.id):
+		case it.group == railBottom:
+			bottom = append(bottom, it.id)
+		default:
+			if group >= 0 && it.group != group {
+				top = append(top, railSep)
+			}
+			group = it.group
+			top = append(top, it.id)
+		}
+	}
+	return top, bottom
+}
+
+// railView is the rail: the items the user did not hide, in their groups,
+// the bottom ones under the spacer. Its menu, and each item's, choose the
+// items.
 func (a *App) railView(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 	cn := a.focused()
-	ui.Column(c.Key("rail")).Width(railWidth).Shrink(0).FillHeight().Padding(theme.Space(2), 0).Gap(theme.Space(1)).
-		AlignItems(ui.Center).Background(a.chromeFill(tok.Glass)).Children(func() {
-		// A tool pane's toggle, lit while it is in this tab.
-		toggle := func(k layout.Kind, ic, on *icons.Icon, label string) {
-			if (IconButton{Icon: ic, On: on, Label: label, Active: a.toolHere(k), Toggle: true, Size: Small}).Clicked(c, "tool:"+k.String()) {
-				a.ToggleTool(k)
+	top, bottom := railRows(a.settings.RailHidden)
+	rail := ui.Column(c.Key("rail")).Width(railWidth).Shrink(0).FillHeight().Padding(theme.Space(2), 0).Gap(theme.Space(1)).
+		AlignItems(ui.Center).Background(a.chromeFill(tok.Glass))
+	rail.Children(func() {
+		for i, id := range top {
+			if id == railSep {
+				ui.Box(c.Key("sep" + strconv.Itoa(i))).Width(14).Height(1).Shrink(0).MarginY(theme.Space(1)).Background(tok.Line)
+				continue
 			}
+			a.railButton(c, m, cn, id)
 		}
-		toggle(layout.Monitor, icons.Monitor, icons.MonitorOn, m.SystemMonitor())
-		toggle(layout.Usage, icons.Usage, icons.UsageOn, m.ProcessUsage())
-		toggle(layout.HostInfo, icons.Info, icons.InfoOn, m.HostDetails())
-		ui.Box(c.Key("sep")).Width(14).Height(1).Shrink(0).MarginY(theme.Space(1)).Background(tok.Line)
+		ui.Spacer(c)
+		for _, id := range bottom {
+			a.railButton(c, m, cn, id)
+		}
+	})
+	a.contextMenu(rail, func() []menuEntry { return a.railEntries(m, "") })
+}
+
+// railButton is the rail's button of item id, which runs it on a click;
+// its menu hides it.
+func (a *App) railButton(c *ui.Context, m locales.Messages, cn *conn, id string) {
+	var b IconButton
+	var do func()
+	// A tool pane's toggle, lit while it is in this tab.
+	tool := func(k layout.Kind, ic, on *icons.Icon, label string) {
+		b = IconButton{Icon: ic, On: on, Label: label, Active: a.toolHere(k), Toggle: true}
+		do = func() { a.ToggleTool(k) }
+	}
+	t := a.ws.ActiveTab()
+	switch id {
+	case "monitor":
+		tool(layout.Monitor, icons.Monitor, icons.MonitorOn, m.SystemMonitor())
+	case "usage":
+		tool(layout.Usage, icons.Usage, icons.UsageOn, m.ProcessUsage())
+	case "host":
+		tool(layout.HostInfo, icons.Info, icons.InfoOn, m.HostDetails())
+	case "files":
 		// The tab's files pane and AI pane, one each: lit while it has
 		// one, which a click closes.
-		t := a.ws.ActiveTab()
-		files, ai := a.tabPane(t, layout.Files) != nil, a.tabPane(t, layout.AI) != nil
+		files := a.tabPane(t, layout.Files) != nil
 		label := openFilesLabel(m, a.filesEdge())
 		if files {
 			label = m.CloseFilesPane()
 		}
-		if (IconButton{Icon: icons.Folder, On: icons.FolderOn, Label: label, Active: files, Toggle: true, Disabled: !files && !remoteOnly(cn), Size: Small}).Clicked(c, "files") {
-			a.ToggleFiles()
-		}
-		toggle(layout.Docker, icons.Docker, icons.DockerOn, m.DockerManager())
-		toggle(layout.Services, icons.Services, icons.ServicesOn, m.SystemServices())
-		toggle(layout.Tmux, icons.Tmux, icons.TmuxOn, m.TmuxManager())
-		label = m.OpenAIRight()
+		b = IconButton{Icon: icons.Folder, On: icons.FolderOn, Label: label, Active: files, Toggle: true, Disabled: !files && !remoteOnly(cn)}
+		do = a.ToggleFiles
+	case "docker":
+		tool(layout.Docker, icons.Docker, icons.DockerOn, m.DockerManager())
+	case "services":
+		tool(layout.Services, icons.Services, icons.ServicesOn, m.SystemServices())
+	case "tmux":
+		tool(layout.Tmux, icons.Tmux, icons.TmuxOn, m.TmuxManager())
+	case "ai":
+		ai := a.tabPane(t, layout.AI) != nil
+		label := m.OpenAIRight()
 		if ai {
 			label = m.CloseAIPane()
 		}
-		if (IconButton{Icon: icons.Robot, On: icons.RobotOn, Label: label, Active: ai, Toggle: true, Disabled: !ai && !canAI(cn), Size: Small}).Clicked(c, "ai") {
-			a.ToggleAI()
-		}
-		if (IconButton{Icon: icons.Forward, Label: m.NewForwardMenu(), Disabled: a.store.Len() == 0, Size: Small}).Clicked(c, "fwd") {
+		b = IconButton{Icon: icons.Robot, On: icons.RobotOn, Label: label, Active: ai, Toggle: true, Disabled: !ai && !canAI(cn)}
+		do = a.ToggleAI
+	case "forward":
+		b = IconButton{Icon: icons.Forward, Label: m.NewForwardMenu(), Disabled: a.store.Len() == 0}
+		do = func() {
 			id := a.selectedHost()
 			if cn != nil && !isTemp(cn.host.ID) {
 				id = cn.host.ID
 			}
 			a.openFwdForm(m, nil, id)
 		}
-		// The tool panes, working on the sessions: lit while in this
-		// tab.
-		ui.Box(c.Key("sep2")).Width(14).Height(1).Shrink(0).MarginY(theme.Space(1)).Background(tok.Line)
-		toggle(layout.Snippets, icons.API, nil, m.Snippets())
-		toggle(layout.History, icons.History, nil, m.CommandHistory())
-		synced := ""
+	case "snippets":
+		tool(layout.Snippets, icons.API, nil, m.Snippets())
+	case "history":
+		tool(layout.History, icons.History, nil, m.CommandHistory())
+	case "broadcast":
+		tool(layout.Broadcast, icons.Broadcast, icons.BroadcastOn, m.Broadcast())
 		if n := len(a.bc.synced); n > 0 {
-			synced = strconv.Itoa(n)
+			b.Prominent, b.Badge = true, strconv.Itoa(n)
 		}
-		if (IconButton{Icon: icons.Broadcast, On: icons.BroadcastOn, Label: m.Broadcast(), Active: a.toolHere(layout.Broadcast), Toggle: true,
-			Prominent: synced != "", Badge: synced, Size: Small}).Clicked(c, "broadcast") {
-			a.ToggleTool(layout.Broadcast)
-		}
+	case "logs":
+		tool(layout.Logs, icons.FileText, icons.FileTextOn, m.SessionLogs())
 		logging, failed := a.logCount()
-		badge := ""
 		if logging > 0 {
-			badge = strconv.Itoa(logging)
+			b.Prominent, b.Badge, b.BadgeDanger = true, strconv.Itoa(logging), failed
 		}
-		if (IconButton{Icon: icons.FileText, On: icons.FileTextOn, Label: m.SessionLogs(), Active: a.toolHere(layout.Logs), Toggle: true,
-			Prominent: logging > 0, Badge: badge, BadgeDanger: failed, Size: Small}).Clicked(c, "logs") {
-			a.ToggleTool(layout.Logs)
-		}
-		ui.Spacer(c)
-		if (IconButton{Icon: icons.Quick, Label: m.QuickConnect(), Size: Small}).Clicked(c, "quick") {
-			a.OpenQuickConnect()
-		}
-		if (IconButton{Icon: icons.Import, Label: m.ImportSSHConfig(), Size: Small}).Clicked(c, "import") {
-			a.OpenImport(m, "")
-		}
-	})
+	case "quick":
+		b, do = IconButton{Icon: icons.Quick, Label: m.QuickConnect()}, a.OpenQuickConnect
+	case "import":
+		b, do = IconButton{Icon: icons.Import, Label: m.ImportSSHConfig()}, func() { a.OpenImport(m, "") }
+	default:
+		return
+	}
+	b.Size = Small
+	el := b.Show(c, "rail:"+id)
+	a.contextMenu(el, func() []menuEntry { return a.railEntries(m, id) })
+	if el.Clicked() && !b.Disabled {
+		do()
+	}
+}
+
+// railEntries are the rail's menu: hiding item id, when it is the menu of
+// one, and the settings choosing the items.
+func (a *App) railEntries(m locales.Messages, id string) []menuEntry {
+	var out []menuEntry
+	if id != "" {
+		out = append(out, menuEntry{Icon: icons.Privacy, Label: m.RailHide(), Do: func() { a.setRailShown(id, false) }}, menuSep)
+	}
+	return append(out, menuEntry{Icon: icons.Settings, Label: m.RailCustomize(), Do: func() { a.openSetting(prefGeneral, m.RailSection()) }})
+}
+
+// setRailShown shows or hides the rail's item id, saving the settings; a
+// pane it opened stays open.
+func (a *App) setRailShown(id string, on bool) {
+	s := a.settings
+	s.SetRailShown(id, on)
+	if err := a.ApplySettings(s); err != nil {
+		a.toast(func(m locales.Messages) ui.Toast { return ui.Toast{Title: m.ErrGeneric(err.Error()), Type: "error"} })
+	}
 }
 
 // hostToolPanel is the body of tool pane k on the focused session's host:
@@ -252,7 +364,8 @@ func (a *App) monitorConn(cn *conn) *conn {
 }
 
 // monitorPanel is the focused session's host as its metrics read: the
-// system, then a card each for CPU, memory, network, disks and GPUs.
+// system, then a card each for CPU, memory, network, disks, GPUs and
+// who is logged in.
 func (a *App) monitorPanel(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 	cn := a.focused()
 	if cn == nil {
@@ -282,7 +395,9 @@ func (a *App) monitorPanel(c *ui.Context, m locales.Messages, tok theme.Tokens) 
 	}
 	a.panelCard(c, tok, "sys", icons.Host, hostTint(tok, h), m.SysSection(), "", func() {
 		osName, lat, up := dash, dash, dash
-		if rd.OS != "" {
+		if rd.OSName != "" {
+			osName = rd.OSName
+		} else if rd.OS != "" {
 			osName = rd.OS
 		}
 		if tc != nil && connected {
@@ -294,7 +409,12 @@ func (a *App) monitorPanel(c *ui.Context, m locales.Messages, tok theme.Tokens) 
 				tickDur(c, d)
 			}
 		}
-		facts(c, tok, fam, m.FieldHost(), a.pv(h.Label()), m.SysOS(), osName, m.SysLatency(), lat, m.SysConnectedFor(), up, m.SysAddress(), a.pv(h.Target()))
+		kv := []string{m.FieldHost(), a.pv(h.Label()), m.SysOS(), osName, m.SysLatency(), lat, m.SysConnectedFor(), up}
+		// A BSD release already names its kernel.
+		if rd.Kernel != "" && !strings.Contains(osName, rd.Kernel) {
+			kv = append(kv, m.SysKernel(), rd.Kernel)
+		}
+		facts(c, tok, fam, append(kv, m.SysAddress(), a.pv(h.Target()))...)
 	})
 	switch {
 	case tc == nil:
@@ -331,6 +451,9 @@ func (a *App) monitorPanel(c *ui.Context, m locales.Messages, tok theme.Tokens) 
 	a.diskCard(c, m, tok, fam, rd)
 	if len(rd.GPUs) > 0 {
 		a.gpuCard(c, m, tok, fam, rd)
+	}
+	if rd.LoginsOK {
+		a.loginCard(c, m, tok, fam, rd)
 	}
 }
 
@@ -470,6 +593,72 @@ func (a *App) gpuCard(c *ui.Context, m locales.Messages, tok theme.Tokens, fam s
 			_, mem, temp := gpuBits(m, g)
 			usageRow(c, tok, fam, "GPU "+strconv.Itoa(i), float64(g.Util), g.UtilOK, mem+" · "+temp)
 		}
+		if rd.GPUProcsOK {
+			gpuProcs(c, m, tok, fam, rd)
+		}
+	})
+}
+
+// gpuProcs is the processes holding GPU memory: each with its GPU, its
+// pid and how much it holds.
+func gpuProcs(c *ui.Context, m locales.Messages, tok theme.Tokens, fam string, rd session.Reading) {
+	if rd.GPUProcCount == 0 {
+		panelNote(c, tok, m.GpuProcsNone())
+		return
+	}
+	ui.Text(c, m.GpuProcesses(rd.GPUProcCount)).FontSize(theme.Caption).TextColor(tok.TextMuted).SingleLine()
+	ui.Column(c).Gap(2).FillWidth().Children(func() {
+		for _, p := range rd.GPUProcs {
+			name, mem := m.MetricsDash(), m.MetricsDash()
+			if p.Name != "" {
+				name = p.Name
+			}
+			if p.MemOK {
+				mem = fmtKB(uint64(p.MemMiB) * 1024)
+			}
+			meta := m.GpuProcPid(strconv.FormatUint(p.PID, 10))
+			if p.GPU >= 0 {
+				meta = "GPU " + strconv.Itoa(p.GPU) + " · " + meta
+			}
+			ui.Row(c).Gap(8).FillWidth().Padding(5, 8).Radius(theme.RadiusSmall).Background(tok.Fill).AlignItems(ui.Center).Children(func() {
+				ui.Column(c).Gap(1).Grow(1).Shrink(1).MinWidth(0).Children(func() {
+					ui.Text(c, name).Font(fam).FontSize(theme.Footnote).SingleLine()
+					ui.Text(c, meta).Font(fam).FontSize(theme.Caption).TextColor(tok.TextMuted).SingleLine()
+				})
+				ui.Text(c, mem).Font(fam).FontSize(theme.Footnote).FontWeight(600).SingleLine().Shrink(0)
+			})
+		}
+	})
+}
+
+// loginCard is who is logged in on the host: each session's user and
+// line, where it came from and since when, as the server says.
+func (a *App) loginCard(c *ui.Context, m locales.Messages, tok theme.Tokens, fam string, rd session.Reading) {
+	a.panelCard(c, tok, "logins", icons.Logins, tok.TintAt(5), m.LoginSection(), m.LoginCount(rd.LoginCount), func() {
+		if len(rd.Logins) == 0 {
+			panelNote(c, tok, m.LoginsNone())
+			return
+		}
+		ui.Column(c).Gap(2).FillWidth().Children(func() {
+			for _, l := range rd.Logins {
+				var detail []string
+				if l.From != "" {
+					detail = append(detail, a.pv(l.From))
+				}
+				if l.When != "" {
+					detail = append(detail, l.When)
+				}
+				ui.Row(c).Gap(8).FillWidth().Padding(5, 8).Radius(theme.RadiusSmall).Background(tok.Fill).AlignItems(ui.Center).Children(func() {
+					ui.Column(c).Gap(1).Grow(1).Shrink(1).MinWidth(0).Children(func() {
+						ui.Text(c, a.pv(l.User)).FontSize(theme.Footnote).FontWeight(500).SingleLine()
+						if len(detail) > 0 {
+							ui.Text(c, strings.Join(detail, " · ")).Font(fam).FontSize(theme.Caption).TextColor(tok.TextMuted).SingleLine()
+						}
+					})
+					ui.Text(c, l.Line).Font(fam).FontSize(theme.Caption).TextColor(tok.TextMuted).SingleLine().Shrink(0)
+				})
+			}
+		})
 	})
 }
 

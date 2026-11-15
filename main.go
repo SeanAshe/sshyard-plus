@@ -10,13 +10,16 @@ import (
 	"time"
 
 	"github.com/Licoy/sshyard/internal/app"
+	"github.com/Licoy/sshyard/internal/awake"
 	"github.com/Licoy/sshyard/internal/gtkfix"
 	"github.com/Licoy/sshyard/internal/keychain"
 	"github.com/Licoy/sshyard/internal/macfix"
+	"github.com/Licoy/sshyard/internal/netwatch"
 	"github.com/Licoy/sshyard/internal/settings"
 	"github.com/Licoy/sshyard/internal/theme"
 	"github.com/Licoy/sshyard/internal/updater"
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -41,6 +44,9 @@ func platform() app.Platform {
 		SetTheme:       func(m theme.Mode) { mygo.Theme.SetSource(themeSource(m)) },
 		SetLocale:      mygo.App.SetLocale,
 		OpenPath:       mygo.Shell.OpenPath,
+		CopySecret: func(text string) error {
+			return mygo.Clipboard.Write(transfer.TextData(text), mygo.ClipboardOptions{Concealed: true})
+		},
 		PickFile: func(title string) (string, error) {
 			paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Title: title, ShowHiddenFiles: true})
 			if err != nil || len(paths) == 0 {
@@ -61,8 +67,10 @@ func platform() app.Platform {
 			}
 			return paths[0], nil
 		},
-		OpenWith:   openWith,
-		OpenWindow: openWindow,
+		OpenWith:     openWith,
+		OpenWindow:   openWindow,
+		WatchNetwork: netwatch.Watch,
+		Awake:        awake.System(),
 	}
 }
 

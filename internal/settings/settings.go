@@ -33,6 +33,10 @@ type Settings struct {
 	// in the place of the one open in the tab, one at a time, or
 	// ToolPanesSplit beside the ones already open.
 	ToolPanes string `json:"toolPanes,omitempty"`
+	// RailHidden are the IDs of the right rail's items the user hid; the
+	// others show, so an item added later shows until it is hidden. An
+	// ID this version does not know is kept and ignored.
+	RailHidden []string `json:"railHidden,omitempty"`
 	// TrayIcon selects the monochrome or colorful application logo.
 	TrayIcon string `json:"trayIcon"`
 	// TrayClick selects the popup or the main window on a tray click.
@@ -44,11 +48,14 @@ type Settings struct {
 	CheckUpdates bool `json:"checkUpdates"`
 	// UpdateIntervalHours is the time between automatic checks for
 	// updates, one of UpdateIntervals. The updater reads it at launch.
-	UpdateIntervalHours int     `json:"updateIntervalHours"`
-	TerminalFontSize    int     `json:"terminalFontSize"`
-	KeepAliveSeconds    int     `json:"keepAliveSeconds"`
-	AutoReconnect       bool    `json:"autoReconnect"`
-	SidebarWidth        float32 `json:"sidebarWidth"`
+	UpdateIntervalHours int  `json:"updateIntervalHours"`
+	TerminalFontSize    int  `json:"terminalFontSize"`
+	KeepAliveSeconds    int  `json:"keepAliveSeconds"`
+	AutoReconnect       bool `json:"autoReconnect"`
+	// ReturnToFolder takes an SSH terminal whose connection came back
+	// to the folder its shell was in before, as the shell reported it.
+	ReturnToFolder bool    `json:"returnToFolder"`
+	SidebarWidth   float32 `json:"sidebarWidth"`
 	// TerminalType is the TERM new terminals report, unless their host
 	// names its own (Host.Term); "" is session.DefaultTerm.
 	TerminalType string `json:"terminalType,omitempty"`
@@ -89,6 +96,17 @@ type Settings struct {
 	// both off by default.
 	TerminalLineNumbers bool `json:"terminalLineNumbers,omitempty"`
 	TerminalTimestamps  bool `json:"terminalTimestamps,omitempty"`
+	// TabTitle is what a tab not renamed is called: "", the default, its
+	// host's name, TabTitleProgram the title its terminal's program set,
+	// or TabTitleCwd the directory its shell reported.
+	TabTitle string `json:"tabTitle,omitempty"`
+	// TerminalCompletion is what a terminal offers while a command is
+	// typed at a shell's prompt: CompletionOff, CompletionInline (the
+	// default), the rest of a command run before shown after the
+	// cursor, or CompletionAuto, which also lists the folder of a path
+	// being typed by itself. The list opens on its shortcut too, unless
+	// off.
+	TerminalCompletion string `json:"terminalCompletion,omitempty"`
 	// TerminalFont is the terminal's font family, "" for the system's
 	// monospaced font.
 	TerminalFont string `json:"terminalFont,omitempty"`
@@ -118,6 +136,9 @@ type Settings struct {
 	// TransferConcurrency is how many SFTP transfers of a files pane run
 	// at once, 1 to 10.
 	TransferConcurrency int `json:"transferConcurrency"`
+	// KeepAwake keeps the computer from sleeping while files transfer:
+	// the display may still turn off.
+	KeepAwake bool `json:"keepAwake"`
 	// OpenConfirmMB is the size, in MB, from which opening a remote file
 	// (in the editor or a local program) asks first, 1 to 1024.
 	OpenConfirmMB int `json:"openConfirmMB"`
@@ -633,6 +654,22 @@ const (
 // tab, rather than in the place of the one it shows.
 const ToolPanesSplit = "split"
 
+// RailShown reports whether the right rail shows its item id.
+func (s Settings) RailShown(id string) bool { return !slices.Contains(s.RailHidden, id) }
+
+// SetRailShown shows or hides the right rail's item id, in a new list:
+// the one held may be shared with the settings in force.
+func (s *Settings) SetRailShown(id string, on bool) {
+	hidden := slices.DeleteFunc(slices.Clone(s.RailHidden), func(h string) bool { return h == id })
+	if !on {
+		hidden = append(hidden, id)
+	}
+	if len(hidden) == 0 {
+		hidden = nil
+	}
+	s.RailHidden = hidden
+}
+
 // MCPPortDefault is the MCP endpoint's port unless the user picks one.
 const MCPPortDefault = 47320
 
@@ -692,6 +729,20 @@ const (
 	MinCharWidth, MaxCharWidth   = 80, 150
 )
 
+// What a tab not renamed is called, besides its host's name (TabTitle).
+const (
+	TabTitleProgram = "program"
+	TabTitleCwd     = "cwd"
+)
+
+// What a terminal offers while a command is typed
+// (TerminalCompletion).
+const (
+	CompletionOff    = "off"
+	CompletionInline = "inline"
+	CompletionAuto   = "auto"
+)
+
 // Terminal cursor shapes.
 const (
 	CursorBlock     = "block"
@@ -701,7 +752,7 @@ const (
 
 // Default returns the defaults.
 func Default() Settings {
-	return Settings{Background: DefaultBackground(), Theme: theme.Auto, CloseBehavior: CloseToTray, TrayIcon: TrayIconColor, TrayClick: TrayClickPanel, TrayMaterial: MaterialTranslucent, TrayHeight: DefaultTrayHeight, CheckUpdates: true, UpdateIntervalHours: 1, TerminalFontSize: 13, TerminalLineHeight: 100, TerminalCharWidth: 100, TerminalCursorStyle: CursorBlock, TerminalCursorBlink: true, TerminalStripe: true, KeepAliveSeconds: 30, AutoReconnect: true, SidebarWidth: 240, ChromeMaterial: MaterialTranslucent, ContentMaterial: MaterialOpaque, MonospacedOnly: true, TransferConcurrency: 3, OpenConfirmMB: 10, FilesSplit: 50, FilesEdge: FilesRight, TerminalRightClick: RightClickMenu, EditorTreeWidth: 240, TerminalTransfers: true, OSC52Write: OSC52Ask, OSC52MaxBytes: OSC52MaxDefault, OSC52Notify: true, MetricsEnabled: true, MetricsInterval: 2,
+	return Settings{Background: DefaultBackground(), Theme: theme.Auto, CloseBehavior: CloseToTray, TrayIcon: TrayIconColor, TrayClick: TrayClickPanel, TrayMaterial: MaterialTranslucent, TrayHeight: DefaultTrayHeight, CheckUpdates: true, UpdateIntervalHours: 1, TerminalFontSize: 13, TerminalLineHeight: 100, TerminalCharWidth: 100, TerminalCursorStyle: CursorBlock, TerminalCursorBlink: true, TerminalStripe: true, TerminalCompletion: CompletionInline, KeepAliveSeconds: 30, AutoReconnect: true, ReturnToFolder: true, SidebarWidth: 240, ChromeMaterial: MaterialTranslucent, ContentMaterial: MaterialOpaque, MonospacedOnly: true, TransferConcurrency: 3, KeepAwake: true, OpenConfirmMB: 10, FilesSplit: 50, FilesEdge: FilesRight, TerminalRightClick: RightClickMenu, EditorTreeWidth: 240, TerminalTransfers: true, OSC52Write: OSC52Ask, OSC52MaxBytes: OSC52MaxDefault, OSC52Notify: true, MetricsEnabled: true, MetricsInterval: 2,
 		AIDefaultAgent: "builtin", AIDefaultMode: "ask", AIReviewStrictness: AIReviewStandard, AIContextLines: 200, AIAuditRetentionDays: 90, AIRequestTimeout: DefaultAIRequestTimeout, AIRedact: true, MCPPort: MCPPortDefault, LocalKeys: true, Highlight: Highlight{On: true}, RenewalNotify: true}
 }
 
@@ -759,6 +810,11 @@ func (s *Settings) Normalize() {
 	default:
 		s.TerminalCursorStyle = d.TerminalCursorStyle
 	}
+	switch s.TerminalCompletion {
+	case CompletionOff, CompletionInline, CompletionAuto:
+	default:
+		s.TerminalCompletion = d.TerminalCompletion
+	}
 	if s.TerminalFontSize < MinFontSize || s.TerminalFontSize > MaxFontSize {
 		s.TerminalFontSize = d.TerminalFontSize
 	}
@@ -796,6 +852,10 @@ func (s *Settings) Normalize() {
 	}
 	if s.ToolPanes != ToolPanesSplit {
 		s.ToolPanes = ""
+	}
+	s.RailHidden = cleanList(s.RailHidden)
+	if s.TabTitle != TabTitleProgram && s.TabTitle != TabTitleCwd {
+		s.TabTitle = ""
 	}
 	if s.FilesEdge != FilesBelow {
 		s.FilesEdge = FilesRight

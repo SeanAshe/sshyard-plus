@@ -39,9 +39,10 @@ SSHYard is a native desktop SSH / SFTP client for macOS, Windows and Linux, brin
   - Tabs, split panes and terminal search, with tabs you can reorder and rename
   - True colour, wide characters, input methods and mouse support for tmux, vim and htop
   - Ten built-in colour schemes plus `.itermcolors` import, keyword highlighting, line numbers and timestamps, and adjustable cursor, line height and character width
-  - Many output encodings, set per host; ⌘ / Ctrl-click to open links in the terminal
+  - Many output encodings, set per host; ⌘ / Ctrl-click to open links in the terminal, ⌥ / Alt-drag for block selection
+  - Command suggestions from the host's shell history as you type, accepted with → or End, and a list of the folder's files to complete paths from
   - Telnet, serial ports and local terminals besides SSH (PowerShell, CMD, Git Bash and WSL on Windows)
-  - Shared connections across panes on the same host, with automatic reconnection
+  - Shared connections across panes on the same host, with automatic reconnection that acts at once on a network change or wake from sleep and returns the shell to its folder
 
 - **Workspace**
   - System monitor, process usage, host details, Docker, tmux, snippets, command history, broadcast commands and session logs are draggable panes that dock beside any pane or in another tab
@@ -55,7 +56,8 @@ SSHYard is a native desktop SSH / SFTP client for macOS, Windows and Linux, brin
   - Tabbed built-in editor with a folder tree
   - File access through sudo when you need it
   - Drag-and-drop support and folder transfers; uploads keep permissions and modification times
-  - Transfer queue with pause, resume and retry
+  - Copy files and folders straight from one server to another by drag-and-drop or copy and paste, streamed through the app without touching the local disk
+  - Transfer queue with pause, resume and retry, keeping the computer awake while files transfer
 
 - **AI assistant**
   - Run commands and edit files through a dedicated assistant for each host, over SSH, Telnet, serial or a local terminal, with conversations saved per host
