@@ -109,7 +109,7 @@ func TestDefaultShellSetting(t *testing.T) {
 	withShells(t, threeShells...)
 	a, tt := newTestApp(t)
 	a.openSettings(prefTerminal)
-	tt.SetSize(1200, 2600)
+	tt.SetSize(1200, 3200)
 	tt.Frame()
 	mustFind(t, tt, "What a new local terminal runs. The other shells are in the local terminal menu.")
 	mustClick(t, tt, "PowerShell")
@@ -122,7 +122,7 @@ func TestDefaultShellSetting(t *testing.T) {
 	withShells(t, session.Shell{ID: "/bin/sh", Name: "sh", Path: "/bin/sh"})
 	a, tt = newTestApp(t)
 	a.openSettings(prefTerminal)
-	tt.SetSize(1200, 2600)
+	tt.SetSize(1200, 3200)
 	tt.Frame()
 	if tt.HasText("Default shell") {
 		t.Error("a default shell to choose among one")
@@ -146,7 +146,7 @@ func TestOpenLocalOnStart(t *testing.T) {
 		t.Fatalf("started with %d tabs", len(a.ws.Tabs))
 	}
 	a.openSettings(prefTerminal)
-	tt.SetSize(1200, 2600)
+	tt.SetSize(1200, 3200)
 	tt.Frame()
 	mustFind(t, tt, "Open a local terminal when SSHYard starts")
 
