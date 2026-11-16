@@ -367,6 +367,16 @@ func (msgs Messages) NewHost() string {
 	return Catalog.Format(msgs.locale, "newHost", nil)
 }
 
+// CloneHost says "Clone as New Host…"
+// in the language the app shows.
+func CloneHost() string { return In(i18n.Locale()).CloneHost() }
+
+// CloneHost says "Clone as New Host…"
+// in the language of msgs.
+func (msgs Messages) CloneHost() string {
+	return Catalog.Format(msgs.locale, "cloneHost", nil)
+}
+
 // EditHost says "Edit Host"
 // in the language the app shows.
 func EditHost() string { return In(i18n.Locale()).EditHost() }
@@ -7445,6 +7455,136 @@ func OpenDataFolder() string { return In(i18n.Locale()).OpenDataFolder() }
 // in the language of msgs.
 func (msgs Messages) OpenDataFolder() string {
 	return Catalog.Format(msgs.locale, "openDataFolder", nil)
+}
+
+// StorageLocation says "Data location"
+// in the language the app shows.
+func StorageLocation() string { return In(i18n.Locale()).StorageLocation() }
+
+// StorageLocation says "Data location"
+// in the language of msgs.
+func (msgs Messages) StorageLocation() string {
+	return Catalog.Format(msgs.locale, "storageLocation", nil)
+}
+
+// StorageLocationNote says "Portable keeps all data in sshyard_data beside the app, so it travels with the app's folder."
+// in the language the app shows.
+func StorageLocationNote() string { return In(i18n.Locale()).StorageLocationNote() }
+
+// StorageLocationNote says "Portable keeps all data in sshyard_data beside the app, so it travels with the app's folder."
+// in the language of msgs.
+func (msgs Messages) StorageLocationNote() string {
+	return Catalog.Format(msgs.locale, "storageLocationNote", nil)
+}
+
+// StorageAppData says "App data"
+// in the language the app shows.
+func StorageAppData() string { return In(i18n.Locale()).StorageAppData() }
+
+// StorageAppData says "App data"
+// in the language of msgs.
+func (msgs Messages) StorageAppData() string {
+	return Catalog.Format(msgs.locale, "storageAppData", nil)
+}
+
+// StoragePortable says "Portable"
+// in the language the app shows.
+func StoragePortable() string { return In(i18n.Locale()).StoragePortable() }
+
+// StoragePortable says "Portable"
+// in the language of msgs.
+func (msgs Messages) StoragePortable() string {
+	return Catalog.Format(msgs.locale, "storagePortable", nil)
+}
+
+// StorageMoveTitle says "Move Data?"
+// in the language the app shows.
+func StorageMoveTitle() string { return In(i18n.Locale()).StorageMoveTitle() }
+
+// StorageMoveTitle says "Move Data?"
+// in the language of msgs.
+func (msgs Messages) StorageMoveTitle() string {
+	return Catalog.Format(msgs.locale, "storageMoveTitle", nil)
+}
+
+// StorageMoveToPortable says "SSHYard will restart, move all its data to {path} and then remove it from the app data folder. Moving or deleting the…"
+// in the language the app shows.
+func StorageMoveToPortable(path string) string { return In(i18n.Locale()).StorageMoveToPortable(path) }
+
+// StorageMoveToPortable says "SSHYard will restart, move all its data to {path} and then remove it from the app data folder. Moving or deleting the…"
+// in the language of msgs.
+func (msgs Messages) StorageMoveToPortable(path string) string {
+	return Catalog.Format(msgs.locale, "storageMoveToPortable", map[string]any{"path": path})
+}
+
+// StorageMoveToAppData says "SSHYard will restart, move all its data back to {path} and then remove the sshyard_data folder beside the app."
+// in the language the app shows.
+func StorageMoveToAppData(path string) string { return In(i18n.Locale()).StorageMoveToAppData(path) }
+
+// StorageMoveToAppData says "SSHYard will restart, move all its data back to {path} and then remove the sshyard_data folder beside the app."
+// in the language of msgs.
+func (msgs Messages) StorageMoveToAppData(path string) string {
+	return Catalog.Format(msgs.locale, "storageMoveToAppData", map[string]any{"path": path})
+}
+
+// StorageSecretsKeychain says "Saved passwords and keys stay protected by this computer's system keychain: on another computer they cannot be unlock…"
+// in the language the app shows.
+func StorageSecretsKeychain() string { return In(i18n.Locale()).StorageSecretsKeychain() }
+
+// StorageSecretsKeychain says "Saved passwords and keys stay protected by this computer's system keychain: on another computer they cannot be unlock…"
+// in the language of msgs.
+func (msgs Messages) StorageSecretsKeychain() string {
+	return Catalog.Format(msgs.locale, "storageSecretsKeychain", nil)
+}
+
+// StorageSecretsPassword says "Saved passwords and keys stay protected by your master password, which unlocks them on any computer."
+// in the language the app shows.
+func StorageSecretsPassword() string { return In(i18n.Locale()).StorageSecretsPassword() }
+
+// StorageSecretsPassword says "Saved passwords and keys stay protected by your master password, which unlocks them on any computer."
+// in the language of msgs.
+func (msgs Messages) StorageSecretsPassword() string {
+	return Catalog.Format(msgs.locale, "storageSecretsPassword", nil)
+}
+
+// StorageMoveRestart says "Move and Restart"
+// in the language the app shows.
+func StorageMoveRestart() string { return In(i18n.Locale()).StorageMoveRestart() }
+
+// StorageMoveRestart says "Move and Restart"
+// in the language of msgs.
+func (msgs Messages) StorageMoveRestart() string {
+	return Catalog.Format(msgs.locale, "storageMoveRestart", nil)
+}
+
+// StorageMoveFailed says "Couldn't move the data: {detail}. It was left where it was."
+// in the language the app shows.
+func StorageMoveFailed(detail string) string { return In(i18n.Locale()).StorageMoveFailed(detail) }
+
+// StorageMoveFailed says "Couldn't move the data: {detail}. It was left where it was."
+// in the language of msgs.
+func (msgs Messages) StorageMoveFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "storageMoveFailed", map[string]any{"detail": detail})
+}
+
+// StorageMoveOccupied says "Couldn't move the data: {path} already holds data. It was left where it was."
+// in the language the app shows.
+func StorageMoveOccupied(path string) string { return In(i18n.Locale()).StorageMoveOccupied(path) }
+
+// StorageMoveOccupied says "Couldn't move the data: {path} already holds data. It was left where it was."
+// in the language of msgs.
+func (msgs Messages) StorageMoveOccupied(path string) string {
+	return Catalog.Format(msgs.locale, "storageMoveOccupied", map[string]any{"path": path})
+}
+
+// StorageMoveBusy says "Couldn't move the data: another SSHYard is still using it. It was left where it was."
+// in the language the app shows.
+func StorageMoveBusy() string { return In(i18n.Locale()).StorageMoveBusy() }
+
+// StorageMoveBusy says "Couldn't move the data: another SSHYard is still using it. It was left where it was."
+// in the language of msgs.
+func (msgs Messages) StorageMoveBusy() string {
+	return Catalog.Format(msgs.locale, "storageMoveBusy", nil)
 }
 
 // AboutSecrets says "Secret storage"
@@ -16323,16 +16463,6 @@ func (msgs Messages) AiRecentChats() string {
 	return Catalog.Format(msgs.locale, "aiRecentChats", nil)
 }
 
-// AiAgentForgot says "The agent does not remember the chat above. Your next question starts a new session."
-// in the language the app shows.
-func AiAgentForgot() string { return In(i18n.Locale()).AiAgentForgot() }
-
-// AiAgentForgot says "The agent does not remember the chat above. Your next question starts a new session."
-// in the language of msgs.
-func (msgs Messages) AiAgentForgot() string {
-	return Catalog.Format(msgs.locale, "aiAgentForgot", nil)
-}
-
 // AiHistorySaveFailed says "Could not save this chat to the host's history"
 // in the language the app shows.
 func AiHistorySaveFailed() string { return In(i18n.Locale()).AiHistorySaveFailed() }
@@ -20509,4 +20639,174 @@ func CompletionNoFolder() string { return In(i18n.Locale()).CompletionNoFolder()
 // in the language of msgs.
 func (msgs Messages) CompletionNoFolder() string {
 	return Catalog.Format(msgs.locale, "completionNoFolder", nil)
+}
+
+// SearchRemoteFiles says "Search Remote Files"
+// in the language the app shows.
+func SearchRemoteFiles() string { return In(i18n.Locale()).SearchRemoteFiles() }
+
+// SearchRemoteFiles says "Search Remote Files"
+// in the language of msgs.
+func (msgs Messages) SearchRemoteFiles() string {
+	return Catalog.Format(msgs.locale, "searchRemoteFiles", nil)
+}
+
+// SearchLocalFiles says "Search Local Files"
+// in the language the app shows.
+func SearchLocalFiles() string { return In(i18n.Locale()).SearchLocalFiles() }
+
+// SearchLocalFiles says "Search Local Files"
+// in the language of msgs.
+func (msgs Messages) SearchLocalFiles() string {
+	return Catalog.Format(msgs.locale, "searchLocalFiles", nil)
+}
+
+// FileSearchLabel says "File name to search"
+// in the language the app shows.
+func FileSearchLabel() string { return In(i18n.Locale()).FileSearchLabel() }
+
+// FileSearchLabel says "File name to search"
+// in the language of msgs.
+func (msgs Messages) FileSearchLabel() string {
+	return Catalog.Format(msgs.locale, "fileSearchLabel", nil)
+}
+
+// FileSearchPlaceholder says "Name, or a pattern such as *.log"
+// in the language the app shows.
+func FileSearchPlaceholder() string { return In(i18n.Locale()).FileSearchPlaceholder() }
+
+// FileSearchPlaceholder says "Name, or a pattern such as *.log"
+// in the language of msgs.
+func (msgs Messages) FileSearchPlaceholder() string {
+	return Catalog.Format(msgs.locale, "fileSearchPlaceholder", nil)
+}
+
+// FileSearchScope says "Search in"
+// in the language the app shows.
+func FileSearchScope() string { return In(i18n.Locale()).FileSearchScope() }
+
+// FileSearchScope says "Search in"
+// in the language of msgs.
+func (msgs Messages) FileSearchScope() string {
+	return Catalog.Format(msgs.locale, "fileSearchScope", nil)
+}
+
+// FileSearchHere says "This Folder"
+// in the language the app shows.
+func FileSearchHere() string { return In(i18n.Locale()).FileSearchHere() }
+
+// FileSearchHere says "This Folder"
+// in the language of msgs.
+func (msgs Messages) FileSearchHere() string {
+	return Catalog.Format(msgs.locale, "fileSearchHere", nil)
+}
+
+// FileSearchWholeDisk says "Whole Disk"
+// in the language the app shows.
+func FileSearchWholeDisk() string { return In(i18n.Locale()).FileSearchWholeDisk() }
+
+// FileSearchWholeDisk says "Whole Disk"
+// in the language of msgs.
+func (msgs Messages) FileSearchWholeDisk() string {
+	return Catalog.Format(msgs.locale, "fileSearchWholeDisk", nil)
+}
+
+// FileSearchStop says "Stop Searching"
+// in the language the app shows.
+func FileSearchStop() string { return In(i18n.Locale()).FileSearchStop() }
+
+// FileSearchStop says "Stop Searching"
+// in the language of msgs.
+func (msgs Messages) FileSearchStop() string {
+	return Catalog.Format(msgs.locale, "fileSearchStop", nil)
+}
+
+// FileSearchClose says "Close Search"
+// in the language the app shows.
+func FileSearchClose() string { return In(i18n.Locale()).FileSearchClose() }
+
+// FileSearchClose says "Close Search"
+// in the language of msgs.
+func (msgs Messages) FileSearchClose() string {
+	return Catalog.Format(msgs.locale, "fileSearchClose", nil)
+}
+
+// FileSearchSearching says "{count, plural, one {Searching… # match} other {Searching… # matches}}"
+// in the language the app shows.
+func FileSearchSearching(count int) string { return In(i18n.Locale()).FileSearchSearching(count) }
+
+// FileSearchSearching says "{count, plural, one {Searching… # match} other {Searching… # matches}}"
+// in the language of msgs.
+func (msgs Messages) FileSearchSearching(count int) string {
+	return Catalog.Format(msgs.locale, "fileSearchSearching", map[string]any{"count": count})
+}
+
+// FileSearchFound says "{count, plural, one {# match} other {# matches}}"
+// in the language the app shows.
+func FileSearchFound(count int) string { return In(i18n.Locale()).FileSearchFound(count) }
+
+// FileSearchFound says "{count, plural, one {# match} other {# matches}}"
+// in the language of msgs.
+func (msgs Messages) FileSearchFound(count int) string {
+	return Catalog.Format(msgs.locale, "fileSearchFound", map[string]any{"count": count})
+}
+
+// FileSearchStopped says "{count, plural, one {Stopped with # match} other {Stopped with # matches}}"
+// in the language the app shows.
+func FileSearchStopped(count int) string { return In(i18n.Locale()).FileSearchStopped(count) }
+
+// FileSearchStopped says "{count, plural, one {Stopped with # match} other {Stopped with # matches}}"
+// in the language of msgs.
+func (msgs Messages) FileSearchStopped(count int) string {
+	return Catalog.Format(msgs.locale, "fileSearchStopped", map[string]any{"count": count})
+}
+
+// FileSearchNone says "Nothing matches"
+// in the language the app shows.
+func FileSearchNone() string { return In(i18n.Locale()).FileSearchNone() }
+
+// FileSearchNone says "Nothing matches"
+// in the language of msgs.
+func (msgs Messages) FileSearchNone() string {
+	return Catalog.Format(msgs.locale, "fileSearchNone", nil)
+}
+
+// FileSearchCapped says "{count, plural, one {Showing the first # match. Narrow the search to see the rest.} other {Showing the first # matche…"
+// in the language the app shows.
+func FileSearchCapped(count int) string { return In(i18n.Locale()).FileSearchCapped(count) }
+
+// FileSearchCapped says "{count, plural, one {Showing the first # match. Narrow the search to see the rest.} other {Showing the first # matche…"
+// in the language of msgs.
+func (msgs Messages) FileSearchCapped(count int) string {
+	return Catalog.Format(msgs.locale, "fileSearchCapped", map[string]any{"count": count})
+}
+
+// FileSearchHint says "Type a name to search for. * matches any characters and ? any one."
+// in the language the app shows.
+func FileSearchHint() string { return In(i18n.Locale()).FileSearchHint() }
+
+// FileSearchHint says "Type a name to search for. * matches any characters and ? any one."
+// in the language of msgs.
+func (msgs Messages) FileSearchHint() string {
+	return Catalog.Format(msgs.locale, "fileSearchHint", nil)
+}
+
+// FileSearchShowInFolder says "Show in Folder"
+// in the language the app shows.
+func FileSearchShowInFolder() string { return In(i18n.Locale()).FileSearchShowInFolder() }
+
+// FileSearchShowInFolder says "Show in Folder"
+// in the language of msgs.
+func (msgs Messages) FileSearchShowInFolder() string {
+	return Catalog.Format(msgs.locale, "fileSearchShowInFolder", nil)
+}
+
+// FileSearchResults says "Search results"
+// in the language the app shows.
+func FileSearchResults() string { return In(i18n.Locale()).FileSearchResults() }
+
+// FileSearchResults says "Search results"
+// in the language of msgs.
+func (msgs Messages) FileSearchResults() string {
+	return Catalog.Format(msgs.locale, "fileSearchResults", nil)
 }

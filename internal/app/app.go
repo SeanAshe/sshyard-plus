@@ -70,6 +70,9 @@ type Platform struct {
 	// CacheDir is where files opened in another app are copied, the
 	// user's cache folder when "".
 	CacheDir string
+	// Storage is where the data may move, nil where it cannot (macOS,
+	// installed copies, a data folder set from outside).
+	Storage *Storage
 	// DataDir holds application metadata and encrypted credentials; it is required
 	// unless ResolveStorage supplies the persistent storage paths.
 	DataDir string
@@ -477,6 +480,7 @@ type App struct {
 	updProxy  string
 	themeIdx  int
 	autoRecon bool
+	storage   storageState
 	// lkChoice and lkMCPChoice are the switches of settings.LocalKeys and
 	// LocalKeysMCP.
 	lkChoice, lkMCPChoice bool
@@ -869,6 +873,7 @@ func (a *App) ApplySettings(s settings.Settings) error {
 
 // Start applies the saved theme and language to the window.
 func (a *App) Start() {
+	a.reportStorageMove()
 	a.loadFonts()
 	a.probeDesktop()
 	if a.p.SetTheme != nil {
@@ -1483,8 +1488,13 @@ func (a *App) finishCloseSession(c *conn) {
 	}
 	a.dropXferAsk(id)
 	a.keepRailWidth(c)
+	t, _ := a.ws.Locate(id)
+	active := t != nil && t == a.ws.ActiveTab()
 	a.ws.Close(id)
 	delete(a.conns, id)
+	if c.kind == layout.Files && active && a.ws.ActiveTab() == t {
+		a.focusFirstTerminal(t)
+	}
 	if c.kind == layout.Broadcast {
 		// Typing goes to several terminals only while the pane shows.
 		a.bc.live = false
@@ -1504,6 +1514,23 @@ func (a *App) finishCloseSession(c *conn) {
 	if !a.closing {
 		a.saveLayout()
 	}
+}
+
+// focusFirstTerminal gives tab t's focus, and the keyboard, to its
+// terminal opened first, so typing reaches the shell again once the
+// files pane closes. A tab without a terminal keeps its focus.
+func (a *App) focusFirstTerminal(t *layout.Tab) {
+	var first *layout.Node
+	for _, p := range t.Panes() {
+		if p.Item.Kind == layout.Terminal && a.conns[p.Item.ID] != nil && (first == nil || p.Item.ID < first.Item.ID) {
+			first = p
+		}
+	}
+	if first == nil {
+		return
+	}
+	t.Focus = first.ID
+	a.focusReq = first.Item.ID
 }
 
 // releaseTermNo forgets a host's pane numbers once its last terminal

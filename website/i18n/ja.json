@@ -219,7 +219,7 @@
         "req": "Windows x64 または Arm64 · 管理者権限は不要",
         "description": "Windows x64 / Arm64 版 SSHYard {version} をダウンロード。アプリ内アップデートに対応したインストーラーと、インストール不要のポータブル ZIP があります。AI アシスタント内蔵の無料 SSH / SFTP クライアント。",
         "files": {"win_setup": "x64 インストーラー", "win_portable": "x64 ポータブル ZIP", "win_setup_arm64": "Arm64 インストーラー", "win_portable_arm64": "Arm64 ポータブル ZIP"},
-        "steps": ["インストーラーは現在のユーザー向けに %LOCALAPPDATA%\\Programs へインストールし、アプリ内でアップデートできます。", "ポータブル版は ZIP を書き込み可能なフォルダに展開し、SSHYard.exe を実行してください。アプリのデータは %APPDATA%\\SSHYard に保存されます。"],
+        "steps": ["インストーラーは現在のユーザー向けに %LOCALAPPDATA%\\Programs へインストールし、アプリ内でアップデートできます。", "ポータブル版は ZIP を書き込み可能なフォルダに展開し、SSHYard.exe を実行してください。データは既定で %APPDATA%\\SSHYard に保存されます。設定 → このアプリについて → データの保存場所で「ポータブルフォルダー」を選ぶと、アプリの横の sshyard_data に移り、フォルダと一緒に移動します。システムキーチェーンの資格情報は今の Windows ユーザーでしか解除できず、マスターパスワードなら別のコンピューターでも解除できます。"],
         "verify": "Get-FileHash .\\sshyard-setup-{version}-amd64.exe -Algorithm SHA256"
       },
       "linux": {

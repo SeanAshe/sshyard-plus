@@ -33,7 +33,7 @@ Issuer ID 从 [App Store Connect](https://appstoreconnect.apple.com/access/integ
 
 Windows Arm64 在 GitHub 的 `windows-11-arm` 上原生构建，与 x64 一起进入 CI 产物和正式 Release
 
-Windows 的普通 CI、beta 与正式 Release 都额外按架构提供 `sshyard-<版本>-windows-<amd64|arm64>-portable.zip`；ZIP 直接归档 MyGo 构建的程序及完整资源，排除安装器、安装脚本和更新产物；正式 Release 将其纳入 `SHA256SUMS` 并提供下载链接，解压到可写目录后运行 `SSHYard.exe` 即可，无需安装；应用数据仍保存在 `%APPDATA%\SSHYard`，已保存凭据仍绑定当前 Windows 用户，不代表数据可随 ZIP 跨设备迁移
+Windows 的普通 CI、beta 与正式 Release 都额外按架构提供 `sshyard-<版本>-windows-<amd64|arm64>-portable.zip`；ZIP 直接归档 MyGo 构建的程序及完整资源，排除安装器、安装脚本和更新产物；正式 Release 将其纳入 `SHA256SUMS` 并提供下载链接，解压到可写目录后运行 `SSHYard.exe` 即可，无需安装。默认应用数据仍在 `%APPDATA%\SSHYard`。程序目录可写且没有 `Uninstall.exe` 时，设置 → 关于的「数据存储位置」可改为程序旁的 `sshyard_data`（Linux 便携 tar.gz 同样可选；macOS、安装版、不可写目录和设置了 `SSHYARD_DATA_DIR` 时不显示）：切换只写入请求并重启，迁移在下次启动、任何数据文件打开前完成，失败则数据保持原位。`sshyard_data` 随程序文件夹移动。使用系统钥匙串的凭据在其他电脑上无法解锁，需通过备份迁移；使用主密码的可直接解锁
 
 本地可运行 `python3 .github/windows-portable-test.py` 验证 ZIP 内容、无签名 beta 产物及下载链接，Windows CI 在归档前也会执行这些检查
 

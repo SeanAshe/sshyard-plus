@@ -219,7 +219,7 @@
         "req": "Windows x64 或 Arm64 · 無需系統管理員權限",
         "description": "下載 Windows x64 與 Arm64 版 SSHYard {version}：支援應用程式內更新的安裝程式，或免安裝的 ZIP。內建 AI 助理的免費 SSH / SFTP 用戶端。",
         "files": {"win_setup": "x64 安裝程式", "win_portable": "x64 免安裝 ZIP", "win_setup_arm64": "Arm64 安裝程式", "win_portable_arm64": "Arm64 免安裝 ZIP"},
-        "steps": ["安裝程式會為目前使用者安裝到 %LOCALAPPDATA%\\Programs，並支援應用程式內更新。", "免安裝版請將 ZIP 解壓縮到可寫入的資料夾，執行 SSHYard.exe 即可；應用程式資料儲存在 %APPDATA%\\SSHYard。"],
+        "steps": ["安裝程式會為目前使用者安裝到 %LOCALAPPDATA%\\Programs，並支援應用程式內更新。", "免安裝版請將 ZIP 解壓縮到可寫入的資料夾，執行 SSHYard.exe 即可。資料預設仍在 %APPDATA%\\SSHYard；在設定 → 關於 → 資料儲存位置選擇「可攜目錄」後，會改存到程式旁的 sshyard_data 並隨資料夾移動。系統鑰匙圈中的憑證仍只在目前 Windows 使用者下解鎖，使用主密碼的可在其他電腦解鎖。"],
         "verify": "Get-FileHash .\\sshyard-setup-{version}-amd64.exe -Algorithm SHA256"
       },
       "linux": {

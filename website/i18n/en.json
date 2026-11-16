@@ -219,7 +219,7 @@
         "req": "Windows x64 or Arm64 · no administrator rights needed",
         "description": "Download SSHYard {version} for Windows x64 and Arm64: an installer with in-app updates or a portable ZIP. Free SSH and SFTP client with an AI assistant.",
         "files": {"win_setup": "x64 installer", "win_portable": "x64 portable ZIP", "win_setup_arm64": "Arm64 installer", "win_portable_arm64": "Arm64 portable ZIP"},
-        "steps": ["The installer installs for the current user into %LOCALAPPDATA%\\Programs and updates from inside the app.", "For the portable version, extract the ZIP into a writable folder and run SSHYard.exe. App data is kept in %APPDATA%\\SSHYard."],
+        "steps": ["The installer installs for the current user into %LOCALAPPDATA%\\Programs and updates from inside the app.", "For the portable version, extract the ZIP into a writable folder and run SSHYard.exe. Data stays in %APPDATA%\\SSHYard unless you choose Portable under Settings → About → Data location, which stores it in sshyard_data beside the app. System-keychain secrets still unlock only for this Windows user; a master password unlocks them on another computer."],
         "verify": "Get-FileHash .\\sshyard-setup-{version}-amd64.exe -Algorithm SHA256"
       },
       "linux": {
