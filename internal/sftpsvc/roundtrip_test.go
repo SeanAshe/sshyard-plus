@@ -499,8 +499,14 @@ func TestIdleChannelClosesAfterTimeout(t *testing.T) {
 	}
 	sub.release(t.Context(), nil)
 	waitIdle(t, c, 0)
-	if sub.closed.Err() == nil {
-		t.Fatal("expired channel left open")
+	// drop removes the channel from the pool and then closes it. Under
+	// load those are not one step, so wait for the close itself.
+	deadline := time.Now().Add(2 * time.Second)
+	for sub.closed.Err() == nil {
+		if time.Now().After(deadline) {
+			t.Fatal("expired channel left open")
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }
 
