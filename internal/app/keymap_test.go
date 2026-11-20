@@ -201,36 +201,6 @@ func TestEditorRecordedSave(t *testing.T) {
 	waitFor(t, et, "saved", func() bool { return read(file) == "two\n" && !ed.saving })
 }
 
-// TestLockShortcutLeavesSessionLogs keeps upstream's ⌘L lock on macOS.
-// Elsewhere that binding is Ctrl+Shift+L, which session logs already
-// uses, so lock takes another key.
-func TestLockShortcutLeavesSessionLogs(t *testing.T) {
-	lock, ok := actionOf(actLock)
-	if !ok || lock.def != lockComboFor(runtime.GOOS) {
-		t.Fatalf("lock default = %v, want %s", lock.def, lockComboFor(runtime.GOOS))
-	}
-	logs, ok := actionOf(actSessionLogs)
-	if !ok || logs.def.Key != ui.KeyL {
-		t.Fatalf("session logs default = %v, want L", logs.def)
-	}
-	for _, goos := range []string{"darwin", "linux", "windows"} {
-		got := lockComboFor(goos)
-		logsMods := ui.Ctrl | ui.Shift
-		if goos == "darwin" {
-			logsMods = ui.Super | ui.Shift
-			if got != (keymap.Combo{Mods: ui.Super, Key: ui.KeyL}) {
-				t.Errorf("darwin lock = %s, want ⌘L", got)
-			}
-		}
-		if got == (keymap.Combo{Mods: logsMods, Key: ui.KeyL}) {
-			t.Errorf("%s: lock and session logs share %s", goos, got)
-		}
-		if slices.Contains(reserved(goos, false), got) {
-			t.Errorf("%s: lock defaults to the reserved %s", goos, got)
-		}
-	}
-}
-
 // TestDefaultShortcutsDistinct gives each action of the main window a
 // default shortcut of its own, one it may have.
 func TestDefaultShortcutsDistinct(t *testing.T) {

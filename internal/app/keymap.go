@@ -133,19 +133,8 @@ var actions = append([]action{
 	{actSessionLogs, locales.Messages.SessionLogs, icons.FileText, keymap.Combo{Mods: aiMods, Key: ui.KeyL}, false},
 	{actHistory, locales.Messages.CommandHistory, icons.History, keymap.Combo{Mods: aiMods, Key: ui.KeyH}, false},
 	{actCompletePath, locales.Messages.CompletePath, icons.PathList, keymap.Combo{Mods: appMods, Key: ui.KeyJ}, false},
-	{actLock, locales.Messages.AppLockAction, icons.Lock, lockComboFor(runtime.GOOS), false},
+	{actLock, locales.Messages.AppLockAction, icons.Lock, keymap.Combo{Mods: appMods, Key: ui.KeyY}, false},
 }, tabActions()...)
-
-// lockComboFor is the default Lock shortcut on goos. Upstream binds it to
-// appMods+L, which is ⌘L on macOS and stays clear of session logs (⌘⇧L).
-// On Windows and Linux appMods and the session-log modifiers are both
-// Ctrl+Shift, so L is already session logs and lock uses U.
-func lockComboFor(goos string) keymap.Combo {
-	if goos == "darwin" {
-		return keymap.Combo{Mods: ui.Super, Key: ui.KeyL}
-	}
-	return keymap.Combo{Mods: ui.Ctrl | ui.Shift, Key: ui.KeyU}
-}
 
 // actionOf is the action with id.
 func actionOf(id string) (action, bool) {
