@@ -2277,6 +2277,16 @@ func (msgs Messages) AuthAgent() string {
 	return Catalog.Format(msgs.locale, "authAgent", nil)
 }
 
+// AuthNone says "No password"
+// in the language the app shows.
+func AuthNone() string { return In(i18n.Locale()).AuthNone() }
+
+// AuthNone says "No password"
+// in the language of msgs.
+func (msgs Messages) AuthNone() string {
+	return Catalog.Format(msgs.locale, "authNone", nil)
+}
+
 // CredKindPassword says "Password"
 // in the language the app shows.
 func CredKindPassword() string { return In(i18n.Locale()).CredKindPassword() }
@@ -7025,6 +7035,16 @@ func AiContinue() string { return In(i18n.Locale()).AiContinue() }
 // in the language of msgs.
 func (msgs Messages) AiContinue() string {
 	return Catalog.Format(msgs.locale, "aiContinue", nil)
+}
+
+// AiRetry says "Retry"
+// in the language the app shows.
+func AiRetry() string { return In(i18n.Locale()).AiRetry() }
+
+// AiRetry says "Retry"
+// in the language of msgs.
+func (msgs Messages) AiRetry() string {
+	return Catalog.Format(msgs.locale, "aiRetry", nil)
 }
 
 // AiNoKey says "No API key is saved for this provider."

@@ -387,6 +387,8 @@ type App struct {
 	search      string
 	searchFocus bool // the search, its field or button, takes the focus next frame
 	searchOpen  bool // the search shows its field across the toolbar
+	// newTabQuery is the search of the "+" menu's hosts, while it shows.
+	newTabQuery string
 	// ping is the hosts' latency the sidebar shows
 	ping pingState
 	// multi is the sidebar choosing several hosts and groups
@@ -1374,6 +1376,12 @@ func (a *App) credentials(c *conn, h assets.Host) (session.Credentials, error) {
 		return a.hostCredentials(h, typed)
 	case assets.AuthAgent:
 		out.Agent = true
+	case assets.AuthNone:
+		if !h.SSH() {
+			// A Telnet or serial host logged in to by hand.
+			return out, session.ErrNoCredentials
+		}
+		out.None = true
 	case assets.AuthCredential:
 		cr, ok := a.store.Credential(h.CredentialID)
 		if !ok {
