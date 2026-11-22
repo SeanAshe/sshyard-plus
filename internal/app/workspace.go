@@ -689,6 +689,7 @@ func (a *App) termElement(c *ui.Context, t *layout.Tab, n *layout.Node, cn *conn
 	tv.cursorBlink = a.settings.TerminalCursorBlink
 	tv.stripe = a.settings.TerminalStripe
 	tv.lineNumbers, tv.timestamps = a.settings.TerminalLineNumbers, a.settings.TerminalTimestamps
+	tv.scrollOnKey = a.settings.TerminalScrollOnKey
 	tv.cursorStyle = vt.CursorBlock
 	switch a.settings.TerminalCursorStyle {
 	case settings.CursorBar:
