@@ -18,10 +18,10 @@ func fieldIs(err error, field, reason string) bool {
 func TestStreamHostNormalize(t *testing.T) {
 	tn := Host{Protocol: ProtoTelnet, Address: " switch.lan ", User: "admin", JumpChain: []string{"x"}, CwdFollow: true,
 		Metrics: MetricsOn, AskPassphrase: true, Serial: &SerialLine{Device: "COM1"}, AIPolicy: AIPolicy{Mode: "full"},
-		TerminalDir: "/srv", RemoteDir: "/srv", LocalDir: "/tmp", Tmux: "main", SFTPSudo: true}
+		TerminalDir: "/srv", RemoteDir: "/srv", LocalDir: "/tmp", Tmux: "main", SFTPSudo: true, FileProtocol: FileSCP}
 	tn.Normalize()
 	if tn.Port != 23 || tn.Auth != AuthNone || tn.JumpChain != nil || tn.CwdFollow || tn.Metrics != MetricsFollow ||
-		tn.AskPassphrase || tn.Serial != nil || tn.AIPolicy.Mode != "" || tn.TerminalDir != "" || tn.RemoteDir != "" || tn.LocalDir != "" || tn.Tmux != "" || tn.SFTPSudo {
+		tn.AskPassphrase || tn.Serial != nil || tn.AIPolicy.Mode != "" || tn.TerminalDir != "" || tn.RemoteDir != "" || tn.LocalDir != "" || tn.Tmux != "" || tn.SFTPSudo || tn.FileProtocol != FileAuto {
 		t.Fatalf("telnet %+v", tn)
 	}
 	if err := tn.Validate(); err != nil {
@@ -53,9 +53,9 @@ func TestStreamHostNormalize(t *testing.T) {
 		t.Fatalf("target %q", got)
 	}
 
-	ssh := Host{Address: "h", User: "u", NewLine: NewLineLF, LocalEcho: true, Serial: &SerialLine{Device: "COM1"}}
+	ssh := Host{Address: "h", User: "u", NewLine: NewLineLF, LocalEcho: true, Backspace: BackspaceBS, Serial: &SerialLine{Device: "COM1"}}
 	ssh.Normalize()
-	if ssh.NewLine != "" || ssh.LocalEcho || ssh.Serial != nil || !ssh.SSH() {
+	if ssh.NewLine != "" || ssh.LocalEcho || ssh.Backspace != "" || ssh.Serial != nil || !ssh.SSH() {
 		t.Fatalf("ssh %+v", ssh)
 	}
 }
@@ -77,6 +77,7 @@ func TestStreamHostValidate(t *testing.T) {
 		{Host{Protocol: ProtoTelnet, Address: "h", Auth: AuthAgent}, "auth", ""},
 		{Host{Protocol: ProtoTelnet, Address: "h", Auth: AuthCredential}, "credential", "required"},
 		{Host{Protocol: ProtoTelnet, Address: "h", NewLine: "nul"}, "newline", ""},
+		{Host{Protocol: ProtoTelnet, Address: "h", Backspace: "ctrl-x"}, "backspace", ""},
 		{Host{Protocol: "rlogin", Address: "h"}, "protocol", ""},
 	}
 	for _, tc := range cases {
@@ -222,5 +223,25 @@ func TestHostTerm(t *testing.T) {
 		if _, err := s.Add(h); !fieldIs(err, "term", "invalid") {
 			t.Errorf("%s with TERM %q: %v", h.Name, h.Term, err)
 		}
+	}
+}
+
+// TestHostFileProtocol: an SSH host's files protocol is one of three,
+// and scp's leaves sudo off, which only SFTP runs.
+func TestHostFileProtocol(t *testing.T) {
+	for _, p := range []FileProtocol{FileAuto, FileSFTP, FileSCP} {
+		h := Host{Address: "h", User: "u", FileProtocol: " " + p + " ", SFTPSudo: true}
+		h.Normalize()
+		if h.FileProtocol != p || h.SFTPSudo != (p != FileSCP) {
+			t.Errorf("%q: protocol %q sudo %v", p, h.FileProtocol, h.SFTPSudo)
+		}
+		if err := h.Validate(); err != nil {
+			t.Errorf("%q: %v", p, err)
+		}
+	}
+	h := Host{Address: "h", User: "u", FileProtocol: "ftp"}
+	h.Normalize()
+	if err := h.Validate(); !fieldIs(err, "fileProtocol", "unknown") {
+		t.Errorf("an unknown protocol: %v", err)
 	}
 }

@@ -11689,6 +11689,76 @@ func (msgs Messages) ConnectWithoutTmux() string {
 	return Catalog.Format(msgs.locale, "connectWithoutTmux", nil)
 }
 
+// StartupCommands says "Startup commands"
+// in the language the app shows.
+func StartupCommands() string { return In(i18n.Locale()).StartupCommands() }
+
+// StartupCommands says "Startup commands"
+// in the language of msgs.
+func (msgs Messages) StartupCommands() string {
+	return Catalog.Format(msgs.locale, "startupCommands", nil)
+}
+
+// StartupCommandsHint says "Typed line by line each time a terminal's shell starts, reconnects included: after the cd to the terminal folder and …"
+// in the language the app shows.
+func StartupCommandsHint() string { return In(i18n.Locale()).StartupCommandsHint() }
+
+// StartupCommandsHint says "Typed line by line each time a terminal's shell starts, reconnects included: after the cd to the terminal folder and …"
+// in the language of msgs.
+func (msgs Messages) StartupCommandsHint() string {
+	return Catalog.Format(msgs.locale, "startupCommandsHint", nil)
+}
+
+// StartupFromSnippet says "Add from snippet…"
+// in the language the app shows.
+func StartupFromSnippet() string { return In(i18n.Locale()).StartupFromSnippet() }
+
+// StartupFromSnippet says "Add from snippet…"
+// in the language of msgs.
+func (msgs Messages) StartupFromSnippet() string {
+	return Catalog.Format(msgs.locale, "startupFromSnippet", nil)
+}
+
+// StartupSnippetUnreadable says "Couldn't read that snippet."
+// in the language the app shows.
+func StartupSnippetUnreadable() string { return In(i18n.Locale()).StartupSnippetUnreadable() }
+
+// StartupSnippetUnreadable says "Couldn't read that snippet."
+// in the language of msgs.
+func (msgs Messages) StartupSnippetUnreadable() string {
+	return Catalog.Format(msgs.locale, "startupSnippetUnreadable", nil)
+}
+
+// StartupInvalid says "Startup commands can have at most 32 lines and 4 KB, and no tabs or other control characters."
+// in the language the app shows.
+func StartupInvalid() string { return In(i18n.Locale()).StartupInvalid() }
+
+// StartupInvalid says "Startup commands can have at most 32 lines and 4 KB, and no tabs or other control characters."
+// in the language of msgs.
+func (msgs Messages) StartupInvalid() string {
+	return Catalog.Format(msgs.locale, "startupInvalid", nil)
+}
+
+// StartupReadFailed says "Couldn't read the startup commands of {host}, so its terminal started without them."
+// in the language the app shows.
+func StartupReadFailed(host string) string { return In(i18n.Locale()).StartupReadFailed(host) }
+
+// StartupReadFailed says "Couldn't read the startup commands of {host}, so its terminal started without them."
+// in the language of msgs.
+func (msgs Messages) StartupReadFailed(host string) string {
+	return Catalog.Format(msgs.locale, "startupReadFailed", map[string]any{"host": host})
+}
+
+// ConnectWithoutStartup says "Connect Without Startup Commands"
+// in the language the app shows.
+func ConnectWithoutStartup() string { return In(i18n.Locale()).ConnectWithoutStartup() }
+
+// ConnectWithoutStartup says "Connect Without Startup Commands"
+// in the language of msgs.
+func (msgs Messages) ConnectWithoutStartup() string {
+	return Catalog.Format(msgs.locale, "connectWithoutStartup", nil)
+}
+
 // TmuxStartMissing says "tmux is not installed on {host}, so its terminals start without a tmux session."
 // in the language the app shows.
 func TmuxStartMissing(host string) string { return In(i18n.Locale()).TmuxStartMissing(host) }
@@ -16625,6 +16695,16 @@ func (msgs Messages) ScpFallbackNote() string {
 	return Catalog.Format(msgs.locale, "scpFallbackNote", nil)
 }
 
+// ScpChosenNote says "This host is set to move files with scp and shell commands. An upload is sent once it is complete."
+// in the language the app shows.
+func ScpChosenNote() string { return In(i18n.Locale()).ScpChosenNote() }
+
+// ScpChosenNote says "This host is set to move files with scp and shell commands. An upload is sent once it is complete."
+// in the language of msgs.
+func (msgs Messages) ScpChosenNote() string {
+	return Catalog.Format(msgs.locale, "scpChosenNote", nil)
+}
+
 // ColorScheme says "Color Scheme"
 // in the language the app shows.
 func ColorScheme() string { return In(i18n.Locale()).ColorScheme() }
@@ -18693,6 +18773,16 @@ func (msgs Messages) FieldNewLine() string {
 	return Catalog.Format(msgs.locale, "fieldNewLine", nil)
 }
 
+// FieldBackspace says "Backspace sends"
+// in the language the app shows.
+func FieldBackspace() string { return In(i18n.Locale()).FieldBackspace() }
+
+// FieldBackspace says "Backspace sends"
+// in the language of msgs.
+func (msgs Messages) FieldBackspace() string {
+	return Catalog.Format(msgs.locale, "fieldBackspace", nil)
+}
+
 // LocalEcho says "Local echo"
 // in the language the app shows.
 func LocalEcho() string { return In(i18n.Locale()).LocalEcho() }
@@ -20267,6 +20357,56 @@ func (msgs Messages) SftpSudoHint() string {
 	return Catalog.Format(msgs.locale, "sftpSudoHint", nil)
 }
 
+// FileProtocol says "File protocol"
+// in the language the app shows.
+func FileProtocol() string { return In(i18n.Locale()).FileProtocol() }
+
+// FileProtocol says "File protocol"
+// in the language of msgs.
+func (msgs Messages) FileProtocol() string {
+	return Catalog.Format(msgs.locale, "fileProtocol", nil)
+}
+
+// FileProtocolAuto says "Automatic"
+// in the language the app shows.
+func FileProtocolAuto() string { return In(i18n.Locale()).FileProtocolAuto() }
+
+// FileProtocolAuto says "Automatic"
+// in the language of msgs.
+func (msgs Messages) FileProtocolAuto() string {
+	return Catalog.Format(msgs.locale, "fileProtocolAuto", nil)
+}
+
+// FileProtocolAutoHint says "Files panes use SFTP, and the server's shell and scp when it has no SFTP."
+// in the language the app shows.
+func FileProtocolAutoHint() string { return In(i18n.Locale()).FileProtocolAutoHint() }
+
+// FileProtocolAutoHint says "Files panes use SFTP, and the server's shell and scp when it has no SFTP."
+// in the language of msgs.
+func (msgs Messages) FileProtocolAutoHint() string {
+	return Catalog.Format(msgs.locale, "fileProtocolAutoHint", nil)
+}
+
+// FileProtocolSftpHint says "Files panes use SFTP only; a server without it shows an error."
+// in the language the app shows.
+func FileProtocolSftpHint() string { return In(i18n.Locale()).FileProtocolSftpHint() }
+
+// FileProtocolSftpHint says "Files panes use SFTP only; a server without it shows an error."
+// in the language of msgs.
+func (msgs Messages) FileProtocolSftpHint() string {
+	return Catalog.Format(msgs.locale, "fileProtocolSftpHint", nil)
+}
+
+// FileProtocolScpHint says "Files panes list folders with the server's shell commands and move files with scp, for routers and other servers with…"
+// in the language the app shows.
+func FileProtocolScpHint() string { return In(i18n.Locale()).FileProtocolScpHint() }
+
+// FileProtocolScpHint says "Files panes list folders with the server's shell commands and move files with scp, for routers and other servers with…"
+// in the language of msgs.
+func (msgs Messages) FileProtocolScpHint() string {
+	return Catalog.Format(msgs.locale, "fileProtocolScpHint", nil)
+}
+
 // SudoPromptTitle says "sudo password for {host}"
 // in the language the app shows.
 func SudoPromptTitle(host string) string { return In(i18n.Locale()).SudoPromptTitle(host) }
@@ -21443,34 +21583,54 @@ func (msgs Messages) AppLockResetTitle() string {
 	return Catalog.Format(msgs.locale, "appLockResetTitle", nil)
 }
 
-// AppLockResetBody says "Resetting turns off the app lock and deletes every secret saved on this computer: passwords, private keys, passphrase…"
+// AppLockResetBody says "Resetting deletes everything SSHYard keeps on this computer: hosts, groups, settings, AI conversations and every save…"
 // in the language the app shows.
 func AppLockResetBody() string { return In(i18n.Locale()).AppLockResetBody() }
 
-// AppLockResetBody says "Resetting turns off the app lock and deletes every secret saved on this computer: passwords, private keys, passphrase…"
+// AppLockResetBody says "Resetting deletes everything SSHYard keeps on this computer: hosts, groups, settings, AI conversations and every save…"
 // in the language of msgs.
 func (msgs Messages) AppLockResetBody() string {
 	return Catalog.Format(msgs.locale, "appLockResetBody", nil)
 }
 
-// AppLockReset says "Reset and Delete Secrets"
+// AppLockReset says "Delete All Data and Restart"
 // in the language the app shows.
 func AppLockReset() string { return In(i18n.Locale()).AppLockReset() }
 
-// AppLockReset says "Reset and Delete Secrets"
+// AppLockReset says "Delete All Data and Restart"
 // in the language of msgs.
 func (msgs Messages) AppLockReset() string {
 	return Catalog.Format(msgs.locale, "appLockReset", nil)
 }
 
-// AppLockResetDone says "The app lock was reset and saved secrets were deleted."
+// AppLockResetDone says "The app lock was reset and SSHYard's data was deleted."
 // in the language the app shows.
 func AppLockResetDone() string { return In(i18n.Locale()).AppLockResetDone() }
 
-// AppLockResetDone says "The app lock was reset and saved secrets were deleted."
+// AppLockResetDone says "The app lock was reset and SSHYard's data was deleted."
 // in the language of msgs.
 func (msgs Messages) AppLockResetDone() string {
 	return Catalog.Format(msgs.locale, "appLockResetDone", nil)
+}
+
+// AppLockResetPending says "The app lock was reset. SSHYard restarts to finish deleting its data."
+// in the language the app shows.
+func AppLockResetPending() string { return In(i18n.Locale()).AppLockResetPending() }
+
+// AppLockResetPending says "The app lock was reset. SSHYard restarts to finish deleting its data."
+// in the language of msgs.
+func (msgs Messages) AppLockResetPending() string {
+	return Catalog.Format(msgs.locale, "appLockResetPending", nil)
+}
+
+// AppLockResetRestart says "Restart Now"
+// in the language the app shows.
+func AppLockResetRestart() string { return In(i18n.Locale()).AppLockResetRestart() }
+
+// AppLockResetRestart says "Restart Now"
+// in the language of msgs.
+func (msgs Messages) AppLockResetRestart() string {
+	return Catalog.Format(msgs.locale, "appLockResetRestart", nil)
 }
 
 // AppLockRestored says "The app lock was changed outside SSHYard and has been restored."

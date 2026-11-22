@@ -1,9 +1,9 @@
 // Package assets is SSHYard's asset store: the hosts the user saved, with
 // their groups and favorites, and the credentials, proxies and port
 // forwards they use, kept as JSON in the user's data directory.
-// Secrets are never stored here; they live in the system keychain
-// (package keychain), under the ID of the credential, proxy or forward
-// they belong to.
+// Secrets are never stored here; they live in the encrypted store
+// (package keychain), under the ID of the host, credential, proxy or
+// forward they belong to.
 package assets
 
 import (
@@ -107,10 +107,18 @@ type Host struct {
 	// SFTPSudo runs the SFTP server of an SSH host's Files panes as root
 	// through sudo, which the login password, or one typed, answers.
 	SFTPSudo bool `json:"sftpSudo,omitempty"`
+	// FileProtocol is how an SSH host's Files panes reach its files;
+	// with scp, SFTPSudo is off.
+	FileProtocol FileProtocol `json:"fileProtocol,omitempty"`
 	// Tmux is the tmux session an SSH host's terminals attach to each
 	// time their shell starts, created when there is none; empty is
 	// none.
 	Tmux string `json:"tmux,omitempty"`
+	// Startup is set when an SSH host's terminals type commands each
+	// time their shell starts, after the cd to TerminalDir and before
+	// the tmux attach; the commands are a host-owned secret
+	// (keychain.HostStartup).
+	Startup bool `json:"startup,omitempty"`
 	// OSC52 overrides the global OSC 52 write policy (allow, ask or
 	// deny). Empty follows the global setting.
 	OSC52 string `json:"osc52,omitempty"`
@@ -130,6 +138,9 @@ type Host struct {
 	// LocalEcho shows what is typed to a Telnet or serial host that
 	// does not echo it.
 	LocalEcho bool `json:"localEcho,omitempty"`
+	// Backspace is what the Backspace key sends to a Telnet or serial
+	// host.
+	Backspace Backspace `json:"backspace,omitempty"`
 	// Encoding is the output encoding the host's new terminals decode
 	// with, a vt.OutputEncoding; empty is UTF-8.
 	Encoding string `json:"encoding,omitempty"`
@@ -224,14 +235,19 @@ func (h *Host) Normalize() {
 		h.Color = ""
 	}
 	h.NewLine = NewLine(strings.TrimSpace(string(h.NewLine)))
+	h.Backspace = Backspace(strings.TrimSpace(string(h.Backspace)))
+	h.FileProtocol = FileProtocol(strings.TrimSpace(string(h.FileProtocol)))
 	if h.Port == 0 {
 		h.Port = h.Protocol.DefaultPort()
 	}
 	if !h.SSH() {
 		h.normalizeStream()
 	} else {
-		h.Serial, h.NewLine, h.LocalEcho = nil, "", false
+		h.Serial, h.NewLine, h.LocalEcho, h.Backspace = nil, "", false, ""
 		h.TerminalDir, h.RemoteDir, h.LocalDir = cleanDir(h.TerminalDir), cleanDir(h.RemoteDir), cleanDir(h.LocalDir)
+		if h.FileProtocol == FileSCP {
+			h.SFTPSudo = false
+		}
 	}
 	if h.Auth == "" {
 		h.Auth = AuthAsk
@@ -331,6 +347,8 @@ func (h Host) Validate() error {
 		return &FieldError{"auth", "unknown method"}
 	case h.Auth == AuthCredential && h.CredentialID == "":
 		return &FieldError{"credential", "required"}
+	case h.FileProtocol != FileAuto && h.FileProtocol != FileSFTP && h.FileProtocol != FileSCP:
+		return &FieldError{"fileProtocol", "unknown"}
 	}
 	return nil
 }
