@@ -143,6 +143,8 @@ type Settings struct {
 	// KeepAwake keeps the computer from sleeping while files transfer:
 	// the display may still turn off.
 	KeepAwake bool `json:"keepAwake"`
+	// DownloadDir is this device's download folder; empty uses the default.
+	DownloadDir string `json:"downloadDir,omitempty"`
 	// OpenConfirmMB is the size, in MB, from which opening a remote file
 	// (in the editor or a local program) asks first, 1 to 1024.
 	OpenConfirmMB int `json:"openConfirmMB"`
@@ -337,6 +339,9 @@ const (
 	BackupWebDAV = "webdav"
 	BackupS3     = "s3"
 	BackupGist   = "gist"
+	// BackupFolder is a folder of this computer, most often one a sync
+	// client such as iCloud Drive carries to other devices.
+	BackupFolder = "folder"
 )
 
 // BackupAutoHours are the times between automatic backups a target may
@@ -351,7 +356,7 @@ const (
 )
 
 // BackupTarget is a place backups go: a folder on a WebDAV server, an S3
-// bucket or a GitHub gist. Its password, secret key or token is in the
+// bucket, a GitHub gist or a (synced) folder of this computer. Its password, secret key or token is in the
 // keychain (keychain.BackupSecret), and so is the key its backups are
 // sealed with, by hand or automatically (keychain.BackupKey).
 type BackupTarget struct {
@@ -364,8 +369,8 @@ type BackupTarget struct {
 	User   string `json:"user,omitempty"`
 	Bucket string `json:"bucket,omitempty"`
 	Region string `json:"region,omitempty"`
-	// Dir is the folder on the WebDAV server, or the key prefix in the
-	// bucket.
+	// Dir is the folder on the WebDAV server, the key prefix in the
+	// bucket, or the full path of a folder of this computer.
 	Dir string `json:"dir,omitempty"`
 	// PathStyle names the bucket in the path rather than the host name.
 	PathStyle bool `json:"pathStyle,omitempty"`
@@ -387,7 +392,9 @@ type BackupTarget struct {
 }
 
 // backupKindOK reports whether k is a kind of BackupTarget.
-func backupKindOK(k string) bool { return k == BackupWebDAV || k == BackupS3 || k == BackupGist }
+func backupKindOK(k string) bool {
+	return k == BackupWebDAV || k == BackupS3 || k == BackupGist || k == BackupFolder
+}
 
 // backupIDOK reports whether id can name a target, and its keychain entries.
 func backupIDOK(id string) bool {

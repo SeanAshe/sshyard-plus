@@ -42,6 +42,7 @@ SSHYard 是一款原生桌面 SSH / SFTP 客户端，支持 macOS、Windows 和 
   - 多种输出编码，可按主机设置；⌘ / Ctrl + 点击打开终端中的网址，⌥ / Alt + 拖动进行矩形块选择
   - 输入时根据主机的 Shell 历史提示命令，按 → 或 End 采纳，并可列出文件夹中的文件来补全路径
   - 除 SSH 外还支持 Telnet、串口和本地终端（Windows 可选 PowerShell、CMD、Git Bash 与 WSL）
+  - 通过 `sshyard --path <文件夹>`，或在 Finder 中对文件夹选择“打开方式 → SSHYard”，在指定文件夹打开本地终端；应用已打开时再次执行会复用现有窗口
   - 同一主机的多个面板共享连接，断线自动重连，网络切换或从睡眠唤醒后立即重连并回到原来的文件夹
 
 - **工作区**
@@ -79,7 +80,7 @@ SSHYard 是一款原生桌面 SSH / SFTP 客户端，支持 macOS、Windows 和 
 
 - **备份与恢复**
   - 密码加密备份主机、凭据、快捷指令和设置，支持跨设备恢复
-  - 保存到本地、WebDAV、S3 兼容存储或 GitHub 私密 Gist
+  - 保存到本地、WebDAV、S3 兼容存储、GitHub 私密 Gist，或 iCloud 云盘、OneDrive、Dropbox 等同步文件夹
   - 支持手动与定时备份，可设置保留份数
 
 - **网络连接**

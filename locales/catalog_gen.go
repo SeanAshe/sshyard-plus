@@ -4677,6 +4677,46 @@ func (msgs Messages) TransferSummary(active string, done string, total string) s
 	return Catalog.Format(msgs.locale, "transferSummary", map[string]any{"active": active, "done": done, "total": total})
 }
 
+// DefaultDownloadFolder says "Default download folder"
+// in the language the app shows.
+func DefaultDownloadFolder() string { return In(i18n.Locale()).DefaultDownloadFolder() }
+
+// DefaultDownloadFolder says "Default download folder"
+// in the language of msgs.
+func (msgs Messages) DefaultDownloadFolder() string {
+	return Catalog.Format(msgs.locale, "defaultDownloadFolder", nil)
+}
+
+// DefaultDownloadFolderNote says "The local Files pane and download dialogs start here. Files received in the terminal are saved here by default."
+// in the language the app shows.
+func DefaultDownloadFolderNote() string { return In(i18n.Locale()).DefaultDownloadFolderNote() }
+
+// DefaultDownloadFolderNote says "The local Files pane and download dialogs start here. Files received in the terminal are saved here by default."
+// in the language of msgs.
+func (msgs Messages) DefaultDownloadFolderNote() string {
+	return Catalog.Format(msgs.locale, "defaultDownloadFolderNote", nil)
+}
+
+// ChangeDownloadFolder says "Change Download Folder"
+// in the language the app shows.
+func ChangeDownloadFolder() string { return In(i18n.Locale()).ChangeDownloadFolder() }
+
+// ChangeDownloadFolder says "Change Download Folder"
+// in the language of msgs.
+func (msgs Messages) ChangeDownloadFolder() string {
+	return Catalog.Format(msgs.locale, "changeDownloadFolder", nil)
+}
+
+// ResetDownloadFolder says "Restore the Default Download Folder"
+// in the language the app shows.
+func ResetDownloadFolder() string { return In(i18n.Locale()).ResetDownloadFolder() }
+
+// ResetDownloadFolder says "Restore the Default Download Folder"
+// in the language of msgs.
+func (msgs Messages) ResetDownloadFolder() string {
+	return Catalog.Format(msgs.locale, "resetDownloadFolder", nil)
+}
+
 // TransferConcurrency says "Transfers at once"
 // in the language the app shows.
 func TransferConcurrency() string { return In(i18n.Locale()).TransferConcurrency() }
@@ -8737,6 +8777,18 @@ func (msgs Messages) LocalTerminalWith(name string) string {
 	return Catalog.Format(msgs.locale, "localTerminalWith", map[string]any{"name": name})
 }
 
+// LocalTerminalDirFailed says "Could not open a local terminal in {path}."
+// in the language the app shows.
+func LocalTerminalDirFailed(path string) string {
+	return In(i18n.Locale()).LocalTerminalDirFailed(path)
+}
+
+// LocalTerminalDirFailed says "Could not open a local terminal in {path}."
+// in the language of msgs.
+func (msgs Messages) LocalTerminalDirFailed(path string) string {
+	return Catalog.Format(msgs.locale, "localTerminalDirFailed", map[string]any{"path": path})
+}
+
 // NewGroup says "New group"
 // in the language the app shows.
 func NewGroup() string { return In(i18n.Locale()).NewGroup() }
@@ -12589,11 +12641,11 @@ func (msgs Messages) NoBackupTargets() string {
 	return Catalog.Format(msgs.locale, "noBackupTargets", nil)
 }
 
-// NoBackupTargetsNote says "Back up to a folder on a WebDAV server, an S3 bucket or a GitHub gist."
+// NoBackupTargetsNote says "Back up to a folder on a WebDAV server, an S3 bucket, a GitHub gist or a sync folder such as iCloud Drive."
 // in the language the app shows.
 func NoBackupTargetsNote() string { return In(i18n.Locale()).NoBackupTargetsNote() }
 
-// NoBackupTargetsNote says "Back up to a folder on a WebDAV server, an S3 bucket or a GitHub gist."
+// NoBackupTargetsNote says "Back up to a folder on a WebDAV server, an S3 bucket, a GitHub gist or a sync folder such as iCloud Drive."
 // in the language of msgs.
 func (msgs Messages) NoBackupTargetsNote() string {
 	return Catalog.Format(msgs.locale, "noBackupTargetsNote", nil)
@@ -13051,14 +13103,116 @@ func (msgs Messages) ErrCloudAuth() string {
 	return Catalog.Format(msgs.locale, "errCloudAuth", nil)
 }
 
-// ErrCloudNotFound says "Not found. Check the address, bucket or gist."
+// ErrCloudNotFound says "Not found. Check the address, bucket, gist or folder."
 // in the language the app shows.
 func ErrCloudNotFound() string { return In(i18n.Locale()).ErrCloudNotFound() }
 
-// ErrCloudNotFound says "Not found. Check the address, bucket or gist."
+// ErrCloudNotFound says "Not found. Check the address, bucket, gist or folder."
 // in the language of msgs.
 func (msgs Messages) ErrCloudNotFound() string {
 	return Catalog.Format(msgs.locale, "errCloudNotFound", nil)
+}
+
+// BackupKindFolder says "Sync folder"
+// in the language the app shows.
+func BackupKindFolder() string { return In(i18n.Locale()).BackupKindFolder() }
+
+// BackupKindFolder says "Sync folder"
+// in the language of msgs.
+func (msgs Messages) BackupKindFolder() string {
+	return Catalog.Format(msgs.locale, "backupKindFolder", nil)
+}
+
+// BackupKindFolderVia says "Sync folder ({provider})"
+// in the language the app shows.
+func BackupKindFolderVia(provider string) string {
+	return In(i18n.Locale()).BackupKindFolderVia(provider)
+}
+
+// BackupKindFolderVia says "Sync folder ({provider})"
+// in the language of msgs.
+func (msgs Messages) BackupKindFolderVia(provider string) string {
+	return Catalog.Format(msgs.locale, "backupKindFolderVia", map[string]any{"provider": provider})
+}
+
+// BackupKindOtherFolder says "Other folder"
+// in the language the app shows.
+func BackupKindOtherFolder() string { return In(i18n.Locale()).BackupKindOtherFolder() }
+
+// BackupKindOtherFolder says "Other folder"
+// in the language of msgs.
+func (msgs Messages) BackupKindOtherFolder() string {
+	return Catalog.Format(msgs.locale, "backupKindOtherFolder", nil)
+}
+
+// SyncFolderPath says "Folder"
+// in the language the app shows.
+func SyncFolderPath() string { return In(i18n.Locale()).SyncFolderPath() }
+
+// SyncFolderPath says "Folder"
+// in the language of msgs.
+func (msgs Messages) SyncFolderPath() string {
+	return Catalog.Format(msgs.locale, "syncFolderPath", nil)
+}
+
+// SyncFolderPlaceholder says "Full path of the folder"
+// in the language the app shows.
+func SyncFolderPlaceholder() string { return In(i18n.Locale()).SyncFolderPlaceholder() }
+
+// SyncFolderPlaceholder says "Full path of the folder"
+// in the language of msgs.
+func (msgs Messages) SyncFolderPlaceholder() string {
+	return Catalog.Format(msgs.locale, "syncFolderPlaceholder", nil)
+}
+
+// ChooseSyncFolder says "Choose folder"
+// in the language the app shows.
+func ChooseSyncFolder() string { return In(i18n.Locale()).ChooseSyncFolder() }
+
+// ChooseSyncFolder says "Choose folder"
+// in the language of msgs.
+func (msgs Messages) ChooseSyncFolder() string {
+	return Catalog.Format(msgs.locale, "chooseSyncFolder", nil)
+}
+
+// SyncFolderNote says "Backups are written to this folder, and iCloud Drive, OneDrive, Dropbox or another sync client carries them to your o…"
+// in the language the app shows.
+func SyncFolderNote() string { return In(i18n.Locale()).SyncFolderNote() }
+
+// SyncFolderNote says "Backups are written to this folder, and iCloud Drive, OneDrive, Dropbox or another sync client carries them to your o…"
+// in the language of msgs.
+func (msgs Messages) SyncFolderNote() string {
+	return Catalog.Format(msgs.locale, "syncFolderNote", nil)
+}
+
+// ICloudDriveOff says "iCloud Drive was not found. To back up to iCloud, turn on iCloud Drive in System Settings → Apple Account → iClou…"
+// in the language the app shows.
+func ICloudDriveOff() string { return In(i18n.Locale()).ICloudDriveOff() }
+
+// ICloudDriveOff says "iCloud Drive was not found. To back up to iCloud, turn on iCloud Drive in System Settings → Apple Account → iClou…"
+// in the language of msgs.
+func (msgs Messages) ICloudDriveOff() string {
+	return Catalog.Format(msgs.locale, "iCloudDriveOff", nil)
+}
+
+// ErrTargetFolder says "Enter the full path of the folder."
+// in the language the app shows.
+func ErrTargetFolder() string { return In(i18n.Locale()).ErrTargetFolder() }
+
+// ErrTargetFolder says "Enter the full path of the folder."
+// in the language of msgs.
+func (msgs Messages) ErrTargetFolder() string {
+	return Catalog.Format(msgs.locale, "errTargetFolder", nil)
+}
+
+// ErrFolderDenied says "SSHYard may not use this folder. Check its permissions; on macOS, also allow SSHYard in System Settings → Privacy &…"
+// in the language the app shows.
+func ErrFolderDenied() string { return In(i18n.Locale()).ErrFolderDenied() }
+
+// ErrFolderDenied says "SSHYard may not use this folder. Check its permissions; on macOS, also allow SSHYard in System Settings → Privacy &…"
+// in the language of msgs.
+func (msgs Messages) ErrFolderDenied() string {
+	return Catalog.Format(msgs.locale, "errFolderDenied", nil)
 }
 
 // ErrCloudTooLarge says "The file is too large."
@@ -20715,11 +20869,11 @@ func (msgs Messages) TermXferChooseFiles() string {
 	return Catalog.Format(msgs.locale, "termXferChooseFiles", nil)
 }
 
-// TermXferSaveDownloads says "Save to Downloads"
+// TermXferSaveDownloads says "Save to Download Folder"
 // in the language the app shows.
 func TermXferSaveDownloads() string { return In(i18n.Locale()).TermXferSaveDownloads() }
 
-// TermXferSaveDownloads says "Save to Downloads"
+// TermXferSaveDownloads says "Save to Download Folder"
 // in the language of msgs.
 func (msgs Messages) TermXferSaveDownloads() string {
 	return Catalog.Format(msgs.locale, "termXferSaveDownloads", nil)

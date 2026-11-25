@@ -116,7 +116,7 @@ func envBlock(env []string) *uint16 {
 	return &b[0]
 }
 
-func startLocal(sh Shell, cols, rows int, term string) (localPTY, error) {
+func startLocal(sh Shell, dir string, cols, rows int, term string) (localPTY, error) {
 	var inR, inW, outR, outW windows.Handle
 	if err := windows.CreatePipe(&inR, &inW, nil, 0); err != nil {
 		return nil, err
@@ -137,7 +137,7 @@ func startLocal(sh Shell, cols, rows int, term string) (localPTY, error) {
 		return nil, err
 	}
 	p := &conPTY{hpc: hpc, in: os.NewFile(uintptr(inW), "conpty-in"), out: os.NewFile(uintptr(outR), "conpty-out"), done: make(chan struct{})}
-	if err := p.spawn(sh, localEnv(sh, term)); err != nil {
+	if err := p.spawn(sh, localEnv(sh, term), dir); err != nil {
 		p.closeConsole()
 		return nil, err
 	}
@@ -148,8 +148,8 @@ func startLocal(sh Shell, cols, rows int, term string) (localPTY, error) {
 	return p, nil
 }
 
-// spawn starts sh attached to the console, in the user's home.
-func (p *conPTY) spawn(sh Shell, env []string) error {
+// spawn starts sh attached to the console, in dir or the user's home.
+func (p *conPTY) spawn(sh Shell, env []string, dir string) error {
 	attrs, err := windows.NewProcThreadAttributeList(1)
 	if err != nil {
 		return err
@@ -164,16 +164,16 @@ func (p *conPTY) spawn(sh Shell, env []string) error {
 	si.Cb = uint32(unsafe.Sizeof(*si))
 	// No standard handles of ours: the console's are the shell's.
 	si.Flags = windows.STARTF_USESTDHANDLES
-	cmd, err := windows.UTF16PtrFromString(windows.ComposeCommandLine(append([]string{sh.Path}, sh.Args...)))
+	cmd, err := windows.UTF16PtrFromString(windows.ComposeCommandLine(append([]string{sh.Path}, argsAt(sh, dir)...)))
 	if err != nil {
 		return err
 	}
-	var dir *uint16
-	if home, err := os.UserHomeDir(); err == nil {
-		dir, _ = windows.UTF16PtrFromString(home)
+	var wd *uint16
+	if dir := localDir(dir); dir != "" {
+		wd, _ = windows.UTF16PtrFromString(dir)
 	}
 	var pi windows.ProcessInformation
-	if err := windows.CreateProcess(nil, cmd, nil, nil, false, windows.EXTENDED_STARTUPINFO_PRESENT|windows.CREATE_UNICODE_ENVIRONMENT, envBlock(env), dir, &si.StartupInfo, &pi); err != nil {
+	if err := windows.CreateProcess(nil, cmd, nil, nil, false, windows.EXTENDED_STARTUPINFO_PRESENT|windows.CREATE_UNICODE_ENVIRONMENT, envBlock(env), wd, &si.StartupInfo, &pi); err != nil {
 		return err
 	}
 	windows.CloseHandle(pi.Thread)
@@ -199,6 +199,51 @@ func (p *conPTY) Wait() error {
 	}
 	return nil
 }
+
+// ClearScreen tells the console that the terminal cleared its screen, as
+// Windows Terminal's ClearPseudoConsole does: the console clears its
+// buffer and repaints with the cursor's line at the top. Without it, the
+// console keeps the prompt on its old row and, as it redraws with
+// absolute cursor moves (PSReadLine's predictions), takes the cursor back
+// down there. It does nothing before Windows 11 24H2, whose console may
+// shut down on a signal it doesn't know, or once the console is closed.
+func (p *conPTY) ClearScreen() error {
+	if windowsBuild() < 26100 || p.hpc == 0 {
+		return nil
+	}
+	select {
+	case <-p.done:
+		return nil
+	default:
+	}
+	// kernel32 doesn't export ClearPseudoConsole. The HPCON points at the
+	// console's handles, first the pipe of its signals, which take a
+	// 16-bit code: PTY_SIGNAL_CLEAR_WINDOW is 2.
+	signals := **(**windows.Handle)(unsafe.Pointer(&p.hpc))
+	var n uint32
+	return windows.WriteFile(signals, []byte{2, 0}, &n, nil)
+}
+
+var procRtlGetVersion = windows.NewLazySystemDLL("ntdll.dll").NewProc("RtlGetVersion")
+
+// windowsBuild returns the build of Windows 10 or 11, the maximum on a
+// later major version. RtlGetVersion tells the version whatever the
+// executable's manifest declares.
+var windowsBuild = sync.OnceValue(func() uint32 {
+	var v struct {
+		size, major, minor, build, platform uint32
+		servicePack                         [128]uint16
+	}
+	v.size = uint32(unsafe.Sizeof(v))
+	procRtlGetVersion.Call(uintptr(unsafe.Pointer(&v)))
+	switch {
+	case v.major > 10:
+		return ^uint32(0)
+	case v.major < 10:
+		return 0
+	}
+	return v.build
+})
 
 // Close closes the console, which ends the shell attached to it.
 func (p *conPTY) Close() error {

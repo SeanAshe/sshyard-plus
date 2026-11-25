@@ -42,6 +42,7 @@ SSHYard is a native desktop SSH / SFTP client for macOS, Windows and Linux, brin
   - Many output encodings, set per host; ⌘ / Ctrl-click to open links in the terminal, ⌥ / Alt-drag for block selection
   - Command suggestions from the host's shell history as you type, accepted with → or End, and a list of the folder's files to complete paths from
   - Telnet, serial ports and local terminals besides SSH (PowerShell, CMD, Git Bash and WSL on Windows)
+  - Open a local terminal in a folder with `sshyard --path <folder>`, or choose SSHYard in Finder's Open With for a folder; running it again while the app is open uses the existing window
   - Shared connections across panes on the same host, with automatic reconnection that acts at once on a network change or wake from sleep and returns the shell to its folder
 
 - **Workspace**
@@ -79,7 +80,7 @@ SSHYard is a native desktop SSH / SFTP client for macOS, Windows and Linux, brin
 
 - **Backup and restore**
   - Password-encrypted backups of hosts, credentials, snippets and settings, with restore on another device
-  - Save locally or to WebDAV, S3-compatible storage and private GitHub Gists
+  - Save locally or to WebDAV, S3-compatible storage, private GitHub Gists or a sync folder such as iCloud Drive, OneDrive or Dropbox
   - Manual or scheduled backups, with configurable retention
 
 - **Networking**

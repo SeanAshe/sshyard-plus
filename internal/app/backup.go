@@ -16,6 +16,7 @@ import (
 
 	"github.com/Licoy/sshyard/internal/assets"
 	"github.com/Licoy/sshyard/internal/backup"
+	"github.com/Licoy/sshyard/internal/backup/folder"
 	"github.com/Licoy/sshyard/internal/backup/gist"
 	"github.com/Licoy/sshyard/internal/icons"
 	"github.com/Licoy/sshyard/internal/keychain"
@@ -398,9 +399,9 @@ func backupIDs(snap assets.Snapshot, provs []settings.AIProvider) []string {
 // device, cur: what belongs to this device stays (the window's layout and
 // materials, the layout of its files panes and editor windows, the fonts
 // installed here, the MCP endpoint, the places it backs up to and its
-// default backup password, the folder of its session logs, the external
-// ACP agents it starts and its default agent), AI providers are merged by
-// ID and the hosts that confirmed AI use are joined.
+// default backup password, its download and session log folders, the
+// external ACP agents it starts and its default agent), AI providers are
+// merged by ID and the hosts that confirmed AI use are joined.
 func mergeSettings(cur, in settings.Settings) settings.Settings {
 	out := in
 	out.Background = cur.Background
@@ -410,6 +411,7 @@ func mergeSettings(cur, in settings.Settings) settings.Settings {
 	out.TrayClick, out.TrayMaterial, out.TrayHeight = cur.TrayClick, cur.TrayMaterial, cur.TrayHeight
 	out.UIFont, out.TerminalFont = cur.UIFont, cur.TerminalFont
 	out.FilesDual, out.FilesSplit = cur.FilesDual, cur.FilesSplit
+	out.DownloadDir = cur.DownloadDir
 	out.EditorTreeWidth, out.EditorTreeHidden = cur.EditorTreeWidth, cur.EditorTreeHidden
 	// A backup never turns the MCP endpoint on, nor lets it use the keys
 	// of this computer: that is asked here.
@@ -458,6 +460,10 @@ func backupErrText(m locales.Messages, err error) string {
 		return m.ErrCloudTooLarge()
 	case errors.Is(err, backup.ErrAuth), errors.Is(err, gist.ErrToken):
 		return m.ErrCloudAuth()
+	case errors.Is(err, folder.ErrPath):
+		return m.ErrTargetFolder()
+	case errors.Is(err, folder.ErrDenied):
+		return m.ErrFolderDenied()
 	case errors.Is(err, backup.ErrNotFound):
 		return m.ErrCloudNotFound()
 	case errors.Is(err, errBackupKey):

@@ -28,6 +28,7 @@ import (
 	"github.com/Licoy/sshyard/internal/ai/policy"
 	"github.com/Licoy/sshyard/internal/assets"
 	"github.com/Licoy/sshyard/internal/awake"
+	"github.com/Licoy/sshyard/internal/backup/folder"
 	"github.com/Licoy/sshyard/internal/forward"
 	"github.com/Licoy/sshyard/internal/highlight"
 	"github.com/Licoy/sshyard/internal/keychain"
@@ -109,8 +110,8 @@ type Platform struct {
 	OpenWindow func(spec WindowSpec) Window
 	// Dial replaces net.Dialer, for tests.
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
-	// HomeDir is where the local side of a files pane starts, and whose
-	// .ssh/config the import reads; "" is the user's home.
+	// HomeDir overrides the user's home for tests, including where the
+	// app looks for Downloads and .ssh/config.
 	HomeDir string
 	// LocalUser is the login name a host without one defaults to, as ssh
 	// does; "" is the user running the app.
@@ -286,6 +287,9 @@ type sessTarget struct{ s *session.Session }
 
 func (t sessTarget) Terminal() *vt.Terminal { return t.s.Term }
 func (t sessTarget) Resize(cols, rows int)  { t.s.Resize(cols, rows) }
+
+// ClearScreen tells a local console that the terminal cleared its screen.
+func (t sessTarget) ClearScreen() { t.s.ClearScreen() }
 
 // Write sends typed input without waiting for the connection.
 func (t sessTarget) Write(p []byte) (int, error) {
@@ -625,6 +629,10 @@ type App struct {
 	// localName is what local terminals are called, in the language of
 	// the last frame.
 	localName string
+	// Launch requests wait for startup and the app lock. The UI thread
+	// owns this state.
+	launchDirs  []string
+	launchReady bool
 	// logs is the session logs pane's.
 	logs logsState
 	// toolNames are what the tool panes are called, in the language of
@@ -677,7 +685,9 @@ type App struct {
 	// cloud is what this device knows of the places it backs up to, read
 	// once; cloudCtx ends their requests when the app closes. target is
 	// the backup location sheet open, remotes the sheet of a place's
-	// backups. gistAPI replaces GitHub's API, for tests.
+	// backups. gistAPI replaces GitHub's API, for tests. places are the
+	// sync clients' folders found here, once placesOK says they were
+	// looked for.
 	cloud         *cloudState
 	cloudCtx      context.Context
 	cloudStop     context.CancelFunc
@@ -687,6 +697,8 @@ type App struct {
 	remotes       *remoteList
 	listingRemote bool
 	gistAPI       string
+	places        []folder.Place
+	placesOK      bool
 }
 
 // New opens the app's data.
@@ -931,17 +943,17 @@ func (a *App) startIndependent() {
 	a.watchNetwork()
 	a.watchSleep()
 	a.loadLayout()
-	if a.settings.OpenLocalOnStart {
-		a.post(func() {
-			if len(a.ws.Tabs) == 0 {
-				a.OpenLocalTerminal()
-			}
-		})
-	}
 	if root, err := a.cacheDir(); err == nil {
 		go cleanCache(root)
 	}
 	a.startRenewalReminders()
+	a.post(func() {
+		a.launchReady = true
+		if len(a.launchDirs) == 0 && a.settings.OpenLocalOnStart && len(a.ws.Tabs) == 0 {
+			a.OpenLocalTerminal()
+		}
+		a.openLaunchDirs()
+	})
 }
 
 // post runs fn on the UI thread, without requiring a visible window.
@@ -1024,7 +1036,7 @@ func (a *App) Close() {
 	a.waitMCP()
 	if !a.closing {
 		a.closing = true
-		a.saveLayout()
+		a.flushLayout()
 	}
 	for _, c := range a.conns {
 		if c.kind == layout.AI {
@@ -1069,10 +1081,15 @@ func (a *App) OpenFiles(hostID string, at openAt, from *conn) (int, error) {
 }
 
 func (a *App) open(hostID string, kind layout.Kind, at openAt, from *conn) (int, error) {
+	return a.openIn(hostID, kind, at, from, "")
+}
+
+// openIn is open, with dir the folder a local terminal starts in.
+func (a *App) openIn(hostID string, kind layout.Kind, at openAt, from *conn, dir string) (int, error) {
 	if ex := a.singleAt(kind, at); ex != nil {
 		return a.reuse(ex, hostID, 0)
 	}
-	c, err := a.makeConn(hostID, kind, 0)
+	c, err := a.makeConnIn(hostID, kind, 0, dir)
 	var inUse *serialInUseError
 	if errors.As(err, &inUse) {
 		// A serial port opens once: its pane is the host's terminal.
@@ -1089,6 +1106,11 @@ func (a *App) open(hostID string, kind layout.Kind, at openAt, from *conn) (int,
 // makeConn builds a pane and registers it. It does not place or start it.
 // An AI pane gets no SSH session.
 func (a *App) makeConn(hostID string, kind layout.Kind, link int) (*conn, error) {
+	return a.makeConnIn(hostID, kind, link, "")
+}
+
+// makeConnIn is makeConn, with dir the folder a local terminal starts in.
+func (a *App) makeConnIn(hostID string, kind layout.Kind, link int, dir string) (*conn, error) {
 	if !a.ready() {
 		return nil, keychain.ErrLocked
 	}
@@ -1141,6 +1163,9 @@ func (a *App) makeConn(hostID string, kind layout.Kind, link int) (*conn, error)
 	}
 	if kind == layout.Terminal {
 		opts.Dir = h.TerminalDir
+		if isLocal(h.ID) {
+			opts.Dir = dir
+		}
 		if !opts.Local && !isStream(h) {
 			c.start = &shellStart{host: h.Tmux, dir: h.TerminalDir, startup: h.Startup}
 			opts.Start = a.shellStartCmd(c)
