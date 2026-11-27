@@ -20,12 +20,14 @@ const (
 	actQuickConnect   = "quickConnect"
 	actCommandPalette = "commandPalette"
 	actNewTab         = "newTab"
+	actNewWindow      = "newWindow"
 	actClosePane      = "closePane"
 	actSplitRight     = "splitRight"
 	actSplitDown      = "splitDown"
 	actOpenFiles      = "openFiles"
 	actFind           = "find"
 	actClearScreen    = "clearScreen"
+	actReconnect      = "reconnect"
 	actOpenAI         = "openAI"
 	actStopAI         = "stopAI"
 	actStopAllAI      = "stopAllAI"
@@ -117,12 +119,14 @@ var actions = append([]action{
 	{actCommandPalette, locales.Messages.CommandPalette, icons.Command, keymap.Combo{Mods: aiMods, Key: ui.KeyP}, false},
 	{actQuickConnect, locales.Messages.QuickConnect, icons.Quick, keymap.Combo{Mods: appMods, Key: ui.KeyK}, false},
 	{actNewTab, locales.Messages.NewTab, icons.Add, keymap.Combo{Mods: appMods, Key: ui.KeyT}, false},
+	{actNewWindow, locales.Messages.NewWindow, icons.NewWindow, keymap.Combo{Mods: appMods, Key: ui.KeyN}, false},
 	{actClosePane, locales.Messages.ClosePane, icons.Close, keymap.Combo{Mods: appMods, Key: ui.KeyW}, false},
 	{actSplitRight, locales.Messages.SplitRight, icons.SplitRight, keymap.Combo{Mods: appMods, Key: ui.KeyD}, false},
 	{actSplitDown, locales.Messages.SplitDown, icons.SplitDown, keymap.Combo{Mods: appMods, Key: ui.KeyE}, false},
 	{actOpenFiles, locales.Messages.OpenFilesSplit, icons.Folder, keymap.Combo{Mods: appMods, Key: ui.KeyO}, false},
 	{actFind, locales.Messages.Find, icons.Search, keymap.Combo{Mods: appMods, Key: ui.KeyF}, false},
 	{actClearScreen, locales.Messages.ClearScreen, icons.Clear, keymap.Combo{Mods: clearMods, Key: ui.KeyK}, false},
+	{actReconnect, locales.Messages.Reconnect, icons.Reconnect, keymap.Combo{Mods: appMods, Key: ui.KeyR}, false},
 	{actOpenAI, locales.Messages.OpenAIRight, icons.Robot, keymap.Combo{Mods: aiMods, Key: ui.KeyA}, false},
 	{actStopAI, locales.Messages.ShortcutStopAI, icons.Stop, keymap.Combo{Mods: stopMods, Key: ui.KeyPeriod}, false},
 	{actStopAllAI, locales.Messages.StopAllAI, icons.Stop, keymap.Combo{Mods: stopAllMods, Key: ui.KeyPeriod}, false},
@@ -355,12 +359,18 @@ func (a *App) runAction(id string) {
 		if cn := a.focused(); a.page == pageWorkspace && cn != nil && cn.tv != nil {
 			cn.tv.clearScreen()
 		}
+	case actReconnect:
+		if a.page == pageWorkspace {
+			a.reconnectPane(a.focused())
+		}
 	case actNewTab:
 		if cn := a.focused(); cn != nil {
 			a.Connect(cn.host.ID, openAt{})
 		} else if id := a.selectedHost(); id != "" {
 			a.Connect(id, openAt{})
 		}
+	case actNewWindow:
+		a.NewWindow()
 	case actClosePane:
 		if a.page == pageWorkspace {
 			a.CloseFocused()

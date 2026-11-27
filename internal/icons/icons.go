@@ -166,6 +166,8 @@ var (
 	Detach      = load("logout-box-r-line")
 	OpenInTab   = load("window-line")
 	AppWindow   = OpenInTab
+	NewWindow   = OpenInTab
+	ToWindow    = load("share-box-line")
 	Duplicate   = WinRestore
 	Locate      = load("focus-3-line")
 	Halt        = load("stop-line")

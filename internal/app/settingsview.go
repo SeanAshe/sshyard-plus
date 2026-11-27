@@ -99,7 +99,11 @@ func (a *App) prefNow() prefPage {
 // openSettings shows the settings on page p.
 func (a *App) openSettings(p prefPage) {
 	a.clearOutputEncodingMenu("")
-	a.page, a.pref = pageSettings, p
+	a.main.page, a.pref = pageSettings, p
+	if a.winState != a.main {
+		// Only the main window shows the settings.
+		a.focusWindow(a.main)
+	}
 }
 
 // closeSettings goes back to the sessions, the focused terminal taking
@@ -827,6 +831,10 @@ func keyCaps(goos string, mods ui.Modifiers, key ui.Key) []string {
 		out = append(out, "F"+strconv.Itoa(int(key-ui.KeyF1)+1))
 	case key == ui.KeySpace:
 		out = append(out, "Space")
+	case key == ui.KeyEnter && mac:
+		out = append(out, "↩")
+	case key == ui.KeyEnter:
+		out = append(out, "Enter")
 	case printable[key][0] != 0:
 		out = append(out, string(printable[key][0]))
 	case key == ui.KeyDelete && mac:
