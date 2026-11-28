@@ -35,6 +35,7 @@ import (
 	"github.com/Licoy/sshyard/internal/layout"
 	"github.com/Licoy/sshyard/internal/localkeys"
 	"github.com/Licoy/sshyard/internal/netproxy"
+	"github.com/Licoy/sshyard/internal/rdp"
 	"github.com/Licoy/sshyard/internal/session"
 	"github.com/Licoy/sshyard/internal/settings"
 	"github.com/Licoy/sshyard/internal/termlog"
@@ -105,7 +106,7 @@ type Platform struct {
 	// begin with; it may block. "" with no error is a cancel.
 	PickFolder func(title, start string) (string, error)
 	// OpenWith lets the user choose the app that opens path, then opens
-	// it there; it may block. A cancel is no error. nil can't.
+	// it there. It may block and can report context.Canceled. nil can't.
 	OpenWith func(path, title string) error
 	// OpenWindow opens a window of its own showing spec's view, for the
 	// file editor; it may block, and is never called on a frame. nil
@@ -192,6 +193,7 @@ type conn struct {
 	host           assets.Host
 	s              *session.Session
 	tv             *termView   // terminal panes
+	rd             *desktop    // remote desktop panes
 	fs             *filesState // files and editor panes (its SFTP client)
 	ed             *edWin      // editor windows
 	// wake is how a terminal's session asks for frames, drawn the main
@@ -296,6 +298,9 @@ func (c *conn) close() {
 	if c.fs != nil {
 		c.fs.close()
 	}
+	if c.rd != nil {
+		c.rd.close()
+	}
 	if c.fw != nil {
 		c.fw.Stop()
 		return
@@ -337,6 +342,7 @@ type App struct {
 	keychainOK bool
 	unlock     unlockState
 	known      *session.KnownHosts
+	rdpCerts   *rdp.KnownCerts
 	conns      map[int]*conn
 	// cwdSeq counts the directory reports of terminals
 	cwdSeq   int
@@ -455,6 +461,8 @@ type App struct {
 	sudoAsking   bool
 	sudoHold     focusHold
 	hostKey      *hostKeyAsk
+	certAsk      *desktopCertAsk // a remote desktop's certificate to trust
+	askingCert   bool
 	keyChange    *hostKeyChange
 	changingKey  bool
 	khQuery      string
@@ -506,13 +514,14 @@ type App struct {
 	// which invalidate redraws too. Under mu. quitting is set while the
 	// app quits: the windows close without asking, keeping their tabs; the
 	// system's thread reads it as a window closes.
-	wins        []*winState
-	main        *winState
-	focusWin    *winState
-	nextWin     int
-	wsSvc       map[int]ui.Services
-	quitting    atomic.Bool
-	updateCheck bool
+	wins            []*winState
+	main            *winState
+	focusWin        *winState
+	nextWin         int
+	wsSvc           map[int]ui.Services
+	quitting        atomic.Bool
+	extQuitApproved bool
+	updateCheck     bool
 	// updEvery is the index of the update interval in its control;
 	// updProxy the updates' proxy choice in its select.
 	updEvery  int
@@ -580,6 +589,12 @@ type App struct {
 	metEvery      int
 	metMount      string
 	metMountFocus bool
+	// upMode is the uploaded files' permissions field, upModeFocus set
+	// while it has the keyboard; edForm is the external editors' sheet.
+	upMode      string
+	upModeFocus bool
+	edForm      *editorsForm
+	edFormOpen  bool
 	// termCustom shows the terminal type setting's custom field, termText
 	// its text; termFocus is set while it has the keyboard (termTypeRow).
 	termCustom bool
@@ -767,6 +782,11 @@ func (a *App) loadData() error {
 			errs = append(errs, err)
 		}
 	}
+	if kc := path(rdp.KnownCertsFile); kc != "" {
+		if a.rdpCerts, err = rdp.OpenKnownCerts(kc); err != nil {
+			errs = append(errs, err)
+		}
+	}
 
 	return errors.Join(errs...)
 }
@@ -808,6 +828,7 @@ func (a *App) syncChoices() {
 	a.metEvery = intervalIndex(a.settings.MetricsInterval)
 	a.updEvery = max(slices.Index(settings.UpdateIntervals, a.settings.UpdateIntervalHours), 0)
 	a.metMount = a.settings.MetricsMount
+	a.upMode = a.settings.UploadFileMode
 	a.aiLines = float64(a.settings.AIContextLines)
 	a.aiDays = float64(a.settings.AIAuditRetentionDays)
 	a.aiWait = float64(a.settings.AIRequestTimeout)
@@ -887,10 +908,23 @@ func (a *App) ApplySettings(s settings.Settings) error {
 			}
 		}
 	}
-	if s.TransferConcurrency != old.TransferConcurrency {
+	concurrencyChanged := s.TransferConcurrency != old.TransferConcurrency
+	uploadModeChanged := s.UploadFileMode != old.UploadFileMode
+	hiddenChanged := s.HideHiddenFiles != old.HideHiddenFiles
+	if concurrencyChanged || uploadModeChanged || hiddenChanged {
 		for _, c := range a.conns {
-			if c.fs != nil {
+			if c.fs == nil {
+				continue
+			}
+			if concurrencyChanged {
 				c.fs.transfers.SetConcurrency(s.TransferConcurrency)
+			}
+			if uploadModeChanged {
+				c.fs.transfers.SetUploadMode(s.UploadMode())
+			}
+			if hiddenChanged {
+				c.fs.remote.setShowHidden(!s.HideHiddenFiles)
+				c.fs.local.setShowHidden(!s.HideHiddenFiles)
 			}
 		}
 	}
@@ -1139,6 +1173,17 @@ func (a *App) makeConnIn(hostID string, kind layout.Kind, link int, dir string) 
 	if isStream(h) && kind != layout.Terminal && kind != layout.AI {
 		return nil, errTerminalOnly
 	}
+	if isDesktop(h) {
+		// A remote desktop is all an RDP host opens: its "terminal".
+		if kind == layout.Terminal {
+			kind = layout.Desktop
+		}
+		if kind != layout.Desktop {
+			return nil, errDesktopOnly
+		}
+	} else if kind == layout.Desktop {
+		return nil, errDesktopOnly
+	}
 	if kind == layout.Terminal {
 		if ex := a.serialPane(h); ex != nil {
 			return nil, &serialInUseError{ex}
@@ -1148,6 +1193,11 @@ func (a *App) makeConnIn(hostID string, kind layout.Kind, link int, dir string) 
 	c := &conn{id: a.nextConn, kind: kind, host: h}
 	if isTemp(h.ID) {
 		c.temp = h.ID
+	}
+	if kind == layout.Desktop {
+		c.rd = a.newDesktop(c, h)
+		a.conns[c.id] = c
+		return c, nil
 	}
 	if kind == layout.AI {
 		agentName := a.settings.AIDefaultAgent
@@ -1239,6 +1289,20 @@ func (a *App) shown(c *conn) {
 func (a *App) startConn(c *conn) {
 	if c.temp == "" {
 		a.store.Touch(c.host.ID)
+	}
+	if c.rd != nil {
+		if a.connectionNeedsSecrets(c.host) {
+			c.waitingSecrets = true
+			a.withSecrets(func() {
+				if a.conns[c.id] == c {
+					c.waitingSecrets = false
+					c.rd.start()
+				}
+			})
+		} else {
+			c.rd.start()
+		}
+		return
 	}
 	if c.s != nil {
 		if a.connectionNeedsSecrets(c.host) {
@@ -1544,6 +1608,12 @@ func (a *App) closeSoon(id int) {
 
 // CloseSession closes a pane, terminal or files, and its connection.
 func (a *App) CloseSession(id int) {
+	if c := a.conns[id]; c != nil {
+		a.closeItems([]layout.Item{c.item()})
+	}
+}
+
+func (a *App) closeSession(id int) {
 	c := a.conns[id]
 	if c == nil {
 		return
@@ -1583,6 +1653,7 @@ func (a *App) finishCloseSession(c *conn) {
 	// Copies go here, not in the goroutine. RemoveAll unlinks the file
 	// before the folder, and c.close waits on the session.
 	if c.fs != nil {
+		c.fs.stopExternalEdits()
 		c.fs.copies.close()
 	}
 	if c.ed != nil {

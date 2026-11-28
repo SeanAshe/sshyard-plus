@@ -4,6 +4,7 @@ import (
 	"github.com/Licoy/sshyard/internal/assets"
 	"github.com/Licoy/sshyard/internal/icons"
 	"github.com/Licoy/sshyard/internal/layout"
+	"github.com/Licoy/sshyard/internal/rdp"
 	"github.com/Licoy/sshyard/internal/session"
 	"github.com/Licoy/sshyard/internal/theme"
 	"github.com/Licoy/sshyard/locales"
@@ -141,17 +142,22 @@ func (a *App) sidebarView(c *ui.Context, m locales.Messages, tok theme.Tokens) {
 	})
 }
 
-// connectedCount counts shared SSH clients once, excluding local shells.
+// connectedCount counts shared SSH clients once, excluding local shells,
+// and the remote desktops connected.
 func (a *App) connectedCount() int {
 	clients := make(map[*ssh.Client]struct{})
+	desktops := 0
 	for _, cn := range a.conns {
+		if cn.rd != nil && cn.rd.s.Status().State == rdp.Connected {
+			desktops++
+		}
 		if cn.s != nil {
 			if client := cn.s.Client(); client != nil {
 				clients[client] = struct{}{}
 			}
 		}
 	}
-	return len(clients)
+	return len(clients) + desktops
 }
 
 // ungroupedDrops takes the hosts and groups dropped on the ungrouped
@@ -337,7 +343,7 @@ func (a *App) hostItem(c *ui.Context, m locales.Messages, h assets.Host, prefix 
 // menu, and the menu of its "more" button.
 func (a *App) hostEntries(m locales.Messages, h assets.Host) []menuEntry {
 	noTab := a.ws.ActiveTab() == nil
-	// Telnet and serial hosts have a terminal only.
+	// Telnet and serial hosts have a terminal only, RDP hosts a desktop.
 	noSSH := !h.SSH()
 	beside := func(open func(at openAt)) func() {
 		return func() {
@@ -377,7 +383,7 @@ func (a *App) hostEntries(m locales.Messages, h assets.Host) []menuEntry {
 	return append(connect, []menuEntry{
 		{Icon: icons.SplitRight, Label: m.SplitRight(), Disabled: noTab, Do: beside(func(at openAt) { a.Connect(h.ID, at) })},
 		{Icon: icons.Folder, Label: m.OpenFiles(), Disabled: noSSH, Do: func() { a.OpenFiles(h.ID, openAt{}, nil) }},
-		{Icon: icons.Robot, Label: m.OpenAI(), Do: func() { a.OpenAIFor(h.ID) }},
+		{Icon: icons.Robot, Label: m.OpenAI(), Disabled: h.IsRDP(), Do: func() { a.OpenAIFor(h.ID) }},
 		{Icon: icons.OpenFile, Label: openFilesLabel(m, a.filesEdge()), Disabled: noTab || noSSH, Do: beside(func(at openAt) {
 			at.edge = a.filesEdge()
 			a.OpenFiles(h.ID, at, nil)
@@ -413,10 +419,18 @@ func (a *App) hostState(id string) (session.State, bool) {
 	}
 	best, ok := session.State(0), false
 	for _, cn := range a.conns {
-		if cn.host.ID != id || cn.s == nil || cn.fw != nil {
+		if cn.host.ID != id || cn.fw != nil {
 			continue
 		}
-		st := cn.s.Status().State
+		var st session.State
+		switch {
+		case cn.s != nil:
+			st = cn.s.Status().State
+		case cn.rd != nil:
+			st = desktopState(cn.rd.s.Status().State)
+		default:
+			continue
+		}
 		if rank(st) > 0 && (!ok || rank(st) > rank(best)) {
 			best, ok = st, true
 		}

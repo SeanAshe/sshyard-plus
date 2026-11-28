@@ -153,6 +153,10 @@ func kindIcon(k layout.Kind, on bool) *icons.Icon {
 		return icons.ServicesOn
 	case k == layout.Services:
 		return icons.Services
+	case k == layout.Desktop && on:
+		return icons.DesktopOn
+	case k == layout.Desktop:
+		return icons.Desktop
 	case k == layout.Tmux && on:
 		return icons.TmuxOn
 	case k == layout.Tmux:
@@ -209,9 +213,7 @@ func (a *App) CloseFocused() {
 }
 
 func (a *App) closeTab(t *layout.Tab) {
-	for _, p := range t.Panes() {
-		a.CloseSession(p.Item.ID)
-	}
+	a.closeItems(t.Items())
 }
 
 // tempBadge marks a tab or pane on a temporary host of quick connect.
@@ -440,6 +442,10 @@ func (a *App) paneView(c *ui.Context, t *layout.Tab, n *layout.Node, tok theme.T
 				a.toolPaneView(c, cn, tok, m)
 				return
 			}
+			if cn.kind == layout.Desktop {
+				a.desktopPane(c, t, n, cn, tok, m)
+				return
+			}
 			// The header is drawn on the pane's color: on a terminal scheme
 			// of the other appearance it takes that appearance's tokens, so
 			// its text and buttons keep their contrast.
@@ -552,6 +558,9 @@ func (a *App) paneActions(c *ui.Context, t *layout.Tab, n *layout.Node, cn *conn
 			barAction{Key: "dual", Button: IconButton{Icon: icons.LocalDisk, On: icons.LocalDiskOn, Label: m.ShowLocalFiles(), Toggle: true, Active: a.settings.FilesDual, Size: Tiny},
 				Do: on(a.toggleDual)},
 			a.transfersAction(c, cn, m))
+		if len(cn.fs.edits) > 0 {
+			acts = append(acts, a.extEditsAction(cn, m))
+		}
 		if f, ok := a.followAction(t, n, cn, m); ok {
 			acts = append(acts, f)
 		}
